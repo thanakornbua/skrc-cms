@@ -1,0 +1,29 @@
+<!-- @dsCard group="Colors" viewport="700x190" name="Neutral Palette" subtitle="Surfaces, borders, dark and text neutrals — soft purple-tinted" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 16px; background: var(--color-bg); }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .cell { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-2); }
+  .sw { height: 52px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); box-shadow: var(--shadow-sm); margin-bottom: 6px; }
+  .name { display:block; color: var(--color-text); }
+  .hex { color: var(--color-muted); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><div class="sw" style="background:#fdfbff"></div><span class="name">bg</span><span class="hex">#fdfbff</span></div>
+    <div class="cell"><div class="sw" style="background:#ffffff"></div><span class="name">surface</span><span class="hex">#ffffff</span></div>
+    <div class="cell"><div class="sw" style="background:#f4f0ff"></div><span class="name">surface-2</span><span class="hex">#f4f0ff</span></div>
+    <div class="cell"><div class="sw" style="background:#e5e7eb"></div><span class="name">border</span><span class="hex">#e5e7eb</span></div>
+    <div class="cell"><div class="sw" style="background:#ddd6fe"></div><span class="name">border-2</span><span class="hex">#ddd6fe</span></div>
+    <div class="cell"><div class="sw" style="background:#1a1a2e"></div><span class="name">dark / text</span><span class="hex">#1a1a2e</span></div>
+    <div class="cell"><div class="sw" style="background:#374151"></div><span class="name">text-2</span><span class="hex">#374151</span></div>
+    <div class="cell"><div class="sw" style="background:#6b7280"></div><span class="name">muted</span><span class="hex">#6b7280</span></div>
+    <div class="cell"><div class="sw" style="background:#9ca3af"></div><span class="name">muted-2</span><span class="hex">#9ca3af</span></div>
+  </div>
+</body>
+</html>

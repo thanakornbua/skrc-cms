@@ -1,0 +1,43 @@
+<!-- @dsCard group="Slides" viewport="1280x720" name="Content Slide" subtitle="Heading + body with a dark code card — lecture layout" -->
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  .slide { width: 1280px; height: 720px; background: var(--color-bg); padding: 72px 96px; box-sizing: border-box; position: relative; }
+  .bar { position: absolute; top: 0; left: 0; right: 0; height: 8px; background: var(--gradient-brand); }
+  .eyebrow { font-size: 15px; margin-bottom: 14px; }
+  h2 { font-family: var(--font-sans); font-weight: 700; font-size: 46px; letter-spacing: -0.02em; margin: 0 0 8px; color: var(--color-text); }
+  .sub { font-family: var(--font-thai); font-size: 22px; color: var(--color-muted); margin-bottom: 40px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  ul { margin: 0; padding-left: 22px; }
+  li { font-family: var(--font-thai); font-size: 22px; color: var(--color-text-2); line-height: 2; }
+  pre { margin: 0; background: var(--gradient-brand) top left/100% 6px no-repeat, var(--code-bg);
+        border-radius: var(--radius-md); padding: 28px 24px 24px; font-family: var(--font-mono); font-size: 18px; line-height: 1.6; color: var(--code-text); box-shadow: var(--shadow-lg); }
+  .k { color: var(--code-keyword); } .s { color: var(--code-string); } .n { color: var(--code-number); }
+  .c { color: var(--code-comment); } .f { color: var(--code-function); } .v { color: var(--code-variable); } .o { color: var(--code-operator); }
+</style>
+</head>
+<body>
+  <div class="slide">
+    <div class="bar"></div>
+    <div class="skrc-eyebrow skrc-gradient-text eyebrow">บทที่ 04 — PID CONTROL</div>
+    <h2>Line-Following Logic</h2>
+    <div class="sub th">การควบคุมหุ่นยนต์เดินตามเส้นด้วย PID</div>
+    <div class="grid">
+      <ul>
+        <li>อ่านค่าจากเซนเซอร์ตรวจจับเส้น</li>
+        <li>คำนวณค่าความคลาดเคลื่อน (error)</li>
+        <li>ปรับความเร็วมอเตอร์ซ้าย–ขวา</li>
+        <li>ทดสอบและจูนค่า Kp, Ki, Kd</li>
+      </ul>
+<pre><span class="c"># คำนวณค่าแก้ไข — compute correction</span>
+<span class="v">error</span> <span class="o">=</span> <span class="v">target</span> <span class="o">-</span> <span class="f">read_line</span>()
+<span class="v">turn</span>  <span class="o">=</span> <span class="v">Kp</span> <span class="o">*</span> <span class="v">error</span>
+<span class="f">drive</span>(<span class="n">base</span> <span class="o">+</span> <span class="v">turn</span>, <span class="n">base</span> <span class="o">-</span> <span class="v">turn</span>)</pre>
+    </div>
+  </div>
+</body>
+</html>

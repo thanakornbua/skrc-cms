@@ -1,0 +1,47 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    environment:
+      AWS_REGION: ${AWS_REGION:-ap-southeast-7}
+      DYNAMO_TABLE: ${DYNAMO_TABLE:-robo-compet}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:?set in .env, see docs/spec/ENV.md}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?set in .env, see docs/spec/ENV.md}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      PORT: ${PORT:-3000}
+      DEVICE_KEYS: ${DEVICE_KEYS:-{}}
+      LANES: ${LANES:-["1"]}
+    restart: unless-stopped
+
+  # Local DynamoDB for dev/testing only — never used on competition day
+  # (the real table lives in AWS, created by ops/create-table.ts).
+  # Enable with: docker compose --profile dev up
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    ports:
+      - "8000:8000"
+    profiles: ["dev"]
+
+  # Enable on the competition host after DNS points at its Elastic IP:
+  # docker compose --profile tls up -d
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    profiles: ["tls"]
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

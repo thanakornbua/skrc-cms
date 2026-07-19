@@ -1,0 +1,129 @@
+/*
+ * SKRC Design System tokens — vendored from the "SKRC Design System" Claude
+ * Design project (projectId 2809c602-6acf-4ba0-af58-2d464e1ec38e), Phase 5.
+ * Transcribed (not linked live) so the app has no runtime dependency on the
+ * design-system project. Re-sync manually if the source tokens change.
+ */
+
+/* ---- Fonts (IBM Plex family, Google Fonts CDN) ---- */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Thai:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+:root {
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Thai', system-ui, -apple-system, sans-serif;
+  --font-thai: 'IBM Plex Sans Thai', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- Primary gradient ---- */
+  --gradient-stop-1: #e040fb; /* magenta */
+  --gradient-stop-2: #7c3aed; /* violet  */
+  --gradient-stop-3: #3b82f6; /* blue    */
+  --gradient-brand: linear-gradient(135deg, #e040fb, #7c3aed 50%, #3b82f6);
+  --gradient-soft: linear-gradient(135deg, rgba(224,64,251,0.08), rgba(124,58,237,0.08) 50%, rgba(59,130,246,0.08));
+
+  /* ---- Neutral palette ---- */
+  --color-bg:        #fdfbff;
+  --color-surface:   #ffffff;
+  --color-surface-2: #f4f0ff;
+  --color-border:    #e5e7eb;
+  --color-border-2:  #ddd6fe;
+  --color-dark:      #1a1a2e;
+  --color-text:      #1a1a2e;
+  --color-text-2:    #374151;
+  --color-muted:     #6b7280;
+  --color-muted-2:   #9ca3af;
+
+  /* ---- Semantic colors ---- */
+  --color-success:   #10b981;
+  --color-warning:   #f59e0b;
+  --color-error:     #ef4444;
+  --color-info:      #3b82f6;
+  --color-success-soft: rgba(16,185,129,0.15);
+  --color-warning-soft: rgba(245,158,11,0.15);
+  --color-error-soft:   rgba(239,68,68,0.15);
+  --color-info-soft:    rgba(59,130,246,0.15);
+
+  --color-brand-magenta: #e040fb;
+  --color-brand-violet: #7c3aed;
+  --color-brand-blue: #3b82f6;
+
+  /* ---- Code panel palette ---- */
+  --code-bg:   #1a1a2e;
+  --code-text: #e2e8f0;
+
+  /* ---- Radius / shadow ---- */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 3px rgba(109, 40, 217, 0.06);
+  --shadow-md: 0 4px 12px rgba(109, 40, 217, 0.10);
+  --shadow-lg: 0 8px 24px rgba(109, 40, 217, 0.14);
+  --shadow-xl: 0 16px 48px rgba(109, 40, 217, 0.18);
+
+  --content-narrow: 520px;
+  --content-default: 760px;
+  --content-wide: 1120px;
+
+  /* ---- Spacing (8px grid) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- Type scale ---- */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+  --text-5xl:  3rem;
+
+  --leading-body: 1.7;
+  --leading-heading: 1.2;
+  --leading-mono: 1.5;
+
+  --tracking-label: 0.1em;
+  --tracking-button: 0.05em;
+  --tracking-heading: -0.01em;
+  --tracking-normal: 0;
+
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+}
+
+/* ---- Brand utilities ---- */
+
+.skrc-gradient-text {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.skrc-eyebrow {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  font-size: var(--text-xs);
+}
+
+.skrc-gradient-fill { background: var(--gradient-brand); }
+
+.skrc-accent-bar {
+  height: 4px;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-pill);
+}

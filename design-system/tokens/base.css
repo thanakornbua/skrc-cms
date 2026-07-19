@@ -1,0 +1,55 @@
+/* SKRC base layer — global resets + reusable brand utilities built on tokens.
+   Kept here (not in styles.css) so styles.css stays a pure @import manifest. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Latin runs default to Plex Sans; mark Thai content for the Thai face. */
+:lang(th), .th { font-family: var(--font-thai); }
+
+h1, h2, h3, h4 {
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+  margin: 0;
+}
+
+code, pre, kbd, samp { font-family: var(--font-mono); }
+
+/* ---- Brand utilities ---- */
+
+/* Gradient text — for HEADINGS and LABELS only, never body copy. */
+.skrc-gradient-text {
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Uppercase mono eyebrow / field label. */
+.skrc-eyebrow {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  font-size: var(--text-xs);
+}
+
+/* Full-bleed gradient surface (section dividers, button fills, header bands). */
+.skrc-gradient-fill { background: var(--gradient-brand); }
+
+/* Thin gradient accent bar (card / code-block top border). */
+.skrc-accent-bar {
+  height: 4px;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-pill);
+}

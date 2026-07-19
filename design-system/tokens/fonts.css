@@ -1,0 +1,11 @@
+/* SKRC webfonts — IBM Plex family.
+   Loaded from Google Fonts CDN (the requested families are available there
+   verbatim, so no substitution is needed). Consumers wanting a fully offline
+   bundle should swap these @import lines for local base64 @font-face rules. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Sans+Thai:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
+:root {
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Thai', system-ui, -apple-system, sans-serif;
+  --font-thai: 'IBM Plex Sans Thai', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}

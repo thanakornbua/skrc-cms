@@ -1,0 +1,61 @@
+<!-- @dsCard group="Components" viewport="700x430" name="Core — Buttons, Badges, Cards" subtitle="Pill buttons, status badges, card surfaces, section divider" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--color-bg); }
+  .grp { margin-bottom: 22px; }
+  .lbl { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-muted); margin-bottom: 10px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+  const { Button, Badge, Card, SectionDivider } = window.SKRCDesignSystem_2809c6;
+  function Demo() {
+    return (
+      <>
+        <div className="grp">
+          <div className="lbl">Buttons — default · hover · active · disabled</div>
+          <div className="row">
+            <Button>Primary</Button>
+            <Button variant="secondary">Secondary</Button>
+            <Button variant="ghost">Ghost</Button>
+            <Button disabled>Disabled</Button>
+            <Button size="sm">Small</Button>
+          </div>
+        </div>
+        <div className="grp">
+          <div className="lbl">Badges</div>
+          <div className="row">
+            <Badge>Sensors</Badge>
+            <Badge variant="secondary">Optional</Badge>
+            <Badge variant="success">ผ่าน / Passed</Badge>
+            <Badge variant="error">ไม่ผ่าน / Rejected</Badge>
+          </div>
+        </div>
+        <div className="grp">
+          <div className="lbl">Cards</div>
+          <div className="cards">
+            <Card><strong>Standard</strong><div style={{color:'var(--color-muted)',fontSize:14}}>White + gradient top bar</div></Card>
+            <Card variant="accent"><strong>Accent</strong><div style={{color:'var(--color-muted)',fontSize:14}}>surface-2 panel</div></Card>
+            <Card variant="info"><strong>Info</strong><div style={{color:'var(--color-muted)',fontSize:14}}>left gradient border</div></Card>
+            <Card variant="code">$ flash --port /dev/ttyUSB0</Card>
+          </div>
+        </div>
+        <SectionDivider thai="ผลการคัดเลือก" en="Selection Results" height={48} style={{borderRadius:'10px'}} />
+      </>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script>
+</body>
+</html>

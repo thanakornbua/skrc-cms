@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+.sim-state-*.json
+*.tsbuildinfo
+.DS_Store
+.pio/
+.vscode/
+*.swp
+roster.csv
+
+SKILL.md
+*PLAN.md

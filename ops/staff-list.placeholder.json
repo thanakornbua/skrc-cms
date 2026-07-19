@@ -1,0 +1,16 @@
+{
+  "_note": "PLACEHOLDER staff roster pending D7 sign-off (see docs/spec/DECISIONS.md). Domain @skrc.suankularb.space is real (per operator instruction); the individual accounts below are still fake test placeholders for exercising ops/bootstrap-staff.ts and Phase 2 role checks — replace with the real committee/admin roster before the actual event. Every account is created with MessageAction SUPPRESS and must change its password on first Cognito login.",
+  "staff": [
+    { "username": "admin01@skrc.suankularb.space", "name": "Admin (Placeholder)", "role": "admin", "tempPassword": "Admin01-Temp!" },
+    { "username": "committee01@skrc.suankularb.space", "name": "Committee Member 01 (Placeholder)", "role": "committee", "tempPassword": "Committee01-Temp!" },
+    { "username": "committee02@skrc.suankularb.space", "name": "Committee Member 02 (Placeholder)", "role": "committee", "tempPassword": "Committee02-Temp!" },
+    { "username": "committee03@skrc.suankularb.space", "name": "Committee Member 03 (Placeholder)", "role": "committee", "tempPassword": "Committee03-Temp!" },
+    { "username": "committee04@skrc.suankularb.space", "name": "Committee Member 04 (Placeholder)", "role": "committee", "tempPassword": "Committee04-Temp!" },
+    { "username": "committee05@skrc.suankularb.space", "name": "Committee Member 05 (Placeholder)", "role": "committee", "tempPassword": "Committee05-Temp!" },
+    { "username": "committee06@skrc.suankularb.space", "name": "Committee Member 06 (Placeholder)", "role": "committee", "tempPassword": "Committee06-Temp!" },
+    { "username": "committee07@skrc.suankularb.space", "name": "Committee Member 07 (Placeholder)", "role": "committee", "tempPassword": "Committee07-Temp!" },
+    { "username": "committee08@skrc.suankularb.space", "name": "Committee Member 08 (Placeholder)", "role": "committee", "tempPassword": "Committee08-Temp!" },
+    { "username": "committee09@skrc.suankularb.space", "name": "Committee Member 09 (Placeholder)", "role": "committee", "tempPassword": "Committee09-Temp!" },
+    { "username": "committee10@skrc.suankularb.space", "name": "Committee Member 10 (Placeholder)", "role": "committee", "tempPassword": "Committee10-Temp!" }
+  ]
+}

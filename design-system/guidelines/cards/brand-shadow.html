@@ -1,0 +1,22 @@
+<!-- @dsCard group="Brand" viewport="700x170" name="Shadow Scale" subtitle="Soft purple-blue depth — never hard black, never stacked" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px 20px 30px; background: var(--color-bg); }
+  .row { display: flex; gap: 26px; align-items: center; }
+  .col { font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); text-align: center; }
+  .box { width: 96px; height: 56px; background: var(--color-surface); border-radius: var(--radius-md); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-sm)"></div>shadow-sm</div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-md)"></div>shadow-md</div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-lg)"></div>shadow-lg</div>
+    <div class="col"><div class="box" style="box-shadow:var(--shadow-xl)"></div>shadow-xl</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Spacing Scale" subtitle="8px base grid — space-1 (4) → space-16 (64)" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 18px 20px; background: var(--color-bg); }
+  .row { display: flex; align-items: flex-end; gap: 12px; }
+  .col { text-align: center; font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); }
+  .box { background: var(--gradient-brand); border-radius: 3px; margin: 0 auto 6px; width: 14px; }
+  .v { color: var(--color-text); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="col"><div class="box" style="height:4px"></div>1<span class="v"> · 4</span></div>
+    <div class="col"><div class="box" style="height:8px"></div>2<span class="v"> · 8</span></div>
+    <div class="col"><div class="box" style="height:12px"></div>3<span class="v"> · 12</span></div>
+    <div class="col"><div class="box" style="height:16px"></div>4<span class="v"> · 16</span></div>
+    <div class="col"><div class="box" style="height:20px"></div>5<span class="v"> · 20</span></div>
+    <div class="col"><div class="box" style="height:24px"></div>6<span class="v"> · 24</span></div>
+    <div class="col"><div class="box" style="height:32px"></div>8<span class="v"> · 32</span></div>
+    <div class="col"><div class="box" style="height:40px"></div>10<span class="v"> · 40</span></div>
+    <div class="col"><div class="box" style="height:48px"></div>12<span class="v"> · 48</span></div>
+    <div class="col"><div class="box" style="height:64px"></div>16<span class="v"> · 64</span></div>
+  </div>
+</body>
+</html>
