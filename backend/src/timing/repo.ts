@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
-import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { getCompetitor } from "../competitors/repo.js";
@@ -87,20 +87,47 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
     PK: `COMP#${competitorId}`, SK: `PENALTY#${at}#${ruleId}`,
     ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at,
   };
-  await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item, ConditionExpression: "attribute_not_exists(PK)" }));
+  try {
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: {
+        TableName: TABLE_NAME, Key: ruleKey(ruleId),
+        ConditionExpression: "active = :active AND label = :label AND penaltyMs = :penalty",
+        ExpressionAttributeValues: { ":active": true, ":label": rule.label, ":penalty": rule.penaltyMs },
+      } },
+      { Put: {
+        TableName: TABLE_NAME, Item: item,
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof TransactionCanceledException) {
+      throw new ApiError(409, "CONFLICT", "Penalty rule changed or became inactive; reload and try again");
+    }
+    throw error;
+  }
   return item;
 }
 
 export async function revokePenalty(competitorId: string, penaltySk: string, reason: string, byUser: string): Promise<AppliedPenalty> {
-  const result = await ddbDoc.send(new UpdateCommand({
-    TableName: TABLE_NAME, Key: { PK: `COMP#${competitorId}`, SK: penaltySk },
-    UpdateExpression: "SET revocation = :revocation",
-    ConditionExpression: "attribute_exists(PK) AND attribute_not_exists(revocation)",
-    ExpressionAttributeValues: { ":revocation": { reason, byUser, at: new Date().toISOString() } },
-    ReturnValues: "ALL_NEW",
-  }));
-  if (!result.Attributes) throw new ApiError(404, "NOT_FOUND", "Applied penalty not found");
-  return result.Attributes as AppliedPenalty;
+  try {
+    const result = await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: { PK: `COMP#${competitorId}`, SK: penaltySk },
+      UpdateExpression: "SET revocation = :revocation",
+      ConditionExpression:
+        "attribute_exists(PK) AND begins_with(SK, :penaltyPrefix) AND attribute_not_exists(revocation)",
+      ExpressionAttributeValues: {
+        ":penaltyPrefix": "PENALTY#",
+        ":revocation": { reason, byUser, at: new Date().toISOString() },
+      },
+      ReturnValues: "ALL_NEW",
+    }));
+    return result.Attributes as AppliedPenalty;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ApiError(409, "CONFLICT", "Applied penalty was not found or is already revoked");
+    }
+    throw error;
+  }
 }
 
 export async function getCorrection(competitorId: string, runId: string): Promise<TimeCorrection | null> {
@@ -129,16 +156,29 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
     ...correctionKey(competitorId, runId), runId, elapsedMs, reason, byUser, at: new Date().toISOString(),
   };
   try {
-    await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item, ConditionExpression: "attribute_not_exists(PK)" }));
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { Put: {
+        TableName: TABLE_NAME, Item: item,
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+      { Update: {
+        TableName: TABLE_NAME, Key: runKey(competitorId, runId),
+        UpdateExpression: "SET reviewResolution = :resolution, reviewedAt = :at, reviewedBy = :by",
+        ConditionExpression:
+          "(#status = :underReview OR #status = :timedOut) AND attribute_not_exists(reviewResolution)",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":underReview": "UNDER_REVIEW", ":timedOut": "TIMED_OUT",
+          ":resolution": "CORRECTED", ":at": item.at, ":by": byUser,
+        },
+      } },
+    ] }));
   } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) throw new ApiError(409, "CONFLICT", "Run already has a correction");
+    if (error instanceof TransactionCanceledException) {
+      throw new ApiError(409, "CONFLICT", "Run was already corrected or resolved");
+    }
     throw error;
   }
-  await ddbDoc.send(new UpdateCommand({
-    TableName: TABLE_NAME, Key: runKey(competitorId, runId),
-    UpdateExpression: "SET reviewResolution = :resolution, reviewedAt = :at, reviewedBy = :by",
-    ExpressionAttributeValues: { ":resolution": "CORRECTED", ":at": item.at, ":by": byUser },
-  }));
   const competitor = await getCompetitor(competitorId);
   if (competitor?.status === "INSPECTED") {
     try {
@@ -161,18 +201,24 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
 
 export async function resolveUnderReview(competitorId: string, runId: string, decision: "consume" | "void", reason: string, byUser: string): Promise<void> {
   try {
-    await ddbDoc.send(new UpdateCommand({
-      TableName: TABLE_NAME, Key: runKey(competitorId, runId),
-      UpdateExpression: "SET #status = :status, reviewResolution = :resolution, reviewReason = :reason, reviewedAt = :at, reviewedBy = :by",
-      ConditionExpression: "#status = :underReview AND attribute_not_exists(reviewResolution)",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: {
-        ":status": decision === "consume" ? "INVALID" : "VOID", ":resolution": decision.toUpperCase(),
-        ":reason": reason, ":at": new Date().toISOString(), ":by": byUser, ":underReview": "UNDER_REVIEW",
-      },
-    }));
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { ConditionCheck: {
+        TableName: TABLE_NAME, Key: correctionKey(competitorId, runId),
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+      { Update: {
+        TableName: TABLE_NAME, Key: runKey(competitorId, runId),
+        UpdateExpression: "SET #status = :status, reviewResolution = :resolution, reviewReason = :reason, reviewedAt = :at, reviewedBy = :by",
+        ConditionExpression: "#status = :underReview AND attribute_not_exists(reviewResolution)",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":status": decision === "consume" ? "INVALID" : "VOID", ":resolution": decision.toUpperCase(),
+          ":reason": reason, ":at": new Date().toISOString(), ":by": byUser, ":underReview": "UNDER_REVIEW",
+        },
+      } },
+    ] }));
   } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) throw new ApiError(409, "CONFLICT", "Run is not awaiting review");
+    if (error instanceof TransactionCanceledException) throw new ApiError(409, "CONFLICT", "Run is not awaiting review");
     throw error;
   }
 }

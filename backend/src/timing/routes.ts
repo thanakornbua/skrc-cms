@@ -11,7 +11,7 @@ import {
 export const timingRouter = Router();
 const timingSchema = z.object({
   category: z.string().trim().min(1),
-  minTimeMs: z.number().int().nonnegative(),
+  minTimeMs: z.number().int().positive(),
   maxTimeMs: z.number().int().positive(),
 }).refine((data) => data.minTimeMs < data.maxTimeMs, { message: "minTimeMs must be less than maxTimeMs", path: ["minTimeMs"] });
 const ruleSchema = z.object({ label: z.string().trim().min(1), penaltyMs: z.number().int().positive() });
@@ -19,7 +19,7 @@ const ruleUpdateSchema = ruleSchema.extend({ active: z.boolean() });
 const applySchema = z.object({ ruleId: z.string().trim().min(1) });
 const reasonSchema = z.object({ reason: z.string().trim().min(1) });
 const resolveSchema = reasonSchema.extend({ decision: z.enum(["consume", "void"]) });
-const correctionSchema = reasonSchema.extend({ elapsedMs: z.number().int().nonnegative() });
+const correctionSchema = reasonSchema.extend({ elapsedMs: z.number().int().positive() });
 
 function parsed<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body);

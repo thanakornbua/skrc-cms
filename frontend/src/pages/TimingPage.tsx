@@ -219,7 +219,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         {timings.map((item) => <div className="metric" key={item.category}><span className="metric-label">{item.category}</span><span className="metric-value">{seconds(item.minTimeMs)}–{seconds(item.maxTimeMs)}</span></div>)}
         <form onSubmit={saveTiming}>
           <div className="field"><label htmlFor={categoryId}>{t("ประเภท", "Category")}</label><input id={categoryId} required value={category} onChange={(e) => setCategory(e.target.value)} /></div>
-          <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
+          <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0.001" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
           <div className="field"><label htmlFor={maxId}>{t("เวลาสูงสุด (วินาที)", "Maximum seconds")}</label><input id={maxId} required type="number" min="0.001" step="0.001" value={maxSeconds} onChange={(e) => setMaxSeconds(e.target.value)} /></div>
           <button type="submit">{t("บันทึก", "Save limits")}</button>
         </form>
