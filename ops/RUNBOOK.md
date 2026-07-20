@@ -27,7 +27,25 @@ the code Cognito sends to their verified email. Keep the existing least-privileg
 DynamoDB permissions for the competition table so the API can record the reset
 request audit item.
 
-## Competition day
+## T−8 days: registration opens
+
+1. Run `npm run create-table`, `npm run create-auth`, and `npm run create-regweek`.
+2. Validate and bootstrap the staff roster, then remove the local credential file.
+3. Deploy the frontend with `VITE_EVENT_MODE=registration` and the Lambda/Cognito values.
+4. Verify registration, approval, rejection, password reset, and CSV export with disposable data.
+5. Do not provision EC2 yet; registration week is serverless.
+
+## Competition-day morning
+
+1. Launch the EC2 host with its least-privilege instance role and Elastic IP.
+2. Point `api.suankularb.space` at the host and start `docker compose --profile tls up -d`.
+3. Deploy the frontend with `VITE_EVENT_MODE=competition` and verify `/health` and CORS.
+4. Configure every category limit, penalty rule, lane/device mapping, and device key.
+5. Flash either `esp32dev_http` or `esp32dev_serial`; for serial, follow
+   [SERIAL_BRIDGE.md](./SERIAL_BRIDGE.md). Never flash both variants to one board.
+6. Complete [rehearsal.md](./rehearsal.md) before admitting real competitors.
+
+## During competition
 
 Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY_RUN.md).
 
@@ -37,6 +55,15 @@ Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY
 4. Resolve every under-minimum run before giving that team another attempt.
 5. Conclude only after checking unresolved runs, manual corrections, penalties, and DQ.
 6. Export `results.json` and deploy the frontend in `concluded` mode.
+
+For the full evidence-driven rehearsal, follow [rehearsal.md](./rehearsal.md).
+
+## Post-event
+
+1. Resolve every review, verify corrections/penalties/DQ, then conclude.
+2. Export `results.json`, deploy the frontend in concluded mode, and verify it with the API stopped.
+3. Preserve the approved non-PII result and evidence, then terminate EC2.
+4. Schedule the retention command below for the printed six-month deadline.
 
 ## Retention deadline
 
@@ -48,3 +75,24 @@ The deadline is six calendar months after `concludedAt`. By that date:
 - anonymize staff usernames in retained penalty, correction, review, and audit records;
 - verify the retained result contains only team names, ranks, elapsed times, penalties,
   and non-PII operational data.
+
+Preview the guarded purge after conclusion:
+
+```bash
+cd ops
+npm run purge-pii
+```
+
+The preview prints the exact deadline and refuses to run early. At the approved purge
+time, first export and verify static results, take the required backup/evidence, then run:
+
+```bash
+npm run purge-pii -- --execute --confirm PURGE-PII
+```
+
+`--allow-early` exists only for an explicitly approved early erasure request. The tool
+deletes Cognito users, Registration items, password-reset audits, and internal ranking
+items containing competitor IDs; scrubs direct identifiers from Competitor profiles;
+and replaces retained staff attribution with `ANONYMIZED`. The privacy-safe public
+result stored at conclusion remains the authoritative archive. Retain the purge's
+count-only JSON summary with the event records.

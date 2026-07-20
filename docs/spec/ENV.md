@@ -45,6 +45,17 @@ No AWS credentials, access keys, or secret keys are ever set as frontend env var
 | `LANE_ID` | Which lane this device drives, e.g. `1`. |
 | Gate pin map | GPIO pin assignment for start/stop/checkpoint gates — operator's hardware wiring, not a build decision. |
 
+## Laptop serial bridge fallback
+
+| Var | Example | Notes |
+|---|---|---|
+| `SERIAL_API_URL` | `https://api.suankularb.space` | Existing EC2 API; the bridge adds `/gate-events`. |
+| `SERIAL_SPOOL_DIR` | `.serial-spool` | Local durable queue; protect and back up during the event. |
+| `SERIAL_LANES` | `{"esp32-lane1":"1"}` | Device-to-lane guard for received serial frames. |
+
+The bridge also reads the existing `DEVICE_KEYS` map. Keys remain on the laptop and
+are never transmitted to serial firmware.
+
 ## Bootstrap-only (never long-lived env vars; used once by an operator running a script)
 
 - `ops/bootstrap-staff.ts` (Phase 2) takes the D7 staff list + temporary passwords as a script argument or a local JSON file **outside version control** — never as a committed env var.

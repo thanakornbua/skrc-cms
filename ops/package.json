@@ -9,7 +9,12 @@
     "create-auth": "tsx src/create-auth.ts",
     "bootstrap-staff": "tsx src/bootstrap-staff.ts",
     "create-regweek": "tsx src/create-regweek.ts",
-    "simulate-gates": "tsx src/simulate-gates.ts"
+    "simulate-gates": "tsx src/simulate-gates.ts",
+    "stress-gates": "tsx src/stress-gates.ts",
+    "purge-pii": "tsx src/purge-pii.ts",
+    "serial-bridge": "tsx src/serial-bridge.ts",
+    "test:serial": "tsx src/serial-bridge.test.ts",
+    "test:serial-e2e": "tsx src/serial-e2e.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-apigatewayv2": "^3.700.0",
@@ -18,7 +23,9 @@
     "@aws-sdk/client-iam": "^3.700.0",
     "@aws-sdk/client-lambda": "^3.700.0",
     "@aws-sdk/client-sts": "^3.700.0",
-    "archiver": "^7.0.1"
+    "@aws-sdk/lib-dynamodb": "^3.1090.0",
+    "archiver": "^7.0.1",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.2",

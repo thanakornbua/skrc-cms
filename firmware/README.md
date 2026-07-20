@@ -4,7 +4,11 @@ One ESP32 handles the start, stop, and optional checkpoint sensors for one lane.
 
 ## Configure and wire
 
-Edit `include/config.h` before flashing. Set the WiFi credentials, HTTPS API URL, its certificate authority PEM (`API_ROOT_CA`), `DEVICE_ID`, matching `DEVICE_KEY`, `LANE_ID`, status LED pin, and sensor GPIO pins. The repository deliberately assigns no GPIO numbers because they must match the operator's board and wiring. Pins left at `-1` are disabled.
+Edit `include/config.h` before flashing. Both builds require `DEVICE_ID`, `LANE_ID`,
+the status LED pin, and sensor GPIO pins. The HTTP build additionally requires WiFi,
+HTTPS URL/CA, and matching `DEVICE_KEY`; the serial build keeps the device key on the
+laptop. The repository deliberately assigns no GPIO numbers because they must match
+the operator's board and wiring. Pins left at `-1` are disabled.
 
 Sensors are configured as `INPUT_PULLUP` and active-low by default. Change `GATE_INPUT_MODE` and `GATE_ACTIVE_LEVEL` if the actual sensor modules use a different electrical interface. Never connect a 5 V sensor output directly to an ESP32 GPIO; use a 3.3 V-compatible output or suitable level shifting.
 
@@ -12,13 +16,22 @@ For checkpoints, set `CHECKPOINT_GATE_COUNT` from 0–4 and populate the matchin
 
 ## Build, flash, and monitor
 
-Install PlatformIO, connect the ESP32, then run:
+Install PlatformIO, choose the transport for competition day, connect the ESP32,
+then run one of:
 
 ```sh
-pio run
-pio run --target upload
+pio run -e esp32dev_http
+pio run -e esp32dev_http --target upload
+# or, when the ESP32 cannot reach AWS directly:
+pio run -e esp32dev_serial
+pio run -e esp32dev_serial --target upload
 pio device monitor --baud 115200
 ```
+
+Both images share GPIO capture, debounce, NVS boot count, event IDs, and the 64-event
+FIFO. The serial image emits `EVT <json>` once per second until the laptop durably
+stores it and replies `ACK <eventId>`. It never needs WiFi, CA, API URL, or device-key
+secrets; configure those on the laptop bridge instead.
 
 For code-only verification without an ESP32 or PlatformIO, compile and run the portable
 firmware logic tests with any C++17 compiler:

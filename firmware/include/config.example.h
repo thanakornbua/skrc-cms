@@ -2,6 +2,7 @@
 
 // Copy to include/config.h and replace every placeholder before flashing.
 // GPIO values are deliberately not selected by the project; use your wiring.
+// Required only by the esp32dev_http environment.
 #define WIFI_SSID "<venue-wifi>"
 #define WIFI_PASS "<venue-password>"
 #define API_BASE_URL "https://api.example.com"
@@ -10,6 +11,7 @@
                     "<api-root-ca-pem>\n" \
                     "-----END CERTIFICATE-----\n"
 #define DEVICE_ID "esp32-lane1"
+// Required only by esp32dev_http. For serial, the key remains on the laptop.
 #define DEVICE_KEY "<random-device-key>"
 #define LANE_ID "1"
 
