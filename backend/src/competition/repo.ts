@@ -1,10 +1,13 @@
 import { BatchWriteCommand, GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import type { BatchWriteCommandInput } from "@aws-sdk/lib-dynamodb";
+import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import type { CompetitorRecord } from "../competitors/types.js";
 import { calculateTimeResult } from "../timing/repo.js";
 
 const STATE_KEY = { PK: "CONFIG#COMPETITION", SK: "STATE" };
+type BatchWriteRequests = NonNullable<NonNullable<BatchWriteCommandInput["RequestItems"]>[string]>;
 
 export interface RankedResult {
   rank: number;
@@ -39,12 +42,43 @@ export async function getCompetitorRank(category: string, competitorId: string):
 }
 
 async function scanCompetitors(): Promise<CompetitorRecord[]> {
-  const result = await ddbDoc.send(new ScanCommand({
-    TableName: TABLE_NAME,
-    FilterExpression: "GSI1PK = :type",
-    ExpressionAttributeValues: { ":type": "COMPETITOR" },
-  }));
-  return (result.Items ?? []) as CompetitorRecord[];
+  const items: CompetitorRecord[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = await ddbDoc.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "GSI1PK = :type",
+      ExpressionAttributeValues: { ":type": "COMPETITOR" },
+      ExclusiveStartKey,
+    }));
+    items.push(...((result.Items ?? []) as CompetitorRecord[]));
+    ExclusiveStartKey = result.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return items;
+}
+
+async function deleteRankingSnapshots(categories: string[]): Promise<void> {
+  for (const category of categories) {
+    let ExclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const found = await ddbDoc.send(new QueryCommand({
+        TableName: TABLE_NAME, KeyConditionExpression: "PK = :pk",
+        ExpressionAttributeValues: { ":pk": `RANKING#${category}` },
+        ProjectionExpression: "PK, SK", ExclusiveStartKey,
+      }));
+      const keys = found.Items ?? [];
+      for (let i = 0; i < keys.length; i += 25) {
+        let pending: BatchWriteRequests = keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } }));
+        do {
+          const result = await ddbDoc.send(new BatchWriteCommand({
+            RequestItems: { [TABLE_NAME]: pending },
+          }));
+          pending = result.UnprocessedItems?.[TABLE_NAME] ?? [];
+        } while (pending.length > 0);
+      }
+      ExclusiveStartKey = found.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+  }
 }
 
 export async function calculateRankings(includeInternalIds = false): Promise<CategoryResults[]> {
@@ -90,24 +124,49 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
     disqualified: category.disqualified.map(({ competitorId: _competitorId, ...item }) => item),
   }));
   const concludedAt = new Date().toISOString();
-  await ddbDoc.send(new PutCommand({
-    TableName: TABLE_NAME,
-    Item: { ...STATE_KEY, phase: "CONCLUDED", concludedAt, concludedBy: byUser, results: publicResults },
-  }));
-  for (const category of internalResults) {
-    for (const item of category.ranked) {
-      await ddbDoc.send(new PutCommand({
-        TableName: TABLE_NAME,
-        Item: { PK: `RANKING#${category.category}`, SK: `RANK#${String(item.rank).padStart(4, "0")}`, ...item, concludedAt },
-      }));
+  try {
+    await ddbDoc.send(new PutCommand({
+      TableName: TABLE_NAME,
+      Item: { ...STATE_KEY, phase: "CONCLUDED", concludedAt, concludedBy: byUser, results: publicResults },
+      ConditionExpression: "attribute_not_exists(#phase) OR #phase = :open",
+      ExpressionAttributeNames: { "#phase": "phase" },
+      ExpressionAttributeValues: { ":open": "OPEN" },
+    }));
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ApiError(409, "CONFLICT", "Competition is already concluded");
     }
-    for (const item of category.disqualified) {
-      if (!item.competitorId) continue;
-      await ddbDoc.send(new PutCommand({
-        TableName: TABLE_NAME,
-        Item: { PK: `RANKING#${category.category}`, SK: `DQ#${item.competitorId}`, competitorId: item.competitorId, teamName: item.teamName, concludedAt },
-      }));
+    throw error;
+  }
+  try {
+    for (const category of internalResults) {
+      for (const item of category.ranked) {
+        await ddbDoc.send(new PutCommand({
+          TableName: TABLE_NAME,
+          Item: { PK: `RANKING#${category.category}`, SK: `RANK#${String(item.rank).padStart(4, "0")}`, ...item, concludedAt },
+        }));
+      }
+      for (const item of category.disqualified) {
+        if (!item.competitorId) continue;
+        await ddbDoc.send(new PutCommand({
+          TableName: TABLE_NAME,
+          Item: { PK: `RANKING#${category.category}`, SK: `DQ#${item.competitorId}`, competitorId: item.competitorId, teamName: item.teamName, concludedAt },
+        }));
+      }
     }
+  } catch (error) {
+    // Do not leave a FINAL competition whose per-competitor rank snapshot is
+    // incomplete. Keep mutations frozen while cleaning up, then reopen only
+    // the conclusion attempt that this call created.
+    await deleteRankingSnapshots(internalResults.map((item) => item.category));
+    await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: STATE_KEY,
+      UpdateExpression: "SET #phase = :open REMOVE concludedAt, concludedBy, results",
+      ConditionExpression: "concludedAt = :concludedAt",
+      ExpressionAttributeNames: { "#phase": "phase" },
+      ExpressionAttributeValues: { ":open": "OPEN", ":concludedAt": concludedAt },
+    }));
+    throw error;
   }
   return { phase: "CONCLUDED", concludedAt, results: publicResults };
 }
@@ -115,16 +174,7 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
 export async function reopenCompetition(): Promise<void> {
   const state = await getCompetitionState();
   const categories = state.results?.map((item) => item.category) ?? [];
-  for (const category of categories) {
-    const found = await ddbDoc.send(new QueryCommand({
-      TableName: TABLE_NAME, KeyConditionExpression: "PK = :pk",
-      ExpressionAttributeValues: { ":pk": `RANKING#${category}` }, ProjectionExpression: "PK, SK",
-    }));
-    const keys = found.Items ?? [];
-    for (let i = 0; i < keys.length; i += 25) {
-      await ddbDoc.send(new BatchWriteCommand({ RequestItems: { [TABLE_NAME]: keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } })) } }));
-    }
-  }
+  await deleteRankingSnapshots(categories);
   await ddbDoc.send(new UpdateCommand({
     TableName: TABLE_NAME, Key: STATE_KEY,
     UpdateExpression: "SET phase = :open REMOVE concludedAt, concludedBy, results",
