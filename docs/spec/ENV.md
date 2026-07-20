@@ -7,6 +7,7 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | Var | Example | Notes |
 |---|---|---|
 | `AWS_REGION` | `ap-southeast-7` | Fixed by D5. |
+| `RESOURCE_PREFIX` | `robo-compet` | Prefix for Cognito/Lambda/IAM/API Gateway resources. Set `robo-compet-staging` for an isolated rehearsal. |
 | `DYNAMO_TABLE` | `robo-compet` | Fixed by D5. |
 | `COGNITO_USER_POOL_ID` | `ap-southeast-7_xxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `COGNITO_CLIENT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |

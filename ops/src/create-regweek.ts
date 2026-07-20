@@ -31,12 +31,14 @@ import { bundleLambdaFromDist } from "./bundle-lambda.js";
 
 const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
 const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
+const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
+if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("RESOURCE_PREFIX must match ^[a-z0-9-]{3,40}$");
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
 
-const FUNCTION_NAME = "robo-compet-regweek-api";
-const ROLE_NAME = "robo-compet-regweek-lambda-role";
+const FUNCTION_NAME = `${RESOURCE_PREFIX}-regweek-api`;
+const ROLE_NAME = `${RESOURCE_PREFIX}-regweek-lambda-role`;
 const LAMBDA_BASIC_EXECUTION_POLICY_ARN =
   "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole";
 
@@ -103,7 +105,7 @@ async function findOrCreateRegweekRole(accountId: string): Promise<string> {
   await iam.send(
     new PutRolePolicyCommand({
       RoleName: ROLE_NAME,
-      PolicyName: "robo-compet-regweek-inline",
+      PolicyName: `${RESOURCE_PREFIX}-regweek-inline`,
       PolicyDocument: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -208,7 +210,7 @@ async function findOrCreateFunction(roleArn: string): Promise<string> {
   return updated.FunctionArn!;
 }
 
-const HTTP_API_NAME = "robo-compet-regweek-http-api";
+const HTTP_API_NAME = `${RESOURCE_PREFIX}-regweek-http-api`;
 
 /**
  * Lambda Function URLs are not available in every region (notably not in

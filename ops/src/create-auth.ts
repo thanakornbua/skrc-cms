@@ -28,11 +28,13 @@ import {
 import { buildSingleFileZip } from "./zip.js";
 
 const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
-const POOL_NAME = "Robo Compet - Users";
-const CLIENT_NAME = "Robo Compet - Web App";
+const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
+if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("RESOURCE_PREFIX must match ^[a-z0-9-]{3,40}$");
+const POOL_NAME = process.env.COGNITO_POOL_NAME ?? `${RESOURCE_PREFIX} - Users`;
+const CLIENT_NAME = process.env.COGNITO_CLIENT_NAME ?? `${RESOURCE_PREFIX} - Web App`;
 const GROUP_NAMES = ["committee", "admin"] as const;
-const TRIGGER_FUNCTION_NAME = "robo-compet-auto-confirm-signup";
-const TRIGGER_ROLE_NAME = "robo-compet-auto-confirm-signup-role";
+const TRIGGER_FUNCTION_NAME = `${RESOURCE_PREFIX}-auto-confirm-signup`;
+const TRIGGER_ROLE_NAME = `${RESOURCE_PREFIX}-auto-confirm-signup-role`;
 const LAMBDA_BASIC_EXECUTION_POLICY_ARN =
   "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole";
 
