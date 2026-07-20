@@ -5,12 +5,12 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include "config.h"
+#include "gate_logic.h"
 
 namespace {
-constexpr uint32_t DEBOUNCE_MS = 100;
-constexpr size_t QUEUE_CAPACITY = 64;
-constexpr uint32_t RETRY_MIN_MS = 1000;
-constexpr uint32_t RETRY_MAX_MS = 30000;
+using gate_logic::DEBOUNCE_MS;
+using gate_logic::QUEUE_CAPACITY;
+using gate_logic::RETRY_MIN_MS;
 
 enum class GateType { START, CHECKPOINT, STOP };
 
@@ -86,8 +86,12 @@ bool enqueue(const Gate& gate, uint32_t timestamp) {
   }
   Event& event = queue[(queueHead + queueSize) % QUEUE_CAPACITY];
   sequenceNumber += 1;
-  snprintf(event.eventId, sizeof(event.eventId), "%s-%lu-%lu", DEVICE_ID,
-           static_cast<unsigned long>(bootCount), static_cast<unsigned long>(sequenceNumber));
+  if (!gate_logic::formatEventId(event.eventId, sizeof(event.eventId), DEVICE_ID, bootCount,
+                                sequenceNumber)) {
+    portEXIT_CRITICAL(&queueMux);
+    Serial.println("ERROR event ID exceeds buffer; trigger cannot be retained");
+    return false;
+  }
   strlcpy(event.gateId, gate.id, sizeof(event.gateId));
   event.type = gate.type;
   event.deviceTs = timestamp;
@@ -105,7 +109,8 @@ void pollGates(uint32_t now) {
   for (Gate& gate : gates) {
     if (gate.pin < 0) continue;
     const bool active = digitalRead(gate.pin) == GATE_ACTIVE_LEVEL;
-    if (active && !gate.wasActive && now - gate.lastTriggerMs >= DEBOUNCE_MS) {
+    if (active && !gate.wasActive &&
+        gate_logic::elapsedAtLeast(now, gate.lastTriggerMs, DEBOUNCE_MS)) {
       gate.lastTriggerMs = now;
       enqueue(gate, now);
     }
@@ -127,7 +132,7 @@ void scheduleRetry(const Event& attempted, uint32_t now, const char* reason) {
   portENTER_CRITICAL(&queueMux);
   if (queueSize > 0 && strcmp(queue[queueHead].eventId, attempted.eventId) == 0) {
     queue[queueHead].retryAtMs = now + delayMs;
-    queue[queueHead].backoffMs = min(delayMs * 2, RETRY_MAX_MS);
+    queue[queueHead].backoffMs = gate_logic::nextBackoff(delayMs);
   }
   portEXIT_CRITICAL(&queueMux);
   Serial.printf("POST %s failed (%s); retry in %lu ms\n", attempted.eventId, reason,
@@ -141,7 +146,7 @@ void drainQueue(uint32_t now) {
   if (queueSize == 0) { portEXIT_CRITICAL(&queueMux); return; }
   event = queue[queueHead];
   portEXIT_CRITICAL(&queueMux);
-  if (static_cast<int32_t>(now - event.retryAtMs) < 0) return;
+  if (!gate_logic::deadlineReached(now, event.retryAtMs)) return;
 
   JsonDocument document;
   document["eventId"] = event.eventId;
@@ -164,7 +169,7 @@ void drainQueue(uint32_t now) {
   const String response = status > 0 ? http.getString() : "";
   http.end();
 
-  if (status <= 0 || status >= 500) {
+  if (gate_logic::shouldRetryHttpStatus(status)) {
     scheduleRetry(event, now, status <= 0 ? "transport" : "server 5xx");
     return;
   }

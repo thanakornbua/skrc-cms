@@ -20,6 +20,20 @@ pio run --target upload
 pio device monitor --baud 115200
 ```
 
+For code-only verification without an ESP32 or PlatformIO, compile and run the portable
+firmware logic tests with any C++17 compiler:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror -Ifirmware/include \
+  firmware/test/test_gate_logic.cpp -o /tmp/skrc-gate-logic-test
+/tmp/skrc-gate-logic-test
+```
+
+These tests cover debounce and `millis()` rollover arithmetic, retry deadlines and capped
+exponential backoff, HTTP retry classification, event-ID construction, and the minimum
+queue capacity. They do not emulate ESP32 NVS, WiFi, TLS, GPIO electrical behavior, or
+FreeRTOS scheduling.
+
 The serial monitor logs every sensor trigger, queued event ID, retry, HTTP status, and backend response. The status LED is solid while connected and idle, blinks while draining queued events, and fast-blinks while disconnected.
 
 ## Runtime behavior
@@ -31,6 +45,9 @@ The serial monitor logs every sensor trigger, queued event ID, retry, HTTP statu
 - WiFi reconnects automatically. The queue is RAM-only, so a power loss while events are waiting can lose them; use stable power during competition.
 
 ## Hardware-in-loop checklist
+
+This checklist is intentionally deferred when no ESP32 is available; host-side tests
+cannot replace it.
 
 1. Assign and arm the lane in the admin console.
 2. Break start then stop beams and compare the portal time with a stopwatch (target tolerance: about 50 ms).
