@@ -24,7 +24,7 @@ REGISTERED ──check-in──> CHECKED_IN ──inspect──> INSPECTED ─�
 - Strictly forward-only. There is no transition back to an earlier status.
 - `RUN_COMPLETE` is set the moment the competitor's **first** `Run` reaches `status = COMPLETE` (Phase 7). Subsequent runs (2nd, 3rd attempt) do not change `status` further — it stays `RUN_COMPLETE`.
 - `disqualified` (`{bool, reason, byUser, at}`) is an **independent flag**, not a status value. It can be set at any point regardless of the competitor's current `status`, and it never itself advances or reverts `status`. A disqualified competitor is excluded from ranking (Phase 11) and rejected at lane assignment (Phase 6), but their `status` field keeps recording flow progress normally.
-- Competition conclusion (`OPEN → CONCLUDED`) is **global** state (`CONFIG#COMPETITION`), not a per-competitor status.
+- Competition progression is global: `ROUND_1 → BEST_OF_4 → BEST_OF_2 → THE_BEST → CONCLUDED`. Eligibility is snapshotted at advancement and is not a competitor flow status.
 
 Valid actions per status (who / what is required before the action is accepted):
 
@@ -58,4 +58,8 @@ IDLE ──assign (scan)──> ASSIGNED ──arm (admin)──> ARMED ──ST
 - `UNDER_REVIEW` blocks lane assignment until an admin resolves it to `INVALID` or
   `VOID`, or attaches a valid correction. A correction keeps the same attempt.
 - A corrected run qualifies using the correction time; raw device data remains unchanged.
-- Three consumed attempts blocks further lane assignment.
+- Round 1 and Best of 4 consume the team's admin-configured stage time budget;
+  completed laps may use the remainder for another attempt.
+- Best of 2 and The Best allow at most two consumed attempts.
+- After Round 1, lane assignment also requires the competitor to be in the active
+  stage's eligibility snapshot.

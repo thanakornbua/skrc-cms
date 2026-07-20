@@ -6,8 +6,10 @@ import { ApiError, zodToFields } from "../errors.js";
 import { checkIn, disqualifyCompetitor, getCompetitor, inspectCompetitor, listCompetitors, recordPasswordResetRequest, reinstateCompetitor } from "./repo.js";
 import { getActiveLaneForCompetitor } from "../lanes/repo.js";
 import { listRuns } from "../runs/repo.js";
-import { calculateTimeResult, listAppliedPenalties, listCorrections } from "../timing/repo.js";
+import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
 import { getCompetitorRank } from "../competition/repo.js";
+import { getCompetitionState } from "../competition/state.js";
+import { scoreCompetitorStage } from "../competition/scoring.js";
 
 export const competitorsRouter = Router();
 
@@ -21,11 +23,13 @@ competitorsRouter.get(
       if (!competitor) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
 
       const lane = await getActiveLaneForCompetitor(competitor.competitorId);
-      const [runs, corrections, penalties, timeResult, rank] = await Promise.all([
+      const competition = await getCompetitionState();
+      const [runs, corrections, penalties, rank] = await Promise.all([
         listRuns(competitor.competitorId), listCorrections(competitor.competitorId),
-        listAppliedPenalties(competitor.competitorId), calculateTimeResult(competitor.competitorId),
+        listAppliedPenalties(competitor.competitorId),
         getCompetitorRank(competitor.category, competitor.competitorId),
       ]);
+      const stageResult = scoreCompetitorStage({ competitor, runs, corrections, penalties }, competition.activeStage);
       const correctionByRun = new Map(corrections.map((item) => [item.runId, item]));
 
       res.status(200).json({
@@ -41,6 +45,7 @@ competitorsRouter.get(
         penalties: penalties.map(({ byUser: _byUser, ...penalty }) => penalty),
         runs: runs.map((run) => ({
           runId: run.runId,
+          stage: run.stage ?? "ROUND_1",
           laneId: run.laneId,
           startDeviceTs: run.startDeviceTs,
           stopDeviceTs: run.stopDeviceTs,
@@ -55,7 +60,11 @@ competitorsRouter.get(
           reviewResolution: run.reviewResolution ?? null,
           createdAt: run.createdAt,
         })),
-        ...timeResult,
+        stageResult: stageResult ? (() => { const { competitorId: _id, ...result } = stageResult; return result; })() : null,
+        aggregateTimeMs: stageResult?.aggregateTimeMs ?? null,
+        penaltyTimeMs: stageResult?.penaltyTimeMs ?? 0,
+        finalTimeMs: stageResult?.finalTimeMs ?? null,
+        activeStage: competition.activeStage,
         rank,
       });
     } catch (err) {

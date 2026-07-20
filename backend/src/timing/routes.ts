@@ -12,8 +12,17 @@ export const timingRouter = Router();
 const timingSchema = z.object({
   category: z.string().trim().min(1),
   minTimeMs: z.number().int().positive(),
-  maxTimeMs: z.number().int().positive(),
-}).refine((data) => data.minTimeMs < data.maxTimeMs, { message: "minTimeMs must be less than maxTimeMs", path: ["minTimeMs"] });
+  stageMaxTimeMs: z.object({
+    ROUND_1: z.number().int().positive(),
+    BEST_OF_4: z.number().int().positive(),
+    BEST_OF_2: z.number().int().positive(),
+    THE_BEST: z.number().int().positive(),
+  }),
+}).superRefine((data, context) => {
+  for (const stage of ["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as const) if (data.minTimeMs >= data.stageMaxTimeMs[stage]) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: `minTimeMs must be less than ${stage} maximum`, path: ["minTimeMs"] });
+  }
+});
 const ruleSchema = z.object({ label: z.string().trim().min(1), penaltyMs: z.number().int().positive() });
 const ruleUpdateSchema = ruleSchema.extend({ active: z.boolean() });
 const applySchema = z.object({ ruleId: z.string().trim().min(1) });
@@ -33,7 +42,7 @@ timingRouter.get("/admin/config/categories", requireAuth, requireRole("admin"), 
 timingRouter.put("/admin/config/categories", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const input = parsed(timingSchema, req.body);
-    res.status(200).json(await putCategoryTiming(input.category, input.minTimeMs, input.maxTimeMs, req.user!.username));
+    res.status(200).json(await putCategoryTiming(input.category, input.minTimeMs, input.stageMaxTimeMs, req.user!.username));
   } catch (error) { next(error); }
 });
 timingRouter.get("/admin/config/penalties", requireAuth, requireRole("committee"), async (_req, res, next) => {

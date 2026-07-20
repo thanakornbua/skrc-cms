@@ -4,9 +4,11 @@ import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { config } from "../config.js";
 import { getCompetitor } from "../competitors/repo.js";
+import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
+import { STAGE_SCORING } from "../competition/types.js";
 import type { LaneConfigEntry, LaneRecord } from "./types.js";
 import { voidActiveRunAndResetLane } from "../runs/repo.js";
-import { getAttemptState } from "../timing/repo.js";
+import { getAttemptState, getCategoryTiming, stageMaximum } from "../timing/repo.js";
 
 function keyLane(laneId: string) {
   return { PK: `LANE#${laneId}`, SK: "STATE" };
@@ -110,12 +112,23 @@ export async function assignLane(
   if (competitor.status === "REGISTERED" || competitor.status === "CHECKED_IN") {
     throw new ApiError(409, "NOT_INSPECTED", "Competitor has not passed inspection yet");
   }
-  const attempts = await getAttemptState(competitorId);
+  const competition = await getCompetitionState();
+  if (!isEligibleForStage(competition, competitorId)) {
+    throw new ApiError(409, "NOT_ELIGIBLE", `Competitor is not eligible for ${competition.activeStage}`);
+  }
+  const attempts = await getAttemptState(competitorId, competition.activeStage);
   if (attempts.unresolved) {
     throw new ApiError(409, "RUN_UNDER_REVIEW", `Run ${attempts.unresolved.runId} requires admin review before reassignment`);
   }
-  if (attempts.consumed >= 3) {
-    throw new ApiError(409, "CONFLICT", "Competitor has used all 3 attempts");
+  if (STAGE_SCORING[competition.activeStage] === "TIME_AVERAGE" && attempts.consumed >= 2) {
+    throw new ApiError(409, "CONFLICT", `Competitor has used both attempts in ${competition.activeStage}`);
+  }
+  if (STAGE_SCORING[competition.activeStage] === "CHECKPOINT_LAP") {
+    const timing = await getCategoryTiming(competitor.category);
+    if (!timing) throw new ApiError(409, "CONFLICT", `Timing is not configured for ${competitor.category}`);
+    if (attempts.consumedTimeMs >= stageMaximum(timing, competition.activeStage)) {
+      throw new ApiError(409, "CONFLICT", `Competitor has exhausted the ${competition.activeStage} time budget`);
+    }
   }
 
   const activeElsewhere = await getActiveLaneForCompetitor(competitorId);

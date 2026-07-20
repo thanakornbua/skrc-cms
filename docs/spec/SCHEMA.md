@@ -17,18 +17,22 @@ No other tables, no other indexes. If a phase seems to need a new GSI or a secon
 | Registration | `REG#<cognitoSub>` | `PROFILE` | `teamName`, `category`, `student1NameThai`, `student1NameEnglish` (student 1 is team leader/correspondent), equivalent Thai/English fields for students 2–3, `contactEmail`, `contactPhone`, `pdpaConsent` (`accepted`, `version`, `at`, `retentionMonths`, `deleteBy`, `authorityConfirmed`, `language`), status/review fields, and `createdAt`. Registration is free; no payment/slip attributes. |
 | Competitor | `COMP#<competitorId>` | `PROFILE` | Created at approval by copying the team, student, contact, PDPA consent, category, and `cognitoSub` fields; plus flow status, disqualification, check-in/inspection timestamps, and `createdAt`. |
 | ID counter | `CONFIG#COUNTER` | `COMPETITORID` | `value` (number) — incremented only via an atomic DynamoDB `ADD` update inside the approve route. This is the **only** source of new `competitorId`s anywhere in the system. |
-| Email notification ledger | `NOTIFY#<cognitoSub>` | `REGISTRATION_RECEIVED` \| `REGISTRATION_APPROVED` | Async SES delivery state (`PROCESSING`, `FAILED`, or `ACCEPTED`), attempt count, destination, SES message ID, timestamps, and `expiresAt`. Stream records for these items are ignored by the worker; TTL follows the registration's PDPA deletion date. |
-| Category config | `CONFIG#CATEGORY#<cat>` | `PROFILE` | integer `minTimeMs`, integer `maxTimeMs`, `updatedAt`, `updatedBy` |
+| Email notification ledger | `NOTIFY#<cognitoSub>` | `REGISTRATION_RECEIVED` \| `REGISTRATION_APPROVED` | Async Resend delivery state (`PROCESSING`, `FAILED`, or `ACCEPTED`), attempt count, destination, Resend email ID, timestamps, and `expiresAt`. Stream records for these items are ignored by the worker; TTL follows the registration's PDPA deletion date. |
+| Category config | `CONFIG#CATEGORY#<cat>` | `PROFILE` | integer `minTimeMs`, `stageMaxTimeMs` map (`ROUND_1`, `BEST_OF_4`, `BEST_OF_2`, `THE_BEST`), legacy `maxTimeMs` fallback, `updatedAt`, `updatedBy` |
 | Penalty rule | `CONFIG#PENALTY#<ruleId>` | `PROFILE` | `ruleId`, `label`, integer `penaltyMs`, `active`, `updatedAt`, `updatedBy` |
-| Competition state | `CONFIG#COMPETITION` | `STATE` | `phase` (`OPEN`\|`CONCLUDED`), `concludedAt`, `concludedBy` |
+| Competition state | `CONFIG#COMPETITION` | `STATE` | `phase` (`OPEN`\|`CONCLUDED`), `activeStage`, `eligibleCompetitorIds`, immutable-on-advance `stageResults`, final `results`, and conclusion/update audit fields |
 | Lane | `LANE#<laneId>` | `STATE` | `state` (`IDLE`\|`ASSIGNED`\|`ARMED`\|`RUNNING`), `competitorId`, `deviceId`, `armedBy`, `updatedAt` |
 | Gate event (audit) | `LANE#<laneId>` | `EVT#<deviceTs>#<eventId>` | `eventId`, `type` (`START`\|`CHECKPOINT`\|`STOP`), `gateId`, `deviceTs`, `receivedAt`. Every well-formed event is written here, whether accepted or rejected downstream. |
 | Gate-event claim | `EVENT#<eventId>` | `CLAIM` | `eventId`, `deviceId`, `laneId`, `deviceTs`, `receivedAt`. Written atomically with the Gate-event audit item on first receipt; its conditional creation enforces global `eventId` deduplication even if a replay mutates its lane or timestamp (D19). |
-| Run | `COMP#<competitorId>` | `RUN#<runId>` | device timestamps, raw `elapsedMs`, splits, snapshotted `minTimeMs`/`maxTimeMs`, `status` (`COMPLETE`\|`TIMED_OUT`\|`UNDER_REVIEW`\|`INVALID`\|`VOID`), optional review metadata, `createdAt` |
+| Run | `COMP#<competitorId>` | `RUN#<runId>` | snapshotted `stage`, device timestamps, raw `elapsedMs`, splits, snapshotted `minTimeMs`/`maxTimeMs`, status/review metadata, `createdAt`. Legacy unstaged runs are Round 1. |
 | Time correction | `COMP#<competitorId>` | `CORRECTION#<runId>` | `runId`, valid integer `elapsedMs`, mandatory `reason`, `byUser`, `at`; original Run is never overwritten |
-| Applied penalty | `COMP#<competitorId>` | `PENALTY#<isoTs>#<ruleId>` | snapshotted `ruleId`, `label`, `penaltyMs`, `byUser`, `at`, optional `revocation` `{reason,byUser,at}` |
+| Applied penalty | `COMP#<competitorId>` | `PENALTY#<isoTs>#<ruleId>` | snapshotted `stage`, `ruleId`, `label`, `penaltyMs`, `byUser`, `at`, optional `revocation` `{reason,byUser,at}` |
 | Password-reset audit | `COMP#<competitorId>` | `AUDIT#PASSWORD_RESET#<isoTs>` | `type`, `byUser`, `at`, `deleteBy`; records only that an admin requested Cognito delivery and contains no password or reset code |
 | Ranking snapshot | `RANKING#<category>` | `RANK#<zero-padded n>` or `DQ#<competitorId>` | internal `competitorId`, `teamName`, `aggregateTimeMs`, `penaltyTimeMs`, `finalTimeMs`, qualifying run IDs |
+
+Runs, corrections, and penalties are evaluated only in their snapshotted stage.
+Protected stage snapshots retain competitor numbers for advancement; public responses
+and final exports strip them.
 
 ## GSI1 usage
 

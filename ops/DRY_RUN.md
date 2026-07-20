@@ -31,9 +31,10 @@ export SIM_API_URL=https://api.suankularb.space
 
 ## Happy-path rehearsal
 
-1. In `/staff/timing`, admin sets minimum and maximum time for the category and
-   creates the approved penalty rules. Use a window that contains the simulated
-   duration; for example, `5.000 s` minimum and `20.000 s` maximum.
+1. In `/staff/timing`, admin sets the minimum safeguard and all four stage maximum
+   times for the category, then creates the approved penalty rules. Round 1 and
+   Best of 4 maxima are cumulative team budgets; Best of 2 and The Best maxima
+   apply to each of the two attempts.
 2. In `/register`, create the disposable competitor account and submit the team.
    Confirm that no payment step appears.
 3. In `/committee/approvals`, approve the registration. Record the generated
@@ -51,10 +52,17 @@ export SIM_API_URL=https://api.suankularb.space
 8. While it runs, observe `/admin/lanes` change `ARMED → RUNNING → IDLE`. Confirm
    the portal shows the completed attempt and `/staff/timing` shows the same raw
    elapsed time. The expected simulator time is printed after STOP.
-9. Repeat assignment, arming, and simulation until the configured number of
-   qualifying attempts exists. Confirm the best-two average, penalties, final time,
-   and time-based rank agree on the portal, timing screen, and scoreboard.
-10. Apply one penalty in `/staff/timing`; confirm it adds time and therefore can move
+9. Confirm Round 1 ranks completed laps by fastest time and incomplete attempts by
+   furthest unique checkpoint. Use the remaining stage budget for a re-attempt.
+10. As admin, advance through Best of 4 (top 8), Best of 2 (top 4), and The Best
+    (top 2), creating disposable stage-specific runs at each step. Confirm earlier
+    runs disappear from the active-stage calculation.
+11. In Best of 2 and The Best, confirm two valid attempts average, one valid time
+    stands alone, zero valid times are unranked, and a third attempt is rejected.
+12. Confirm Best-of-2 eliminations take 3rd/4th according to their Best-of-4 order,
+    while Best-of-4 positions 5th–8th remain final.
+13. Apply one penalty in `/staff/timing`; confirm it affects only the active stage
+    and therefore can move
     the team down the ranking. Revoke it as admin and confirm the original result.
 
 ## Device and state-machine checks
@@ -74,7 +82,7 @@ Run each check only after putting the lane in the state named in the expectation
 ## Result freeze and recovery
 
 1. Resolve every `UNDER_REVIEW` run and confirm penalties, corrections, and DQ state.
-2. In `/staff/timing`, type the explicit confirmation and conclude the competition.
+2. Advance until The Best, then type the explicit confirmation and conclude.
 3. Confirm `/scoreboard` displays final results and new competitive mutations are rejected.
 4. Reopen once during the rehearsal; confirm the frozen snapshot is removed and the
    competition accepts operations again. Conclude again only after rechecking results.

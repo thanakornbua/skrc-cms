@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { ApiError } from "../errors.js";
-import { calculateRankings, concludeCompetition, getCompetitionState, reopenCompetition } from "./repo.js";
+import { advanceCompetitionStage, calculateRankings, concludeCompetition, getCompetitionState, reopenCompetition } from "./repo.js";
 
 export const competitionRouter = Router();
 
@@ -12,7 +12,27 @@ competitionRouter.get("/public/scoreboard", async (req, res, next) => {
     const results = state.phase === "CONCLUDED" && state.results ? state.results : await calculateRankings(false);
     const category = typeof req.query.category === "string" ? req.query.category : undefined;
     const selected = category ? results.filter((item) => item.category === category) : results;
-    res.status(200).json({ state: state.phase === "CONCLUDED" ? "FINAL" : "PROVISIONAL", categories: selected });
+    res.status(200).json({
+      state: state.phase === "CONCLUDED" ? "FINAL" : "PROVISIONAL",
+      activeStage: state.activeStage, categories: selected,
+    });
+  } catch (error) { next(error); }
+});
+
+competitionRouter.get("/admin/competition/state", requireAuth, requireRole("committee"), async (_req, res, next) => {
+  try {
+    const state = await getCompetitionState();
+    res.status(200).json({ phase: state.phase, activeStage: state.activeStage, eligibleCompetitorIds: state.eligibleCompetitorIds ?? [] });
+  } catch (error) { next(error); }
+});
+
+competitionRouter.post("/admin/competition/advance", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    if (!z.object({ confirm: z.literal("ADVANCE") }).safeParse(req.body).success) {
+      throw new ApiError(400, "VALIDATION_ERROR", "confirm must equal ADVANCE");
+    }
+    const state = await advanceCompetitionStage(req.user!.username);
+    res.status(200).json({ phase: state.phase, activeStage: state.activeStage, eligibleCompetitorIds: state.eligibleCompetitorIds ?? [] });
   } catch (error) { next(error); }
 });
 

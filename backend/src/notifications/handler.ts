@@ -1,20 +1,22 @@
 import type { DynamoDBStreamEvent, DynamoDBRecord } from "aws-lambda";
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { buildEmail, classifyRecord, notificationKey, ttlFromDeleteBy, type NotificationEvent } from "./core.js";
+import { createResendSender } from "./resend.js";
 
-const EMAIL_REGION = process.env.EMAIL_REGION ?? "ap-southeast-1";
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "skrc@suankularb.space";
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@thanakorn.site";
 const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
+const RESEND_API_KEY_SECRET_ID = process.env.RESEND_API_KEY_SECRET_ID;
 const CLAIM_STALE_MS = 5 * 60 * 1000;
 
-const ses = new SESv2Client({ region: EMAIL_REGION });
 const ledger = ddbDoc as DynamoDBDocumentClient;
+const sender = RESEND_API_KEY_SECRET_ID
+  ? createResendSender({ secretId: RESEND_API_KEY_SECRET_ID, from: `SKRC Robotics Competition <${EMAIL_FROM}>`, replyTo: EMAIL_REPLY_TO })
+  : undefined;
 
 async function claim(event: NotificationEvent): Promise<boolean> {
   const key = notificationKey(event);
@@ -86,22 +88,12 @@ async function markFailed(event: NotificationEvent, err: unknown): Promise<void>
 async function processRecord(record: DynamoDBRecord): Promise<void> {
   const event = classifyRecord(record);
   if (!event || !EMAIL_ENABLED) return;
+  if (!sender) throw new Error("RESEND_API_KEY_SECRET_ID is required when EMAIL_ENABLED=true");
   if (!(await claim(event))) return;
 
   try {
     const content = buildEmail(event, PORTAL_URL, CONTACT_EMAIL);
-    const response = await ses.send(new SendEmailCommand({
-      FromEmailAddress: `SKRC Robotics Competition <${EMAIL_FROM}>`,
-      ReplyToAddresses: [EMAIL_REPLY_TO],
-      Destination: { ToAddresses: [event.contactEmail] },
-      Content: { Simple: {
-        Subject: { Data: content.subject, Charset: "UTF-8" },
-        Body: {
-          Text: { Data: content.text, Charset: "UTF-8" },
-          Html: { Data: content.html, Charset: "UTF-8" },
-        },
-      } },
-    }));
+    const messageId = await sender.send(event, content);
     await ledger.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: notificationKey(event),
@@ -110,7 +102,7 @@ async function processRecord(record: DynamoDBRecord): Promise<void> {
       ExpressionAttributeValues: {
         ":accepted": "ACCEPTED",
         ":acceptedAt": new Date().toISOString(),
-        ":messageId": response.MessageId ?? "unknown",
+        ":messageId": messageId,
       },
     }));
   } catch (err) {

@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io awscli jq curl
+systemctl enable --now docker
+
+region='__AWS_REGION__'
+image='__ECR_IMAGE__'
+config_secret='__BACKEND_CONFIG_SECRET__'
+api_domain='__API_DOMAIN__'
+
+aws ecr get-login-password --region "$region" | docker login --username AWS --password-stdin "${image%%/*}"
+install -d -m 0700 /opt/robo-compet
+aws secretsmanager get-secret-value --region "$region" --secret-id "$config_secret" --query SecretString --output text > /tmp/backend-config.json
+jq -r 'to_entries[] | "\(.key)=\(.value)"' /tmp/backend-config.json > /opt/robo-compet/backend.env
+chmod 0600 /opt/robo-compet/backend.env
+rm -f /tmp/backend-config.json
+
+docker network inspect robo-compet >/dev/null 2>&1 || docker network create robo-compet
+docker pull "$image"
+docker rm -f robo-compet-api robo-compet-caddy >/dev/null 2>&1 || true
+docker run -d --name robo-compet-api --restart unless-stopped --network robo-compet --env-file /opt/robo-compet/backend.env "$image"
+
+cat > /opt/robo-compet/Caddyfile <<EOF
+{$api_domain} {
+  encode zstd gzip
+  reverse_proxy robo-compet-api:3000
+}
+EOF
+docker run -d --name robo-compet-caddy --restart unless-stopped --network robo-compet -p 80:80 -p 443:443 -v /opt/robo-compet/Caddyfile:/etc/caddy/Caddyfile:ro -v caddy_data:/data -v caddy_config:/config caddy:2-alpine
+
+for attempt in $(seq 1 30); do
+  if docker exec robo-compet-api node -e "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+    exit 0
+  fi
+  sleep 2
+done
+exit 1

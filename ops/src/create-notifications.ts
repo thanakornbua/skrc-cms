@@ -1,6 +1,5 @@
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 import { DynamoDBClient, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
 import {
   IAMClient, GetRoleCommand, CreateRoleCommand, AttachRolePolicyCommand,
@@ -17,26 +16,23 @@ import {
   SQSClient, GetQueueUrlCommand, CreateQueueCommand, GetQueueAttributesCommand,
   QueueDoesNotExist,
 } from "@aws-sdk/client-sqs";
-import {
-  SESv2Client, GetEmailIdentityCommand, CreateEmailIdentityCommand,
-  PutEmailIdentityMailFromAttributesCommand, NotFoundException as SesNotFoundException,
-} from "@aws-sdk/client-sesv2";
+import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
 import { bundleLambdaFromDist } from "./bundle-lambda.js";
 
 const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
-const EMAIL_REGION = process.env.EMAIL_REGION ?? "ap-southeast-1";
 const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
 const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
-const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? "suankularb.space";
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "skrc@suankularb.space";
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@thanakorn.site";
 const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
-const SES_SANDBOX_RECIPIENT = process.env.SES_SANDBOX_RECIPIENT;
+const RESEND_API_KEY_SECRET_ID = process.env.RESEND_API_KEY_SECRET_ID;
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "false";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("Invalid RESOURCE_PREFIX");
 if (!/^https:\/\//.test(PORTAL_URL)) throw new Error("PORTAL_URL must use HTTPS");
-if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL, ...(SES_SANDBOX_RECIPIENT ? [SES_SANDBOX_RECIPIENT] : [])].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
+if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
+if (!RESEND_API_KEY_SECRET_ID) throw new Error("RESEND_API_KEY_SECRET_ID is required");
+const resendApiKeySecretId = RESEND_API_KEY_SECRET_ID;
 
 const FUNCTION_NAME = `${RESOURCE_PREFIX}-email-worker`;
 const ROLE_NAME = `${RESOURCE_PREFIX}-email-worker-role`;
@@ -45,33 +41,20 @@ const BASIC_POLICY = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecuti
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const HANDLER_DIST_PATH = path.resolve(__dirname, "../../backend/dist/notifications/handler.js");
 
-const sts = new STSClient({ region: REGION });
 const dynamo = new DynamoDBClient({ region: REGION });
 const iam = new IAMClient({ region: REGION });
 const lambda = new LambdaClient({ region: REGION });
 const sqs = new SQSClient({ region: REGION });
-const ses = new SESv2Client({ region: EMAIL_REGION });
+const secrets = new SecretsManagerClient({ region: REGION });
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function ensureEmailIdentity(): Promise<void> {
-  try {
-    await ses.send(new GetEmailIdentityCommand({ EmailIdentity: EMAIL_DOMAIN }));
-  } catch (err) {
-    if (!(err instanceof SesNotFoundException)) throw err;
-    console.log(`Creating SES identity "${EMAIL_DOMAIN}" in ${EMAIL_REGION}...`);
-    await ses.send(new CreateEmailIdentityCommand({ EmailIdentity: EMAIL_DOMAIN }));
-  }
-  await ses.send(new PutEmailIdentityMailFromAttributesCommand({
-    EmailIdentity: EMAIL_DOMAIN,
-    MailFromDomain: `bounce.${EMAIL_DOMAIN}`,
-    BehaviorOnMxFailure: "USE_DEFAULT_VALUE",
-  }));
-  const identity = await ses.send(new GetEmailIdentityCommand({ EmailIdentity: EMAIL_DOMAIN }));
-  console.log(`SES identity status: verified=${identity.VerifiedForSendingStatus ?? false}`);
-  console.log(`DKIM tokens: ${JSON.stringify(identity.DkimAttributes?.Tokens ?? [])}`);
+async function requireResendSecret(): Promise<string> {
+  const secret = await secrets.send(new DescribeSecretCommand({ SecretId: resendApiKeySecretId }));
+  if (!secret.ARN) throw new Error(`Resend secret ${resendApiKeySecretId} did not return an ARN`);
+  return secret.ARN;
 }
 
 async function ensureDlq(): Promise<{ url: string; arn: string }> {
@@ -90,7 +73,7 @@ async function ensureDlq(): Promise<{ url: string; arn: string }> {
   return { url, arn: attrs.Attributes!.QueueArn! };
 }
 
-async function ensureRole(accountId: string, tableArn: string, dlqArn: string): Promise<string> {
+async function ensureRole(tableArn: string, dlqArn: string, resendSecretArn: string): Promise<string> {
   let roleArn: string;
   try {
     roleArn = (await iam.send(new GetRoleCommand({ RoleName: ROLE_NAME }))).Role!.Arn!;
@@ -112,10 +95,7 @@ async function ensureRole(accountId: string, tableArn: string, dlqArn: string): 
     PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
       { Effect: "Allow", Action: ["dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:ListStreams"], Resource: `${tableArn}/stream/*` },
       { Effect: "Allow", Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"], Resource: tableArn },
-      { Effect: "Allow", Action: "ses:SendEmail", Resource: [
-        `arn:aws:ses:${EMAIL_REGION}:${accountId}:identity/${EMAIL_DOMAIN}`,
-        ...(SES_SANDBOX_RECIPIENT ? [`arn:aws:ses:${EMAIL_REGION}:${accountId}:identity/${SES_SANDBOX_RECIPIENT}`] : []),
-      ] },
+      { Effect: "Allow", Action: "secretsmanager:GetSecretValue", Resource: resendSecretArn },
       { Effect: "Allow", Action: "sqs:SendMessage", Resource: dlqArn },
     ] }),
   }));
@@ -125,7 +105,7 @@ async function ensureRole(accountId: string, tableArn: string, dlqArn: string): 
 async function ensureFunction(roleArn: string): Promise<string> {
   const zip = await bundleLambdaFromDist(HANDLER_DIST_PATH);
   const environment = { Variables: {
-    DYNAMO_TABLE: TABLE_NAME, EMAIL_REGION, EMAIL_FROM, EMAIL_REPLY_TO, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
+    DYNAMO_TABLE: TABLE_NAME, RESEND_API_KEY_SECRET_ID: resendApiKeySecretId, EMAIL_FROM, EMAIL_REPLY_TO, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
   } };
   try {
     const existing = await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION_NAME }));
@@ -145,7 +125,7 @@ async function ensureFunction(roleArn: string): Promise<string> {
       created = await lambda.send(new CreateFunctionCommand({
         FunctionName: FUNCTION_NAME, Runtime: "nodejs20.x", Handler: "index.handler", Role: roleArn,
         Code: { ZipFile: zip }, Timeout: 30, MemorySize: 256, Environment: environment,
-        Description: "Sends idempotent registration and approval notification emails",
+        Description: "Sends idempotent registration and approval notifications through Resend",
         Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },
       }));
       break;
@@ -180,12 +160,11 @@ async function ensureEventSource(functionArn: string, streamArn: string, dlqArn:
 }
 
 async function main(): Promise<void> {
-  const accountId = (await sts.send(new GetCallerIdentityCommand({}))).Account!;
   const table = (await dynamo.send(new DescribeTableCommand({ TableName: TABLE_NAME }))).Table;
   if (!table?.TableArn || !table.LatestStreamArn) throw new Error(`Table ${TABLE_NAME} must have a stream; run create-table first`);
-  await ensureEmailIdentity();
+  const resendSecretArn = await requireResendSecret();
   const dlq = await ensureDlq();
-  const roleArn = await ensureRole(accountId, table.TableArn, dlq.arn);
+  const roleArn = await ensureRole(table.TableArn, dlq.arn, resendSecretArn);
   const functionArn = await ensureFunction(roleArn);
   await ensureEventSource(functionArn, table.LatestStreamArn, dlq.arn);
   console.log(`Email worker ready: ${functionArn}`);
