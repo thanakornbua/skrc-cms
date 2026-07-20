@@ -13,6 +13,8 @@ export interface RunRecord {
   stopDeviceTs: number | null;
   elapsedMs: number | null;
   splits: RunSplit[];
+  /** Internal per-gate accepted timestamp used for atomic server debounce. */
+  debounce: Record<string, number>;
   // Absent while in flight.
   status?: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
   minTimeMs: number;

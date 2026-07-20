@@ -12,10 +12,18 @@ const schema = z.object({
   deviceTs: z.number().int().nonnegative(),
 });
 
-runsRouter.post("/gate-events", requireDeviceKey, async (req, res, next) => {
+runsRouter.post("/gate-events", (req, _res, next) => {
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    next(new ApiError(400, "VALIDATION_ERROR", "Invalid gate event", zodToFields(parsed.error)));
+    return;
+  }
+  // Authenticate only after structural validation. Malformed JSON bodies are
+  // contract-level 400s; only well-formed events can be device-auth failures.
+  req.body = parsed.data;
+  next();
+}, requireDeviceKey, async (req, res, next) => {
   try {
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "Invalid gate event", zodToFields(parsed.error));
-    res.status(200).json(await processGateEvent(parsed.data));
+    res.status(200).json(await processGateEvent(req.body));
   } catch (error) { next(error); }
 });

@@ -22,6 +22,7 @@ Source of truth for every ⛔ HUMAN decision named in `IMPLEMENTATION_PLAN.md`. 
 | D16 | Can staff register as competitors? | ✅ DECIDED | **No.** `POST /register` returns 403 for committee/admin tokens. |
 | D17 | Robot names | ✅ DECIDED | **Not used.** `robotName` removed from every entity, endpoint, form, badge, and scoreboard shape. |
 | D18 | Admin raw-data export | ✅ DECIDED | **Yes, CSV.** `GET /export.csv?entity=registrations\|competitors` (admin only) on the regweek Lambda; same route carried into the EC2 API in Phase 11. |
+| D19 | Global gate-event deduplication key | ✅ DECIDED | Add a dedicated `EVENT#<eventId>` / `CLAIM` entity. Atomically create it with the canonical lane audit item before state evaluation, so any reuse of an event ID is a duplicate even when other fields are mutated. Approved by the operator during Phase 7 integration. |
 
 ## Operator inputs (not ⛔ HUMAN decisions, but recorded here)
 

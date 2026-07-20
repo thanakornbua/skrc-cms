@@ -22,6 +22,7 @@ No other tables, no other indexes. If a phase seems to need a new GSI or a secon
 | Competition state | `CONFIG#COMPETITION` | `STATE` | `phase` (`OPEN`\|`CONCLUDED`), `concludedAt`, `concludedBy` |
 | Lane | `LANE#<laneId>` | `STATE` | `state` (`IDLE`\|`ASSIGNED`\|`ARMED`\|`RUNNING`), `competitorId`, `deviceId`, `armedBy`, `updatedAt` |
 | Gate event (audit) | `LANE#<laneId>` | `EVT#<deviceTs>#<eventId>` | `eventId`, `type` (`START`\|`CHECKPOINT`\|`STOP`), `gateId`, `deviceTs`, `receivedAt`. Every well-formed event is written here, whether accepted or rejected downstream. |
+| Gate-event claim | `EVENT#<eventId>` | `CLAIM` | `eventId`, `deviceId`, `laneId`, `deviceTs`, `receivedAt`. Written atomically with the Gate-event audit item on first receipt; its conditional creation enforces global `eventId` deduplication even if a replay mutates its lane or timestamp (D19). |
 | Run | `COMP#<competitorId>` | `RUN#<runId>` | device timestamps, raw `elapsedMs`, splits, snapshotted `minTimeMs`/`maxTimeMs`, `status` (`COMPLETE`\|`TIMED_OUT`\|`UNDER_REVIEW`\|`INVALID`\|`VOID`), optional review metadata, `createdAt` |
 | Time correction | `COMP#<competitorId>` | `CORRECTION#<runId>` | `runId`, valid integer `elapsedMs`, mandatory `reason`, `byUser`, `at`; original Run is never overwritten |
 | Applied penalty | `COMP#<competitorId>` | `PENALTY#<isoTs>#<ruleId>` | snapshotted `ruleId`, `label`, `penaltyMs`, `byUser`, `at`, optional `revocation` `{reason,byUser,at}` |
@@ -40,3 +41,6 @@ No other tables, no other indexes. If a phase seems to need a new GSI or a secon
 - **No password material of any kind is stored in this table.** Cognito owns all credentials. There is no "staff user" item — staff exist only as Cognito users in the `committee` / `admin` groups.
 - Every `byUser` attribute anywhere in the schema stores the **Cognito username** (the staff member's or the system's identifier for who took the action) — never a raw sub unless that's the only identifier available.
 - Do not rename any entity, attribute, or key pattern above, and do not add a GSI2 or a second table without stopping to flag it for human review.
+- A first-seen gate event creates its Gate-event claim and lane audit item in one
+  transaction before state evaluation. A failed claim means `duplicate`; neither
+  item may be created without the other.

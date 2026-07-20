@@ -1,11 +1,11 @@
 import { BatchGetCommand, GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { config } from "../config.js";
 import { getCompetitor } from "../competitors/repo.js";
 import type { LaneConfigEntry, LaneRecord } from "./types.js";
-import { voidActiveRun } from "../runs/repo.js";
+import { voidActiveRunAndResetLane } from "../runs/repo.js";
 import { getAttemptState } from "../timing/repo.js";
 
 function keyLane(laneId: string) {
@@ -242,22 +242,38 @@ export async function resetLane(laneId: string): Promise<LaneRecord> {
   await ensureLane(entry);
   const before = await getLane(laneId);
   if (before?.state === "RUNNING" && before.competitorId) {
-    await voidActiveRun(before.competitorId);
+    try {
+      await voidActiveRunAndResetLane(before.competitorId, laneId, new Date().toISOString());
+      return (await getLane(laneId))!;
+    } catch (error) {
+      if (error instanceof ConditionalCheckFailedException || error instanceof TransactionCanceledException) {
+        throw new ApiError(409, "CONFLICT", `Lane ${laneId} changed while it was being reset`);
+      }
+      throw error;
+    }
   }
-  const result = await ddbDoc.send(
-    new UpdateCommand({
+  try {
+    const result = await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME,
       Key: keyLane(laneId),
       UpdateExpression:
         "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+      ConditionExpression: "#state = :beforeState AND competitorId = :beforeCompetitorId",
       ExpressionAttributeNames: { "#state": "state" },
       ExpressionAttributeValues: {
         ":idle": "IDLE",
         ":none": null,
+        ":beforeState": before?.state ?? "IDLE",
+        ":beforeCompetitorId": before?.competitorId ?? null,
         ":at": new Date().toISOString(),
       },
       ReturnValues: "ALL_NEW",
-    })
-  );
-  return result.Attributes as LaneRecord;
+    }));
+    return result.Attributes as LaneRecord;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ApiError(409, "CONFLICT", `Lane ${laneId} changed while it was being reset`);
+    }
+    throw error;
+  }
 }

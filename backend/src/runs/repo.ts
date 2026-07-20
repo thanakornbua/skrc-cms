@@ -1,6 +1,6 @@
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
-  GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand,
+  GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { config } from "../config.js";
@@ -27,28 +27,58 @@ export async function listRuns(competitorId: string): Promise<RunRecord[]> {
     TableName: TABLE_NAME,
     KeyConditionExpression: "PK = :pk AND begins_with(SK, :run)",
     ExpressionAttributeValues: { ":pk": `COMP#${competitorId}`, ":run": "RUN#" },
+    ConsistentRead: true,
   }));
-  return ((result.Items ?? []) as RunRecord[]).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return ((result.Items ?? []) as RunRecord[])
+    .map((run) => ({
+      ...run,
+      // Concurrent checkpoint writes serialize in commit order; expose splits
+      // in device-clock order, which is the competition's timing order.
+      splits: [...(run.splits ?? [])].sort((a, b) => a.deviceTs - b.deviceTs),
+    }))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 async function activeRun(competitorId: string): Promise<RunRecord | null> {
   return (await listRuns(competitorId)).find((run) => run.status === undefined) ?? null;
 }
 
-async function audit(event: GateEventInput): Promise<boolean> {
+async function claimAndAudit(event: GateEventInput): Promise<boolean> {
+  const receivedAt = new Date().toISOString();
   try {
-    await ddbDoc.send(new PutCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        PK: `LANE#${event.laneId}`, SK: `EVT#${event.deviceTs}#${event.eventId}`,
-        eventId: event.eventId, type: event.type, gateId: event.gateId,
-        deviceTs: event.deviceTs, receivedAt: new Date().toISOString(),
-      },
-      ConditionExpression: "attribute_not_exists(PK)",
-    }));
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { Put: {
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `EVENT#${event.eventId}`, SK: "CLAIM", eventId: event.eventId,
+          deviceId: event.deviceId, laneId: event.laneId,
+          deviceTs: event.deviceTs, receivedAt,
+        },
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+      { Put: {
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `LANE#${event.laneId}`, SK: `EVT#${event.deviceTs}#${event.eventId}`,
+          eventId: event.eventId, type: event.type, gateId: event.gateId,
+          deviceTs: event.deviceTs, receivedAt,
+        },
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+    ] }));
     return true;
   } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) return false;
+    if (error instanceof TransactionCanceledException) {
+      // Cancellation reasons are not populated consistently by every DynamoDB
+      // implementation/SDK. A strongly consistent claim read distinguishes a
+      // real duplicate from throttling or another operational cancellation.
+      const existing = await ddbDoc.send(new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `EVENT#${event.eventId}`, SK: "CLAIM" },
+        ConsistentRead: true,
+      }));
+      if (existing.Item) return false;
+    }
     throw error;
   }
 }
@@ -56,7 +86,7 @@ async function audit(event: GateEventInput): Promise<boolean> {
 export async function processGateEvent(
   event: GateEventInput
 ): Promise<{ accepted: boolean; reason?: "duplicate" | "invalid_state" | "clock_anomaly" }> {
-  if (!(await audit(event))) return { accepted: false, reason: "duplicate" };
+  if (!(await claimAndAudit(event))) return { accepted: false, reason: "duplicate" };
 
   const laneResult = await ddbDoc.send(new GetCommand({
     TableName: TABLE_NAME, Key: laneKey(event.laneId), ConsistentRead: true,
@@ -96,7 +126,8 @@ export async function processGateEvent(
           TableName: TABLE_NAME,
           Item: { ...runKey(lane.competitorId, event.eventId), runId: event.eventId,
             laneId: event.laneId, startDeviceTs: event.deviceTs, stopDeviceTs: null,
-            elapsedMs: null, splits: [], minTimeMs, maxTimeMs, createdAt: now },
+            elapsedMs: null, splits: [], debounce: { [event.gateId]: event.deviceTs },
+            minTimeMs, maxTimeMs, createdAt: now },
           ConditionExpression: "attribute_not_exists(PK)",
         } },
       ] }));
@@ -104,30 +135,42 @@ export async function processGateEvent(
       // avoiding a continuous DynamoDB lane read while the event is idle.
       scheduleTimeoutSweep(maxTimeMs);
       return { accepted: true };
-    } catch { return { accepted: false, reason: "invalid_state" }; }
+    } catch (error) {
+      if (error instanceof TransactionCanceledException) {
+        return { accepted: false, reason: "invalid_state" };
+      }
+      throw error;
+    }
   }
 
   if (lane?.state !== "RUNNING" || !lane.competitorId) return { accepted: false, reason: "invalid_state" };
   const run = await activeRun(lane.competitorId);
   if (!run) return { accepted: false, reason: "invalid_state" };
-  const lastSameGate = [...run.splits].reverse().find((split) => split.gateId === event.gateId);
-  if (lastSameGate && event.deviceTs - lastSameGate.deviceTs < 500) {
+  const elapsed = event.deviceTs - run.startDeviceTs;
+  if (elapsed < 0 || elapsed > DAY_MS) return { accepted: false, reason: "clock_anomaly" };
+  const lastSameGateTs = run.debounce?.[event.gateId];
+  if (lastSameGateTs !== undefined && event.deviceTs - lastSameGateTs < 500) {
     return { accepted: false, reason: "invalid_state" };
   }
 
-  const elapsed = event.deviceTs - run.startDeviceTs;
-  if (elapsed < 0 || elapsed > DAY_MS) return { accepted: false, reason: "clock_anomaly" };
-
   if (event.type === "CHECKPOINT") {
     const split: RunSplit = { gateId: event.gateId, deviceTs: event.deviceTs, splitMs: elapsed };
-    await ddbDoc.send(new UpdateCommand({
-      TableName: TABLE_NAME, Key: runKey(lane.competitorId, run.runId),
-      UpdateExpression: "SET splits = list_append(splits, :split)",
-      ConditionExpression: "attribute_not_exists(#status)",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":split": [split] },
-    }));
-    return { accepted: true };
+    try {
+      await ddbDoc.send(new UpdateCommand({
+        TableName: TABLE_NAME, Key: runKey(lane.competitorId, run.runId),
+        UpdateExpression: "SET splits = list_append(splits, :split), #debounce.#gate = :deviceTs",
+        ConditionExpression:
+          "attribute_not_exists(#status) AND (attribute_not_exists(#debounce.#gate) OR #debounce.#gate <= :cutoff)",
+        ExpressionAttributeNames: { "#status": "status", "#debounce": "debounce", "#gate": event.gateId },
+        ExpressionAttributeValues: { ":split": [split], ":deviceTs": event.deviceTs, ":cutoff": event.deviceTs - 500 },
+      }));
+      return { accepted: true };
+    } catch (error) {
+      if (error instanceof ConditionalCheckFailedException) {
+        return { accepted: false, reason: "invalid_state" };
+      }
+      throw error;
+    }
   }
 
   const finalStatus = elapsed < run.minTimeMs
@@ -135,13 +178,24 @@ export async function processGateEvent(
     : elapsed > run.maxTimeMs
       ? "TIMED_OUT"
       : "COMPLETE";
+  let competitorCategory: string | undefined;
+  if (finalStatus === "COMPLETE") {
+    const competitorResult = await ddbDoc.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `COMP#${lane.competitorId}`, SK: "PROFILE" },
+      ConsistentRead: true,
+    }));
+    competitorCategory = competitorResult.Item?.category as string | undefined;
+    if (!competitorCategory) return { accepted: false, reason: "invalid_state" };
+  }
   const transactionItems: NonNullable<TransactWriteCommandInput["TransactItems"]> = [
       { Update: {
         TableName: TABLE_NAME, Key: runKey(lane.competitorId, run.runId),
-        UpdateExpression: "SET #status = :finalStatus, stopDeviceTs = :stop, elapsedMs = :elapsed",
-        ConditionExpression: "attribute_not_exists(#status)",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":finalStatus": finalStatus, ":stop": event.deviceTs, ":elapsed": elapsed },
+        UpdateExpression: "SET #status = :finalStatus, stopDeviceTs = :stop, elapsedMs = :elapsed, #debounce.#gate = :stop",
+        ConditionExpression:
+          "attribute_not_exists(#status) AND (attribute_not_exists(#debounce.#gate) OR #debounce.#gate <= :cutoff)",
+        ExpressionAttributeNames: { "#status": "status", "#debounce": "debounce", "#gate": event.gateId },
+        ExpressionAttributeValues: { ":finalStatus": finalStatus, ":stop": event.deviceTs, ":elapsed": elapsed, ":cutoff": event.deviceTs - 500 },
       } },
       { Update: {
         TableName: TABLE_NAME, Key: laneKey(event.laneId),
@@ -156,12 +210,17 @@ export async function processGateEvent(
         UpdateExpression: "SET #status = :complete, GSI1SK = :gsi",
         ConditionExpression: "#status = :inspected OR #status = :complete",
         ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: { ":inspected": "INSPECTED", ":complete": "RUN_COMPLETE", ":gsi": `${(await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: { PK: `COMP#${lane.competitorId}`, SK: "PROFILE" } }))).Item?.category}#RUN_COMPLETE#${lane.competitorId}` },
+        ExpressionAttributeValues: { ":inspected": "INSPECTED", ":complete": "RUN_COMPLETE", ":gsi": `${competitorCategory}#RUN_COMPLETE#${lane.competitorId}` },
       } });
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: transactionItems }));
     return { accepted: true };
-  } catch { return { accepted: false, reason: "invalid_state" }; }
+  } catch (error) {
+    if (error instanceof TransactionCanceledException) {
+      return { accepted: false, reason: "invalid_state" };
+    }
+    throw error;
+  }
 }
 
 export async function voidActiveRun(competitorId: string): Promise<void> {
@@ -173,6 +232,46 @@ export async function voidActiveRun(competitorId: string): Promise<void> {
     ExpressionAttributeNames: { "#status": "status" },
     ExpressionAttributeValues: { ":void": "VOID" },
   }));
+}
+
+/** Atomically voids the in-flight run and releases its still-RUNNING lane. */
+export async function voidActiveRunAndResetLane(
+  competitorId: string,
+  laneId: string,
+  at: string
+): Promise<void> {
+  const run = await activeRun(competitorId);
+  if (!run) {
+    // A legacy/inconsistent RUNNING lane should remain operator-resettable.
+    await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: laneKey(laneId),
+      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+      ConditionExpression: "#state = :running AND competitorId = :cid",
+      ExpressionAttributeNames: { "#state": "state" },
+      ExpressionAttributeValues: {
+        ":idle": "IDLE", ":running": "RUNNING", ":cid": competitorId, ":none": null, ":at": at,
+      },
+    }));
+    return;
+  }
+  await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+    { Update: {
+      TableName: TABLE_NAME, Key: runKey(competitorId, run.runId),
+      UpdateExpression: "SET #status = :void",
+      ConditionExpression: "attribute_not_exists(#status)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: { ":void": "VOID" },
+    } },
+    { Update: {
+      TableName: TABLE_NAME, Key: laneKey(laneId),
+      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+      ConditionExpression: "#state = :running AND competitorId = :cid",
+      ExpressionAttributeNames: { "#state": "state" },
+      ExpressionAttributeValues: {
+        ":idle": "IDLE", ":running": "RUNNING", ":cid": competitorId, ":none": null, ":at": at,
+      },
+    } },
+  ] }));
 }
 
 /** Closes missed-STOP runs at the snapshotted maximum allowed time. */
@@ -207,7 +306,10 @@ export async function sweepTimedOutRuns(nowMs = Date.now()): Promise<number> {
         } },
       ] }));
       timedOut += 1;
-    } catch { /* another STOP/reset/sweep won the conditional race */ }
+    } catch (error) {
+      if (!(error instanceof TransactionCanceledException)) throw error;
+      // Another STOP/reset/sweep won the conditional race.
+    }
   }
   return timedOut;
 }

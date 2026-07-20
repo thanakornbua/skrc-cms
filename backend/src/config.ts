@@ -19,11 +19,21 @@ export const config = {
   },
   get deviceKeys(): Record<string, string> {
     const raw = process.env.DEVICE_KEYS ?? "{}";
+    let parsed: unknown;
     try {
-      return JSON.parse(raw) as Record<string, string>;
+      parsed = JSON.parse(raw);
     } catch {
       throw new Error("DEVICE_KEYS env var is not valid JSON (see docs/spec/ENV.md)");
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("DEVICE_KEYS env var must be a JSON object (see docs/spec/ENV.md)");
+    }
+    for (const [deviceId, key] of Object.entries(parsed)) {
+      if (!deviceId || typeof key !== "string" || !key) {
+        throw new Error("DEVICE_KEYS must map non-empty deviceIds to non-empty string keys");
+      }
+    }
+    return parsed as Record<string, string>;
   },
   // Operator decided a single lane at launch; entries are either "1" or
   // {"laneId":"1","deviceId":"esp32-lane1"} so the device mapping can be
