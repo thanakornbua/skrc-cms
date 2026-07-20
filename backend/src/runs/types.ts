@@ -8,6 +8,8 @@ export interface RunRecord {
   PK: string;
   SK: string;
   runId: string;
+  /** Absent only on legacy records, which are interpreted as ROUND_1. */
+  stage?: CompetitionStage;
   laneId: string;
   startDeviceTs: number;
   stopDeviceTs: number | null;
@@ -34,3 +36,4 @@ export interface GateEventInput {
   type: "START" | "CHECKPOINT" | "STOP";
   deviceTs: number;
 }
+import type { CompetitionStage } from "../competition/types.js";

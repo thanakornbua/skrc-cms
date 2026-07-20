@@ -67,7 +67,7 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
         <h2>{t("5. วัตถุประสงค์และฐานการประมวลผล", "5. Purposes and lawful bases")}</h2>
         <ul>
           <li>{t("สร้างบัญชี รับและตรวจสอบใบสมัคร ติดต่อทีม และยืนยันตัวตน", "create accounts, receive and review applications, contact teams, and verify identity.")}</li>
-          <li>{t("เช็คอิน ตรวจสภาพ จัดสนาม จับเวลา คำนวณเวลาสุทธิ และจัดอันดับจากเวลาน้อยที่สุด", "check in, inspect, assign lanes, time runs, calculate final time, and rank by lowest time.")}</li>
+          <li>{t("เช็คอิน ตรวจสภาพ จัดสนาม จับเวลา บันทึกจุดตรวจ และจัดอันดับตามกติกาของแต่ละรอบ", "check in, inspect, assign lanes, time runs, record checkpoints, and rank under each stage's rules.")}</li>
           <li>{t("จัดการบทลงโทษ การแก้ไขเวลา ข้อโต้แย้ง ความปลอดภัย และหลักฐานตรวจสอบ", "manage penalties, corrections, disputes, security, and audit evidence.")}</li>
           <li>{t("ประกาศชื่อทีมและผลการแข่งขันต่อสาธารณะ", "publish team names and competition results.")}</li>
         </ul>
@@ -118,7 +118,7 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
         <h2>{t("11. การคำนวณผลโดยอัตโนมัติ", "11. Automated calculation")}</h2>
         <p>{t(
           "ระบบคำนวณเวลารวม เวลาปรับ และอันดับโดยอัตโนมัติตามกติกาแบบใช้เวลาเท่านั้น กรรมการสามารถตรวจสอบรอบที่ผิดปกติ แก้ไขด้วยเหตุผลที่บันทึกไว้ และพิจารณาการตัดสิทธิ์ ไม่มีระบบคะแนนหรือการทำโปรไฟล์เพื่อการตลาด",
-          "The system automatically calculates aggregate time, penalties, and time-only ranking. Staff can review abnormal runs, make reasoned corrections, and decide disqualification. There is no scoring system or marketing profiling.")}</p>
+          "The system automatically calculates checkpoint/lap progress or time averages by stage, plus penalties and advancement. Staff can review abnormal runs, make reasoned corrections, and decide disqualification. There is no marketing profiling.")}</p>
       </section>
 
       <section>

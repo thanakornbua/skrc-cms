@@ -214,10 +214,20 @@ Never call the wrong service from the wrong era — the frontend switches which 
 
 ### Phase 11 — conclusion & ranking
 
+#### `GET /admin/competition/state`
+- **Role:** committee/admin.
+- **Response:** `{phase,activeStage,eligibleCompetitorIds}`.
+
+#### `POST /admin/competition/advance`
+- **Role:** admin. Body `{ "confirm": "ADVANCE" }`.
+- Freezes the active result and advances `ROUND_1 → BEST_OF_4 → BEST_OF_2 → THE_BEST`.
+- Top 8, 4, and 2 advance per category. Active or under-review runs block advancement.
+
 #### `POST /admin/competition/conclude`
 - **Role:** admin only.
 - **Request:** `{ "confirm": "CONCLUDE" }` (exact string required — a safety check, not real security).
-- **Response 200:** `{ "phase": "CONCLUDED", "concludedAt": "..." }`. Computes and writes `Ranking snapshot` items per category (see SCHEMA.md); DQ'd competitors written as `DQ#<competitorId>` entries, listed separately from ranked entries.
+- Allowed only during The Best. Computes 1st/2nd from The Best, 3rd/4th from
+  Best-of-4 ordering among Best-of-2 eliminations, and 5th–8th from Best of 4.
 - **Errors:** `400 VALIDATION_ERROR` wrong confirm string. `409 CONFLICT` already concluded.
 
 #### `POST /admin/competition/reopen`
@@ -227,10 +237,11 @@ Never call the wrong service from the wrong era — the frontend switches which 
 #### `GET /admin/competition/export`
 - **Role:** admin only.
 - **Preconditions:** `409 CONFLICT` if not yet concluded.
-- **Response 200:** `{ "categories": [ { "category": "...", "ranked": [ {rank,teamName,aggregateTimeMs,penaltyTimeMs,finalTimeMs} ], "disqualified": [ {teamName} ] } ] }`; no competitor ID or contact data.
+- **Response 200:** stage-aware category results with checkpoint/lap or time-average
+  fields plus `ranked`, `unranked`, and `disqualified`; no competitor ID/contact data.
 
 #### `GET /public/scoreboard?category=`
 - **Role:** none (unauthenticated).
-- **Response 200:** `{state:"PROVISIONAL"|"FINAL",categories:[...]}` using the same time-only public shape as the export.
+- **Response 200:** `{state:"PROVISIONAL"|"FINAL",activeStage,categories:[...]}` using the same stage-aware public shape as the export.
 
 All mutation endpoints return `409 COMPETITION_CONCLUDED` after conclusion, except `reopen`.

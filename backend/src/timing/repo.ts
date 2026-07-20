@@ -3,6 +3,8 @@ import { ConditionalCheckFailedException, TransactionCanceledException } from "@
 import { GetCommand, PutCommand, QueryCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
+import { getCompetitionState } from "../competition/state.js";
+import type { CompetitionStage } from "../competition/types.js";
 import { getCompetitor } from "../competitors/repo.js";
 import { listRuns } from "../runs/repo.js";
 import type { RunRecord } from "../runs/types.js";
@@ -27,9 +29,20 @@ export async function listCategoryTimings(): Promise<CategoryTiming[]> {
   return ((result.Items ?? []) as CategoryTiming[]).sort((a, b) => a.category.localeCompare(b.category));
 }
 
-export async function putCategoryTiming(category: string, minTimeMs: number, maxTimeMs: number, byUser: string): Promise<CategoryTiming> {
+export function stageMaximum(timing: CategoryTiming, stage: CompetitionStage): number {
+  return timing.stageMaxTimeMs?.[stage] ?? timing.maxTimeMs;
+}
+
+export async function putCategoryTiming(
+  category: string,
+  minTimeMs: number,
+  stageMaxTimeMs: Record<CompetitionStage, number>,
+  byUser: string
+): Promise<CategoryTiming> {
   const item: CategoryTiming & { PK: string; SK: string } = {
-    ...categoryKey(category), category, minTimeMs, maxTimeMs,
+    ...categoryKey(category), category, minTimeMs,
+    // Retained for old clients/readers; Round 1 is the migration fallback.
+    maxTimeMs: stageMaxTimeMs.ROUND_1, stageMaxTimeMs,
     updatedAt: new Date().toISOString(), updatedBy: byUser,
   };
   await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
@@ -83,9 +96,10 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
   if (!rule) throw new ApiError(404, "NOT_FOUND", "Penalty rule not found");
   if (!rule.active) throw new ApiError(409, "CONFLICT", "Penalty rule is inactive");
   const at = new Date().toISOString();
+  const stage = (await getCompetitionState()).activeStage;
   const item: AppliedPenalty & { PK: string } = {
     PK: `COMP#${competitorId}`, SK: `PENALTY#${at}#${ruleId}`,
-    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at,
+    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at, stage,
   };
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
@@ -148,12 +162,15 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
   const result = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
   const run = result.Item as RunRecord | undefined;
   if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");
+  const activeStage = (await getCompetitionState()).activeStage;
+  if ((run.stage ?? "ROUND_1") !== activeStage) throw new ApiError(409, "CONFLICT", "A frozen earlier-stage run cannot be corrected");
   if (run.status !== "UNDER_REVIEW" && run.status !== "TIMED_OUT") throw new ApiError(409, "CONFLICT", "Only under-review or timed-out runs can be corrected");
   if (typeof run.minTimeMs !== "number" || typeof run.maxTimeMs !== "number" || elapsedMs < run.minTimeMs || elapsedMs > run.maxTimeMs) {
     throw new ApiError(400, "VALIDATION_ERROR", "Corrected time must be within the run's snapshotted limits");
   }
   const item: TimeCorrection & { PK: string; SK: string } = {
-    ...correctionKey(competitorId, runId), runId, elapsedMs, reason, byUser, at: new Date().toISOString(),
+    ...correctionKey(competitorId, runId), runId, elapsedMs, reason, byUser,
+    at: new Date().toISOString(), stage: run.stage ?? "ROUND_1",
   };
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
@@ -200,6 +217,11 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
 }
 
 export async function resolveUnderReview(competitorId: string, runId: string, decision: "consume" | "void", reason: string, byUser: string): Promise<void> {
+  const runResult = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
+  const run = runResult.Item as RunRecord | undefined;
+  if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");
+  const activeStage = (await getCompetitionState()).activeStage;
+  if ((run.stage ?? "ROUND_1") !== activeStage) throw new ApiError(409, "CONFLICT", "A frozen earlier-stage run cannot be resolved");
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
       { ConditionCheck: {
@@ -223,29 +245,32 @@ export async function resolveUnderReview(competitorId: string, runId: string, de
   }
 }
 
-export async function getAttemptState(competitorId: string): Promise<{ consumed: number; unresolved: RunRecord | null }> {
+export async function getAttemptState(competitorId: string, stage?: CompetitionStage): Promise<{ consumed: number; unresolved: RunRecord | null; consumedTimeMs: number }> {
   const [runs, corrections] = await Promise.all([listRuns(competitorId), listCorrections(competitorId)]);
-  const corrected = new Set(corrections.map((item) => item.runId));
-  const unresolved = runs.find((run) => run.status === "UNDER_REVIEW" && !corrected.has(run.runId)) ?? null;
-  const consumed = runs.filter((run) =>
+  const selectedRuns = stage ? runs.filter((run) => (run.stage ?? "ROUND_1") === stage) : runs;
+  const corrected = new Set(corrections.filter((item) => !stage || (item.stage ?? "ROUND_1") === stage).map((item) => item.runId));
+  const unresolved = selectedRuns.find((run) => run.status === "UNDER_REVIEW" && !corrected.has(run.runId)) ?? null;
+  const consumedRuns = selectedRuns.filter((run) =>
     run.status === "COMPLETE" || run.status === "TIMED_OUT" || run.status === "INVALID" || corrected.has(run.runId)
-  ).length;
-  return { consumed, unresolved };
+  );
+  const consumedTimeMs = consumedRuns.reduce((sum, run) => sum + (typeof run.elapsedMs === "number" ? Math.min(run.elapsedMs, run.maxTimeMs) : run.maxTimeMs), 0);
+  return { consumed: consumedRuns.length, unresolved, consumedTimeMs };
 }
 
-export async function calculateTimeResult(competitorId: string): Promise<TimeResult> {
+export async function calculateTimeResult(competitorId: string, stage?: CompetitionStage): Promise<TimeResult> {
   const [runs, corrections, penalties] = await Promise.all([
     listRuns(competitorId), listCorrections(competitorId), listAppliedPenalties(competitorId),
   ]);
-  const correctionByRun = new Map(corrections.map((item) => [item.runId, item]));
-  const qualifying = runs.flatMap((run) => {
+  const activeStage = stage ?? (await getCompetitionState()).activeStage;
+  const correctionByRun = new Map(corrections.filter((item) => (item.stage ?? "ROUND_1") === activeStage).map((item) => [item.runId, item]));
+  const qualifying = runs.filter((run) => (run.stage ?? "ROUND_1") === activeStage).flatMap((run) => {
     const correction = correctionByRun.get(run.runId);
     const elapsedMs = correction?.elapsedMs ?? (run.status === "COMPLETE" ? run.elapsedMs : null);
     return typeof elapsedMs === "number" ? [{ runId: run.runId, elapsedMs, createdAt: run.createdAt }] : [];
   }).sort((a, b) => a.elapsedMs - b.elapsedMs || a.createdAt.localeCompare(b.createdAt));
   const best = qualifying.slice(0, 2);
   const aggregateTimeMs = best.length ? best.reduce((sum, item) => sum + item.elapsedMs, 0) / best.length : null;
-  const penaltyTimeMs = penalties.filter((item) => !item.revocation).reduce((sum, item) => sum + item.penaltyMs, 0);
+  const penaltyTimeMs = penalties.filter((item) => !item.revocation && (item.stage ?? "ROUND_1") === activeStage).reduce((sum, item) => sum + item.penaltyMs, 0);
   return {
     aggregateTimeMs, penaltyTimeMs,
     finalTimeMs: aggregateTimeMs === null ? null : aggregateTimeMs + penaltyTimeMs,

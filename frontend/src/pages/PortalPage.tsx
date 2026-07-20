@@ -24,6 +24,7 @@ interface Registration {
 }
 
 interface Competitor {
+  activeStage?: "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
   competitorId: string;
   name: string;
   teamName: string;
@@ -33,17 +34,21 @@ interface Competitor {
   inspectedAt: string | null;
   disqualified: { bool: boolean; reason: string | null; byUser: string | null; at: string | null };
   lane?: { laneId: string; state: "ASSIGNED" | "ARMED" | "RUNNING" } | null;
-  penalties?: Array<{ SK: string; label: string; penaltyMs: number; at: string; revocation?: unknown }>;
+  penalties?: Array<{ SK: string; label: string; penaltyMs: number; at: string; stage?: "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST"; revocation?: unknown }>;
+  stageResult?: { scoringMode: "CHECKPOINT_LAP" | "TIME_AVERAGE"; completedLap: boolean; lapTimeMs: number | null; furthestCheckpoint: number; aggregateTimeMs: number | null; penaltyTimeMs: number; finalTimeMs: number | null } | null;
   aggregateTimeMs?: number | null;
   penaltyTimeMs?: number;
   finalTimeMs?: number | null;
   rank?: number | null;
   runs?: Array<{
     runId: string;
+    stage?: "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
     status?: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
     elapsedMs: number | null;
   }>;
 }
+
+const STAGE_LABEL = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" } as const;
 
 interface MeResponse {
   registration: Registration;
@@ -174,17 +179,18 @@ function PortalDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       </div>
 
       <div className="card">
-        <h2>{t("ผลเวลา", "Time result")}</h2>
+        <span className="section-kicker">{competitor?.activeStage ? STAGE_LABEL[competitor.activeStage] : "COMPETITION"}</span>
+        <h2>{t("ผลรอบปัจจุบัน", "Current stage result")}</h2>
         <div className="metric-grid">
-          <div className="metric"><span className="metric-label">{t("ค่าเฉลี่ย 2 รอบ", "Best-two average")}</span><span className="metric-value">{competitor?.aggregateTimeMs == null ? "—" : `${(competitor.aggregateTimeMs / 1000).toFixed(3)} s`}</span></div>
+          <div className="metric"><span className="metric-label">{competitor?.stageResult?.scoringMode === "CHECKPOINT_LAP" ? t("ผลงานดีที่สุด", "Best progress") : t("ค่าเฉลี่ยสูงสุด 2 ครั้ง", "Best-two average")}</span><span className="metric-value">{competitor?.stageResult?.scoringMode === "CHECKPOINT_LAP" ? (competitor.stageResult.completedLap && competitor.stageResult.lapTimeMs != null ? `${(competitor.stageResult.lapTimeMs / 1000).toFixed(3)} s` : `${competitor.stageResult.furthestCheckpoint} checkpoint${competitor.stageResult.furthestCheckpoint === 1 ? "" : "s"}`) : (competitor?.aggregateTimeMs == null ? "—" : `${(competitor.aggregateTimeMs / 1000).toFixed(3)} s`)}</span></div>
           <div className="metric"><span className="metric-label">{t("เวลาปรับ", "Penalties")}</span><span className="metric-value">+{((competitor?.penaltyTimeMs ?? 0) / 1000).toFixed(3)} s</span></div>
           <div className="metric"><span className="metric-label">{t("เวลาสุทธิ", "Final time")}</span><span className="metric-value">{competitor?.finalTimeMs == null ? "—" : `${(competitor.finalTimeMs / 1000).toFixed(3)} s`}</span></div>
           {competitor?.rank != null && <div className="metric"><span className="metric-label">{t("อันดับ", "Rank")}</span><span className="metric-value">#{competitor.rank}</span></div>}
         </div>
         <h3>{t("บทลงโทษ", "Penalties")}</h3>
-        {competitor?.penalties && competitor.penalties.filter((penalty) => !penalty.revocation).length > 0 ? (
+        {competitor?.penalties && competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.activeStage ?? "ROUND_1")).length > 0 ? (
           <ul>
-            {competitor.penalties.filter((penalty) => !penalty.revocation).map((penalty) => (
+            {competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.activeStage ?? "ROUND_1")).map((penalty) => (
               <li key={penalty.SK}>
                 {penalty.label} (+{(penalty.penaltyMs / 1000).toFixed(3)} s) — {penalty.at}
               </li>
@@ -197,10 +203,11 @@ function PortalDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         {competitor?.runs && competitor.runs.length > 0 ? (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>{t("รอบ", "Attempt")}</th><th>{t("สถานะ", "Status")}</th><th>{t("เวลา", "Time")}</th></tr></thead>
+              <thead><tr><th>{t("รอบการแข่งขัน", "Stage")}</th><th>{t("ครั้ง", "Attempt")}</th><th>{t("สถานะ", "Status")}</th><th>{t("เวลา", "Time")}</th></tr></thead>
               <tbody>
                 {competitor.runs.map((run, index) => (
                   <tr key={run.runId}>
+                    <td>{STAGE_LABEL[run.stage ?? "ROUND_1"]}</td>
                     <td>{index + 1}</td>
                     <td><span className="status-badge">{run.status ?? "RUNNING"}</span></td>
                     <td className="technical">{run.elapsedMs == null ? "—" : `${(run.elapsedMs / 1000).toFixed(3)} s`}</td>

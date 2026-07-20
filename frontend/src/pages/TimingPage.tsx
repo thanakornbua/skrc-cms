@@ -7,21 +7,25 @@ import NavBar from "../components/NavBar";
 import { t } from "../i18n";
 
 type Role = "admin" | "committee" | "competitor";
-interface Timing { category: string; minTimeMs: number; maxTimeMs: number }
+type Stage = "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
+interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number> }
+interface CompetitionState { phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[] }
 interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean }
 interface Run {
   runId: string; status: "RUNNING" | "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
   elapsedMs: number | null; minTimeMs: number; maxTimeMs: number;
   correction?: { elapsedMs: number; reason: string } | null;
+  stage?: Stage;
 }
 interface Competitor {
-  competitorId: string; teamName: string; category: string; runs: Run[];
+  competitorId: string; teamName: string; category: string; activeStage: Stage; runs: Run[];
   disqualified: { bool: boolean; reason: string | null };
-  penalties: Array<{ SK: string; label: string; penaltyMs: number; revocation?: unknown }>;
+  penalties: Array<{ SK: string; label: string; penaltyMs: number; stage?: Stage; revocation?: unknown }>;
   aggregateTimeMs: number | null; penaltyTimeMs: number; finalTimeMs: number | null;
 }
 
 const seconds = (ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
+const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
 
 function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
   const [role, setRole] = useState<Role>("competitor");
@@ -31,7 +35,8 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [competitor, setCompetitor] = useState<Competitor | null>(null);
   const [category, setCategory] = useState("Line Tracing - Open");
   const [minSeconds, setMinSeconds] = useState("");
-  const [maxSeconds, setMaxSeconds] = useState("");
+  const [stageMaxSeconds, setStageMaxSeconds] = useState<Record<Stage, string>>({ ROUND_1: "180", BEST_OF_4: "180", BEST_OF_2: "180", THE_BEST: "180" });
+  const [competitionState, setCompetitionState] = useState<CompetitionState | null>(null);
   const [ruleLabel, setRuleLabel] = useState("");
   const [penaltySeconds, setPenaltySeconds] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +46,10 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [busy, setBusy] = useState(false);
   const categoryId = useId();
   const minId = useId();
-  const maxId = useId();
+  const round1MaxId = useId();
+  const best4MaxId = useId();
+  const best2MaxId = useId();
+  const finalMaxId = useId();
   const ruleLabelId = useId();
   const penaltyId = useId();
   const lookupId = useId();
@@ -49,8 +57,11 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const reinstatementReasonId = useId();
 
   async function loadConfig(currentRole = role): Promise<void> {
-    const penalties = await ec2Json<{ rules: Rule[] }>("/admin/config/penalties");
-    setRules(penalties.rules);
+    const [penalties, state] = await Promise.all([
+      ec2Json<{ rules: Rule[] }>("/admin/config/penalties"),
+      ec2Json<CompetitionState>("/admin/competition/state"),
+    ]);
+    setRules(penalties.rules); setCompetitionState(state);
     if (currentRole === "admin") {
       const categoryResult = await ec2Json<{ categories: Timing[] }>("/admin/config/categories");
       setTimings(categoryResult.categories);
@@ -76,7 +87,10 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     try {
       await ec2Json("/admin/config/categories", {
         method: "PUT",
-        body: JSON.stringify({ category, minTimeMs: Math.round(Number(minSeconds) * 1000), maxTimeMs: Math.round(Number(maxSeconds) * 1000) }),
+        body: JSON.stringify({
+          category, minTimeMs: Math.round(Number(minSeconds) * 1000),
+          stageMaxTimeMs: Object.fromEntries(Object.entries(stageMaxSeconds).map(([stage, value]) => [stage, Math.round(Number(value) * 1000)])),
+        }),
       });
       await loadConfig("admin"); setNotice("Timing limits saved for future attempts.");
     } catch (err) { setError(err instanceof Error ? err.message : "Save failed"); }
@@ -110,6 +124,16 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     setBusy(true);
     try { await ec2Json("/admin/competition/conclude", { method: "POST", body: JSON.stringify({ confirm: "CONCLUDE" }) }); setNotice("Competition concluded and results frozen."); }
     catch (err) { setError(err instanceof Error ? err.message : "Conclusion failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function advance(): Promise<void> {
+    if (!competitionState || window.prompt(`Type ADVANCE to finish ${stageLabel[competitionState.activeStage]}`) !== "ADVANCE") return;
+    setBusy(true); setError(null);
+    try {
+      const state = await ec2Json<CompetitionState>("/admin/competition/advance", { method: "POST", body: JSON.stringify({ confirm: "ADVANCE" }) });
+      setCompetitionState(state); setNotice(`Advanced to ${stageLabel[state.activeStage]}. Stage results were frozen independently.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Stage advancement failed"); }
     finally { setBusy(false); }
   }
 
@@ -216,11 +240,13 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
 
     {role === "admin" && <div className="card-grid admin-config-grid">
       <div className="card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
-        {timings.map((item) => <div className="metric" key={item.category}><span className="metric-label">{item.category}</span><span className="metric-value">{seconds(item.minTimeMs)}–{seconds(item.maxTimeMs)}</span></div>)}
+        {timings.map((item) => <div key={item.category}><strong>{item.category}</strong><div className="metric-grid">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)}</span></div>)}</div></div>)}
         <form onSubmit={saveTiming}>
           <div className="field"><label htmlFor={categoryId}>{t("ประเภท", "Category")}</label><input id={categoryId} required value={category} onChange={(e) => setCategory(e.target.value)} /></div>
           <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0.001" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
-          <div className="field"><label htmlFor={maxId}>{t("เวลาสูงสุด (วินาที)", "Maximum seconds")}</label><input id={maxId} required type="number" min="0.001" step="0.001" value={maxSeconds} onChange={(e) => setMaxSeconds(e.target.value)} /></div>
+          {([
+            ["ROUND_1", round1MaxId], ["BEST_OF_4", best4MaxId], ["BEST_OF_2", best2MaxId], ["THE_BEST", finalMaxId],
+          ] as Array<[Stage, string]>).map(([stage, id]) => <div className="field" key={stage}><label htmlFor={id}>{stageLabel[stage]} — {t("เวลาสูงสุด (วินาที)", "maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>)}
           <button type="submit">{t("บันทึก", "Save limits")}</button>
         </form>
       </div>
@@ -231,7 +257,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       </form>
       <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.ruleId}><span><span className={`status-badge ${rule.active ? "success" : ""}`}>{rule.active ? "ACTIVE" : "INACTIVE"}</span> {rule.label} <span className="technical">+{seconds(rule.penaltyMs)}</span></span><button className="secondary" type="button" onClick={() => toggleRule(rule)}>{rule.active ? t("ปิด", "Deactivate") : t("เปิด", "Activate")}</button></div>)}</div>
       </div>
-      <div className="card"><span className="section-kicker">COMPETITION STATE</span><h2>{t("สถานะการแข่งขัน", "State")}</h2><p>{t("การสรุปผลจะหยุดการจัดอันดับและสร้างผลอย่างเป็นทางการ", "Concluding freezes the ranking and produces the official results.")}</p><div className="button-row"><button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button><button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div></div>
+      <div className="card"><span className="section-kicker">COMPETITION STATE</span><h2>{competitionState ? stageLabel[competitionState.activeStage] : t("สถานะการแข่งขัน", "State")}</h2><p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p><p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p><div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div></div>
     </div>}
 
     <div className="card lookup-card"><span className="section-kicker">OPERATIONS</span><h2>{t("ค้นหาผู้เข้าแข่งขัน", "Competitor lookup")}</h2>
@@ -257,8 +283,8 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       ) : null}
       <div className="metric-grid"><div className="metric"><span className="metric-label">{t("เฉลี่ย", "Average")}</span><span className="metric-value">{seconds(competitor.aggregateTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("เวลาปรับ", "Penalties")}</span><span className="metric-value">+{seconds(competitor.penaltyTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("สุทธิ", "Final")}</span><span className="metric-value">{seconds(competitor.finalTimeMs)}</span></div></div>
       <h3>{t("เพิ่มบทลงโทษ", "Apply penalty")}</h3><div className="button-row">{rules.filter((rule) => rule.active).map((rule) => <button type="button" key={rule.ruleId} className="secondary" onClick={() => applyRule(rule.ruleId)}>{rule.label} (+{seconds(rule.penaltyMs)})</button>)}</div>
-      <h3>{t("บทลงโทษที่ใช้งาน", "Active penalties")}</h3>{competitor.penalties.filter((item) => !item.revocation).map((item) => <div className="rule-row" key={item.SK}><span>{item.label} <span className="technical">+{seconds(item.penaltyMs)}</span></span>{role === "admin" && <button type="button" className="danger" onClick={() => revoke(item.SK)}>{t("เพิกถอน", "Revoke")}</button>}</div>)}
-      <h3>{t("การวิ่ง", "Attempts")}</h3>{competitor.runs.map((run) => <div key={run.runId} className="attempt-row"><p><span className="status-badge">{run.status}</span> <span className="technical">{run.runId}</span> · raw {seconds(run.elapsedMs)} {run.correction && `· corrected ${seconds(run.correction.elapsedMs)}`}</p><div className="button-row">
+      <h3>{t("บทลงโทษที่ใช้งาน", "Active-stage penalties")}</h3>{competitor.penalties.filter((item) => !item.revocation && (item.stage ?? "ROUND_1") === competitor.activeStage).map((item) => <div className="rule-row" key={item.SK}><span>{item.label} <span className="technical">+{seconds(item.penaltyMs)}</span></span>{role === "admin" && <button type="button" className="danger" onClick={() => revoke(item.SK)}>{t("เพิกถอน", "Revoke")}</button>}</div>)}
+      <h3>{t("การวิ่ง", "Attempts")}</h3>{competitor.runs.map((run) => <div key={run.runId} className="attempt-row"><p><span className="status-badge">{run.status}</span> <span className="technical">{run.stage ? stageLabel[run.stage] : stageLabel.ROUND_1} · {run.runId}</span> · raw {seconds(run.elapsedMs)} {run.correction && `· corrected ${seconds(run.correction.elapsedMs)}`}</p><div className="button-row">
         {role === "admin" && run.status === "UNDER_REVIEW" && !run.correction && <><button type="button" onClick={() => resolve(run, "consume")}>{t("ใช้ผล", "Consume invalid")}</button><button type="button" className="secondary" onClick={() => resolve(run, "void")}>{t("ยกเลิก", "Void")}</button></>}
         {role === "admin" && (run.status === "UNDER_REVIEW" || run.status === "TIMED_OUT") && !run.correction && <button type="button" className="secondary" onClick={() => correct(run)}>{t("แก้เวลา", "Correct time")}</button>}
         </div>

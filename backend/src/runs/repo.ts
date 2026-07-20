@@ -4,6 +4,8 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { config } from "../config.js";
+import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
+import { STAGE_SCORING } from "../competition/types.js";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import type { GateEventInput, RunRecord, RunSplit } from "./types.js";
 
@@ -104,13 +106,24 @@ export async function processGateEvent(
     }));
     const category = competitorResult.Item?.category as string | undefined;
     if (!category) return { accepted: false, reason: "invalid_state" };
+    const competition = await getCompetitionState();
+    if (!isEligibleForStage(competition, lane.competitorId)) return { accepted: false, reason: "invalid_state" };
     const timingResult = await ddbDoc.send(new GetCommand({
       TableName: TABLE_NAME, Key: { PK: `CONFIG#CATEGORY#${category}`, SK: "PROFILE" }, ConsistentRead: true,
     }));
     const minTimeMs = timingResult.Item?.minTimeMs;
-    const maxTimeMs = timingResult.Item?.maxTimeMs;
-    if (typeof minTimeMs !== "number" || typeof maxTimeMs !== "number") {
+    const configuredMaxTimeMs = timingResult.Item?.stageMaxTimeMs?.[competition.activeStage] ?? timingResult.Item?.maxTimeMs;
+    if (typeof minTimeMs !== "number" || typeof configuredMaxTimeMs !== "number") {
       return { accepted: false, reason: "invalid_state" };
+    }
+    let maxTimeMs = configuredMaxTimeMs;
+    if (STAGE_SCORING[competition.activeStage] === "CHECKPOINT_LAP") {
+      const stageRuns = (await listRuns(lane.competitorId)).filter((run) => (run.stage ?? "ROUND_1") === competition.activeStage);
+      const used = stageRuns
+        .filter((run) => ["COMPLETE", "TIMED_OUT", "INVALID"].includes(run.status ?? ""))
+        .reduce((sum, run) => sum + (typeof run.elapsedMs === "number" ? Math.min(run.elapsedMs, run.maxTimeMs) : run.maxTimeMs), 0);
+      maxTimeMs = configuredMaxTimeMs - used;
+      if (maxTimeMs <= 0) return { accepted: false, reason: "invalid_state" };
     }
     const now = new Date().toISOString();
     try {
@@ -125,6 +138,7 @@ export async function processGateEvent(
         { Put: {
           TableName: TABLE_NAME,
           Item: { ...runKey(lane.competitorId, event.eventId), runId: event.eventId,
+            stage: competition.activeStage,
             laneId: event.laneId, startDeviceTs: event.deviceTs, stopDeviceTs: null,
             elapsedMs: null, splits: [], debounce: { [event.gateId]: event.deviceTs },
             minTimeMs, maxTimeMs, createdAt: now },

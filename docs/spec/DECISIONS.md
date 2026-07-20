@@ -4,17 +4,17 @@ Source of truth for every ⛔ HUMAN decision named in `IMPLEMENTATION_PLAN.md`. 
 
 | # | Decision | Status | Answer |
 |---|---|---|---|
-| D1 | Category timing parameters | ✅ DECIDED | Admin sets integer `minTimeMs` and `maxTimeMs` per category; limits snapshot at START and never apply retroactively. No `maxPoints`. |
+| D1 | Category timing parameters | ✅ AMENDED | Admin sets integer `minTimeMs` plus separate maximum times for Round 1, Best of 4, Best of 2, and The Best per category. Limits snapshot at START and never apply retroactively. |
 | D2 | Scoring formula sign-off | RETIRED | There is no point-scoring system. Results are elapsed time only. |
-| D3 | Attempts + aggregation | ✅ DECIDED | 3 attempts. Rank on the average of the 2 fastest qualifying times; one valid time stands alone; none is unranked. Timeout and admin-confirmed invalid consume; staff-reset VOID does not. |
-| D4 | Ranking tie-break rule | ✅ DECIDED | Lower final time wins; an exact tie is won by the earlier fastest qualifying attempt using the original run timestamp. |
+| D3 | Attempts + aggregation | ✅ SUPERSEDED | Stage-specific under D21. Round 1 and Best of 4 use an admin-configured cumulative team time budget. Best of 2 and The Best allow two consumed attempts and average the two fastest valid times; one valid time stands alone; none is unranked. |
+| D4 | Ranking tie-break rule | ✅ AMENDED | Completed laps rank before incomplete runs; completed laps use fastest final time, while incomplete runs use furthest unique checkpoint. Time-average stages use lower final average. Exact ties use the earlier deciding attempt timestamp, then competitor number. |
 | D5 | AWS region, table name, billing mode | ✅ DECIDED | Region: **`ap-southeast-7`**. DynamoDB table name: **`robo-compet`**. Billing mode: **on-demand** (`PAY_PER_REQUEST`). |
 | D6 | Domain name + TLS | ✅ DECIDED | Frontend `competitive.skrc.suankularb.space`; API `api.suankularb.space`; operator owns DNS, API TLS via Caddy. |
 | D7 | Staff account list + temporary passwords | ✅ DECIDED | Source is local-secret `roster.csv`; normalize `comittee` to `committee` and preflight all rows before Cognito writes. |
 | D8 | QR vs Code128 | ✅ DECIDED | **QR code**, encoding the bare `competitorId` string. |
 | D9 | ESP32 → backend transport | ✅ DECIDED | **HTTP POST** with local retry queue + idempotent event IDs (not MQTT). |
 | D10 | Run timeout + missed-STOP handling | ✅ DECIDED | The admin-configured, snapshotted `maxTimeMs` is the deadline. Missing/late STOP marks `TIMED_OUT`, returns the lane to IDLE, and consumes an attempt. |
-| D11 | Do checkpoint splits affect results? | ✅ DECIDED | Display-only; splits never affect ranking. |
+| D11 | Do checkpoint splits affect results? | ✅ SUPERSEDED | In Round 1 and Best of 4, unique checkpoints determine progress when no lap is completed. In Best of 2 and The Best, splits are display-only. |
 | D12 | PII retention after the event | ✅ DECIDED | Within 6 calendar months of conclusion delete Cognito users, registrations/contact fields/direct identifiers and anonymize retained staff attribution. Keep team names, final time results, penalties, and non-PII records. |
 | D13 | Registration email mode | ✅ DECIDED | **Auto-confirm sign-up** (no verification email at sign-up). Cognito still sends forgot-password codes. A separate asynchronous Resend-backed worker sends bilingual registration-received and approval notifications from `no-reply@thanakorn.site`, with replies directed to `thanakorn@thanakorn.site`; business actions remain successful while delivery retries. SES was superseded. |
 | D14 | Registration payment | RETIRED | Registration is free. Remove payment content, slips, S3 storage, and payment wording; staff approval and reasoned rejection remain. |
@@ -24,6 +24,7 @@ Source of truth for every ⛔ HUMAN decision named in `IMPLEMENTATION_PLAN.md`. 
 | D18 | Admin raw-data export | ✅ DECIDED | **Yes, CSV.** `GET /export.csv?entity=registrations\|competitors` (admin only) on the regweek Lambda; same route carried into the EC2 API in Phase 11. |
 | D19 | Global gate-event deduplication key | ✅ DECIDED | Add a dedicated `EVENT#<eventId>` / `CLAIM` entity. Atomically create it with the canonical lane audit item before state evaluation, so any reuse of an event ID is a duplicate even when other fields are mutated. Approved by the operator during Phase 7 integration. |
 | D20 | ESP32 network fallback | ✅ DECIDED | Maintain two builds from shared firmware source: direct HTTPS and USB serial. The operator selects and flashes one on competition day. Serial events are durably spooled by a laptop bridge before ACK and forwarded to the unchanged gate-event API. |
+| D21 | Competition stages | ✅ DECIDED | `ROUND_1 → BEST_OF_4 → BEST_OF_2 → THE_BEST → CONCLUDED`; top 8, 4, and 2 advance. Stages are isolated. Best-of-4 positions 5–8 are final, and Best-of-4 ordering settles 3rd/4th for Best-of-2 eliminations. The Best settles 1st/2nd. |
 
 ## Operator inputs (not ⛔ HUMAN decisions, but recorded here)
 
