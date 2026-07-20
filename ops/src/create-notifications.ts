@@ -27,14 +27,15 @@ const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
 const EMAIL_REGION = process.env.EMAIL_REGION ?? "ap-southeast-1";
 const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
 const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
-const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? "notify.suankularb.space";
-const EMAIL_FROM = process.env.EMAIL_FROM ?? `registration@${EMAIL_DOMAIN}`;
+const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? "suankularb.space";
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "skrc@suankularb.space";
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "false";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("Invalid RESOURCE_PREFIX");
 if (!/^https:\/\//.test(PORTAL_URL)) throw new Error("PORTAL_URL must use HTTPS");
-if (!/^\S+@\S+\.\S+$/.test(EMAIL_FROM) || !/^\S+@\S+\.\S+$/.test(CONTACT_EMAIL)) throw new Error("Invalid email configuration");
+if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
 
 const FUNCTION_NAME = `${RESOURCE_PREFIX}-email-worker`;
 const ROLE_NAME = `${RESOURCE_PREFIX}-email-worker-role`;
@@ -120,7 +121,7 @@ async function ensureRole(accountId: string, tableArn: string, dlqArn: string): 
 async function ensureFunction(roleArn: string): Promise<string> {
   const zip = await bundleLambdaFromDist(HANDLER_DIST_PATH);
   const environment = { Variables: {
-    DYNAMO_TABLE: TABLE_NAME, EMAIL_REGION, EMAIL_FROM, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
+    DYNAMO_TABLE: TABLE_NAME, EMAIL_REGION, EMAIL_FROM, EMAIL_REPLY_TO, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
   } };
   try {
     const existing = await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION_NAME }));

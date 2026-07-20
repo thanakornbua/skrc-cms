@@ -13,8 +13,9 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `COGNITO_CLIENT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `CORS_ORIGIN` | `https://competitive.skrc.suankularb.space` | Fixed frontend origin. |
 | `EMAIL_REGION` | `ap-southeast-1` | SES region; SES is not available in `ap-southeast-7`. |
-| `EMAIL_DOMAIN` | `notify.suankularb.space` | Dedicated SES identity; does not replace apex mail forwarding. |
-| `EMAIL_FROM` | `registration@notify.suankularb.space` | Transactional no-reply sender. |
+| `EMAIL_DOMAIN` | `suankularb.space` | SES identity; DKIM and isolated custom MAIL-FROM records must not replace apex mail forwarding. |
+| `EMAIL_FROM` | `skrc@suankularb.space` | Transactional sender shown to competitors. |
+| `EMAIL_REPLY_TO` | `thanakorn@thanakorn.site` | Address used when a recipient replies. |
 | `PORTAL_URL` | `https://competitive.skrc.suankularb.space/portal` | Included in notification emails. |
 | `CONTACT_EMAIL` | `thanakorn@thanakorn.site` | Human contact printed in no-reply messages. |
 | `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after SES/DNS verification. |

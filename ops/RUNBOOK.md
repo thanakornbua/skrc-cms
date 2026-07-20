@@ -22,8 +22,9 @@ Use `npm run bootstrap-staff -- ../roster.csv --validate-only` for a no-AWS pref
 ## Transactional registration email
 
 SES runs in `ap-southeast-1` because the competition's Bangkok region does not
-offer SES. Onboard `notify.suankularb.space`, publish its DKIM and custom MAIL-FROM
-records, and obtain SES production access before setting `EMAIL_ENABLED=true`.
+offer SES. Onboard `suankularb.space` for the `skrc@suankularb.space` sender,
+publish its DKIM and isolated custom MAIL-FROM records without replacing the apex
+mail-forwarding records, and obtain SES production access before setting `EMAIL_ENABLED=true`.
 Run `npm run create-table` to ensure the DynamoDB stream and notification TTL,
 then `npm run create-notifications` to deploy the retrying worker and 14-day DLQ.
 The no-reply messages direct recipients to `CONTACT_EMAIL`; inspect and drain the

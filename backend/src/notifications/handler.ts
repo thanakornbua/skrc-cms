@@ -6,7 +6,8 @@ import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { buildEmail, classifyRecord, notificationKey, ttlFromDeleteBy, type NotificationEvent } from "./core.js";
 
 const EMAIL_REGION = process.env.EMAIL_REGION ?? "ap-southeast-1";
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "registration@notify.suankularb.space";
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "skrc@suankularb.space";
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
@@ -91,6 +92,7 @@ async function processRecord(record: DynamoDBRecord): Promise<void> {
     const content = buildEmail(event, PORTAL_URL, CONTACT_EMAIL);
     const response = await ses.send(new SendEmailCommand({
       FromEmailAddress: `SKRC Robotics Competition <${EMAIL_FROM}>`,
+      ReplyToAddresses: [EMAIL_REPLY_TO],
       Destination: { ToAddresses: [event.contactEmail] },
       Content: { Simple: {
         Subject: { Data: content.subject, Charset: "UTF-8" },
