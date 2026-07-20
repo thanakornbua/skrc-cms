@@ -190,23 +190,44 @@ export async function inspectCompetitor(competitorId: string): Promise<InspectRe
 }
 
 export async function disqualifyCompetitor(competitorId: string, reason: string, byUser: string): Promise<CompetitorRecord["disqualified"]> {
-  if (!(await getCompetitor(competitorId))) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   const disqualified = { bool: true, reason, byUser, at: new Date().toISOString() };
-  await ddbDoc.send(new UpdateCommand({
-    TableName: TABLE_NAME, Key: keyComp(competitorId),
-    UpdateExpression: "SET disqualified = :disqualified",
-    ExpressionAttributeValues: { ":disqualified": disqualified },
-  }));
-  return disqualified;
+  try {
+    await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: keyComp(competitorId),
+      UpdateExpression: "SET disqualified = :disqualified",
+      ConditionExpression:
+        "attribute_exists(PK) AND (attribute_not_exists(disqualified.#bool) OR disqualified.#bool = :false)",
+      ExpressionAttributeNames: { "#bool": "bool" },
+      ExpressionAttributeValues: { ":disqualified": disqualified, ":false": false },
+    }));
+    return disqualified;
+  } catch (error) {
+    if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    const current = await ddbDoc.send(new GetCommand({
+      TableName: TABLE_NAME, Key: keyComp(competitorId), ConsistentRead: true,
+    }));
+    if (!current.Item) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+    return (current.Item as CompetitorRecord).disqualified;
+  }
 }
 
 export async function reinstateCompetitor(competitorId: string, reason: string, byUser: string): Promise<CompetitorRecord["disqualified"]> {
-  if (!(await getCompetitor(competitorId))) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   const disqualified = { bool: false, reason, byUser, at: new Date().toISOString() };
-  await ddbDoc.send(new UpdateCommand({
-    TableName: TABLE_NAME, Key: keyComp(competitorId),
-    UpdateExpression: "SET disqualified = :disqualified",
-    ExpressionAttributeValues: { ":disqualified": disqualified },
-  }));
-  return disqualified;
+  try {
+    await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: keyComp(competitorId),
+      UpdateExpression: "SET disqualified = :disqualified",
+      ConditionExpression: "attribute_exists(PK) AND disqualified.#bool = :true",
+      ExpressionAttributeNames: { "#bool": "bool" },
+      ExpressionAttributeValues: { ":disqualified": disqualified, ":true": true },
+    }));
+    return disqualified;
+  } catch (error) {
+    if (!(error instanceof ConditionalCheckFailedException)) throw error;
+    const current = await ddbDoc.send(new GetCommand({
+      TableName: TABLE_NAME, Key: keyComp(competitorId), ConsistentRead: true,
+    }));
+    if (!current.Item) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+    return (current.Item as CompetitorRecord).disqualified;
+  }
 }

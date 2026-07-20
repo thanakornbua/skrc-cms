@@ -146,7 +146,8 @@ competitorsRouter.post("/committee/competitors/:id/disqualify", requireAuth, req
   try {
     const parsed = reasonSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "reason is required", zodToFields(parsed.error));
-    res.status(200).json({ disqualified: await disqualifyCompetitor(req.params.id, parsed.data.reason, req.user!.username) });
+    const { bool, reason, at } = await disqualifyCompetitor(req.params.id, parsed.data.reason, req.user!.username);
+    res.status(200).json({ disqualified: { bool, reason, at } });
   } catch (error) { next(error); }
 });
 
@@ -154,7 +155,8 @@ competitorsRouter.post("/admin/competitors/:id/reinstate", requireAuth, requireR
   try {
     const parsed = reasonSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "reason is required", zodToFields(parsed.error));
-    res.status(200).json({ disqualified: await reinstateCompetitor(req.params.id, parsed.data.reason, req.user!.username) });
+    await reinstateCompetitor(req.params.id, parsed.data.reason, req.user!.username);
+    res.status(200).json({ disqualified: { bool: false } });
   } catch (error) { next(error); }
 });
 
