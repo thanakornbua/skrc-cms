@@ -50,6 +50,10 @@ const lambda = new LambdaClient({ region: REGION });
 const sqs = new SQSClient({ region: REGION });
 const ses = new SESv2Client({ region: EMAIL_REGION });
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function ensureEmailIdentity(): Promise<void> {
   try {
     await ses.send(new GetEmailIdentityCommand({ EmailIdentity: EMAIL_DOMAIN }));
@@ -130,12 +134,24 @@ async function ensureFunction(roleArn: string): Promise<string> {
   } catch (err) {
     if (!(err instanceof LambdaResourceNotFoundException)) throw err;
   }
-  const created = await lambda.send(new CreateFunctionCommand({
-    FunctionName: FUNCTION_NAME, Runtime: "nodejs20.x", Handler: "index.handler", Role: roleArn,
-    Code: { ZipFile: zip }, Timeout: 30, MemorySize: 256, Environment: environment,
-    Description: "Sends idempotent registration and approval notification emails",
-    Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },
-  }));
+  let created;
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    try {
+      created = await lambda.send(new CreateFunctionCommand({
+        FunctionName: FUNCTION_NAME, Runtime: "nodejs20.x", Handler: "index.handler", Role: roleArn,
+        Code: { ZipFile: zip }, Timeout: 30, MemorySize: 256, Environment: environment,
+        Description: "Sends idempotent registration and approval notification emails",
+        Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },
+      }));
+      break;
+    } catch (err) {
+      const roleNotReady = err instanceof Error && /cannot be assumed/i.test(err.message);
+      if (!roleNotReady || attempt === 6) throw err;
+      console.log(`Email worker role not yet assumable; retrying (${attempt}/6)...`);
+      await sleep(3000);
+    }
+  }
+  if (!created) throw new Error("Email worker creation did not return a function");
   await waitUntilFunctionActiveV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: FUNCTION_NAME });
   return created.FunctionArn!;
 }
@@ -147,7 +163,7 @@ async function ensureEventSource(functionArn: string, streamArn: string, dlqArn:
     FunctionName: functionArn, BatchSize: 1, BisectBatchOnFunctionError: true,
     MaximumRetryAttempts: 5, MaximumRecordAgeInSeconds: 21600,
     DestinationConfig: { OnFailure: { Destination: dlqArn } },
-    Enabled: true,
+    Enabled: EMAIL_ENABLED === "true",
   };
   if (existing?.UUID) {
     await lambda.send(new UpdateEventSourceMappingCommand({ UUID: existing.UUID, ...config }));
