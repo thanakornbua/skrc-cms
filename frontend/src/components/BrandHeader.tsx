@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { t, tt } from "../i18n";
-import emblemUrl from "../../../design-system/uploads/Suankularb_Wittayalai_School_emblem.png";
+import emblemUrl from "../assets/Suankularb_Wittayalai_School_emblem.png";
 
 interface BrandHeaderProps {
   title: string;
