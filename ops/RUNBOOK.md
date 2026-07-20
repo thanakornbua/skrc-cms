@@ -5,7 +5,8 @@
 - Frontend: `https://competitive.skrc.suankularb.space`
 - API: `https://api.suankularb.space`
 - Point the API record at the EC2 Elastic IP before starting Caddy. Set
-  `CORS_ORIGIN=https://competitive.skrc.suankularb.space`.
+  `CORS_ORIGIN=https://competitive.skrc.suankularb.space`. For an isolated rehearsal,
+  set `API_DOMAIN=staging-api.suankularb.space` instead of editing the Caddyfile.
 - Start production TLS with `docker compose --profile tls up -d`; Caddy obtains and
   renews the certificate for `api.suankularb.space` automatically.
 

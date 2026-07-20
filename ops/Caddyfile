@@ -1,4 +1,4 @@
-api.suankularb.space {
+{$API_DOMAIN:api.suankularb.space} {
   encode zstd gzip
   reverse_proxy api:3000
 }
