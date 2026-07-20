@@ -21,14 +21,14 @@ Use `npm run bootstrap-staff -- ../roster.csv --validate-only` for a no-AWS pref
 
 ## Transactional registration email
 
-SES runs in `ap-southeast-1` because the competition's Bangkok region does not
-offer SES. Onboard `suankularb.space` for the `skrc@suankularb.space` sender,
-publish its DKIM and isolated custom MAIL-FROM records without replacing the apex
-mail-forwarding records, and obtain SES production access before setting `EMAIL_ENABLED=true`.
-Run `npm run create-table` to ensure the DynamoDB stream and notification TTL,
-then `npm run create-notifications` to deploy the retrying worker and 14-day DLQ.
-The no-reply messages direct recipients to `CONTACT_EMAIL`; inspect and drain the
-DLQ before assuming every notification was accepted by SES.
+Verify `thanakorn.site` in Resend and publish the SPF and DKIM records it supplies;
+do not replace unrelated MX, forwarding, or inbound-mail records. Store a restricted
+Resend sending key as JSON in AWS Secrets Manager, set
+`RESEND_API_KEY_SECRET_ID` to its exact name, then set `EMAIL_ENABLED=true` only
+after verification. Run `npm run create-table` to ensure the DynamoDB stream and
+notification TTL, then `npm run create-notifications` to deploy the retrying worker
+and 14-day DLQ. The no-reply messages direct recipients to `CONTACT_EMAIL`; inspect
+the ledger and DLQ before assuming every notification was accepted by Resend.
 
 ## EC2 API permissions
 
@@ -61,7 +61,8 @@ request audit item.
 
 Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY_RUN.md).
 
-1. Admin saves minimum and maximum times for every active category.
+1. Admin saves the minimum safeguard and separate Round 1, Best of 4,
+   Best of 2, and The Best maximum times for every active category.
 2. Admin creates the allowed time-penalty rules.
 3. Committee/admin uses signed-in competitor, lane, inspection, and timing pages.
 4. Resolve every under-minimum run before giving that team another attempt.

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { marshall } from "@aws-sdk/util-dynamodb";
 import type { DynamoDBRecord } from "aws-lambda";
-import { buildEmail, classifyRecord, notificationKey } from "./core.js";
+import { buildEmail, classifyRecord, notificationKey, providerIdempotencyKey } from "./core.js";
 
 const registration = {
   PK: "REG#sub-123", SK: "PROFILE", status: "PENDING_APPROVAL",
@@ -41,4 +41,16 @@ test("builds bilingual escaped HTML and plain text", () => {
   assert.match(email.text, /thanakorn@thanakorn\.site/);
   assert.match(email.html, /A&amp;B &lt;Robots&gt;/);
   assert.doesNotMatch(email.html, /A&B <Robots>/);
+  assert.match(email.html, /background:linear-gradient\(135deg,#e040fb,#7c3aed 50%,#3b82f6\)/);
+  assert.match(email.html, /SKRC · Robotics Competition/);
+  assert.match(email.html, /Pending approval/);
+  assert.match(email.html, /Track status/);
+  assert.match(email.html, /role="presentation"/);
+});
+
+test("builds distinct stable provider idempotency keys", () => {
+  const received = classifyRecord(record("INSERT", registration))!;
+  const approved = classifyRecord(record("MODIFY", { ...registration, status: "APPROVED", approval: { competitorId: "C-0042" } }, registration))!;
+  assert.equal(providerIdempotencyKey(received), "skrc/registration_received/sub-123");
+  assert.equal(providerIdempotencyKey(approved), "skrc/registration_approved/sub-123");
 });
