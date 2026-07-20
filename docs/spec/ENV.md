@@ -16,6 +16,7 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `EMAIL_DOMAIN` | `suankularb.space` | SES identity; DKIM and isolated custom MAIL-FROM records must not replace apex mail forwarding. |
 | `EMAIL_FROM` | `skrc@suankularb.space` | Transactional sender shown to competitors. |
 | `EMAIL_REPLY_TO` | `thanakorn@thanakorn.site` | Address used when a recipient replies. |
+| `SES_SANDBOX_RECIPIENT` | `thanakorn@thanakorn.site` | Optional verified recipient IAM resource for staging while SES remains sandboxed; unset after production access. |
 | `PORTAL_URL` | `https://competitive.skrc.suankularb.space/portal` | Included in notification emails. |
 | `CONTACT_EMAIL` | `thanakorn@thanakorn.site` | Human contact printed in no-reply messages. |
 | `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after SES/DNS verification. |

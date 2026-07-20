@@ -30,12 +30,13 @@ const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN ?? "suankularb.space";
 const EMAIL_FROM = process.env.EMAIL_FROM ?? "skrc@suankularb.space";
 const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
+const SES_SANDBOX_RECIPIENT = process.env.SES_SANDBOX_RECIPIENT;
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "false";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("Invalid RESOURCE_PREFIX");
 if (!/^https:\/\//.test(PORTAL_URL)) throw new Error("PORTAL_URL must use HTTPS");
-if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
+if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL, ...(SES_SANDBOX_RECIPIENT ? [SES_SANDBOX_RECIPIENT] : [])].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
 
 const FUNCTION_NAME = `${RESOURCE_PREFIX}-email-worker`;
 const ROLE_NAME = `${RESOURCE_PREFIX}-email-worker-role`;
@@ -111,7 +112,10 @@ async function ensureRole(accountId: string, tableArn: string, dlqArn: string): 
     PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
       { Effect: "Allow", Action: ["dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:ListStreams"], Resource: `${tableArn}/stream/*` },
       { Effect: "Allow", Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"], Resource: tableArn },
-      { Effect: "Allow", Action: "ses:SendEmail", Resource: `arn:aws:ses:${EMAIL_REGION}:${accountId}:identity/${EMAIL_DOMAIN}` },
+      { Effect: "Allow", Action: "ses:SendEmail", Resource: [
+        `arn:aws:ses:${EMAIL_REGION}:${accountId}:identity/${EMAIL_DOMAIN}`,
+        ...(SES_SANDBOX_RECIPIENT ? [`arn:aws:ses:${EMAIL_REGION}:${accountId}:identity/${SES_SANDBOX_RECIPIENT}`] : []),
+      ] },
       { Effect: "Allow", Action: "sqs:SendMessage", Resource: dlqArn },
     ] }),
   }));
