@@ -43,6 +43,8 @@ Never call the wrong service from the wrong era — the frontend switches which 
   ```
   `teamName` is the public competition identity; category must be configured. Student 1 is the team leader and correspondence contact. All three names are required in Thai and English. The standalone bilingual notice is shown before authentication or registration fields. `pdpaConsent` and `pdpaAuthorityConfirmed` must explicitly be `true`; the server records the policy version, language, consent time, authority declaration, and six-calendar-month deletion deadline. Registration is free.
 - **Response 201:** `{ "competitorId": null, "status": "PENDING_APPROVAL" }` (no `competitorId` yet — minted at approval).
+- **Browser preflight:** `OPTIONS /register` returns an empty `204`; the browser then sends the authenticated `POST`, which returns the `201` above.
+- **Email side effect:** after the Registration item is committed, a DynamoDB Stream worker asynchronously sends a bilingual receipt to `contactEmail`. Delivery failure never rolls back registration and is retried independently.
 - **Errors:** `403 FORBIDDEN` for staff tokens. `409 CONFLICT` if a Registration already exists for this sub. `400 VALIDATION_ERROR` for invalid fields/category.
 
 ### `GET /me`
@@ -68,6 +70,7 @@ Never call the wrong service from the wrong era — the frontend switches which 
 - **Request:** `{}` (no body needed).
 - **Behavior:** conditional update `status: PENDING_APPROVAL|REJECTED → APPROVED`; atomic `ADD` on `CONFIG#COUNTER`; create `COMP#<competitorId>` (status `REGISTERED`); `AdminUpdateUserAttributes` on the Cognito user to stamp `custom:competitorId`. Idempotent: if already `APPROVED`, return the existing result with no further writes.
 - **Response 200:** `{ "competitorId": "C-0042", "status": "APPROVED" }`.
+- **Email side effect:** the first real transition to `APPROVED` asynchronously sends a bilingual approval email containing the assigned `competitorId`. Idempotent approval retries do not enqueue another email.
 - **Errors:** `404 NOT_FOUND` unknown sub.
 
 ### `POST /registrations/:sub/reject`

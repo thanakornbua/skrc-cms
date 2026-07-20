@@ -2,6 +2,9 @@ import {
   DynamoDBClient,
   CreateTableCommand,
   DescribeTableCommand,
+  DescribeTimeToLiveCommand,
+  UpdateTableCommand,
+  UpdateTimeToLiveCommand,
   waitUntilTableExists,
   ResourceNotFoundException,
 } from "@aws-sdk/client-dynamodb";
@@ -11,21 +14,40 @@ const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
 
 const client = new DynamoDBClient({ region: REGION });
 
-async function tableExists(): Promise<boolean> {
+async function describeTable() {
   try {
-    await client.send(new DescribeTableCommand({ TableName: TABLE_NAME }));
-    return true;
+    return (await client.send(new DescribeTableCommand({ TableName: TABLE_NAME }))).Table;
   } catch (err) {
-    if (err instanceof ResourceNotFoundException) return false;
+    if (err instanceof ResourceNotFoundException) return null;
     throw err;
   }
 }
 
+async function ensureStreamAndTtl(): Promise<void> {
+  const table = await describeTable();
+  if (!table?.StreamSpecification?.StreamEnabled || table.StreamSpecification.StreamViewType !== "NEW_AND_OLD_IMAGES") {
+    console.log(`Enabling NEW_AND_OLD_IMAGES stream on "${TABLE_NAME}"...`);
+    await client.send(new UpdateTableCommand({
+      TableName: TABLE_NAME,
+      StreamSpecification: { StreamEnabled: true, StreamViewType: "NEW_AND_OLD_IMAGES" },
+    }));
+    await waitUntilTableExists({ client, maxWaitTime: 120 }, { TableName: TABLE_NAME });
+  }
+
+  const ttl = await client.send(new DescribeTimeToLiveCommand({ TableName: TABLE_NAME }));
+  if (ttl.TimeToLiveDescription?.TimeToLiveStatus === "DISABLED") {
+    console.log(`Enabling TTL attribute "expiresAt" on "${TABLE_NAME}"...`);
+    await client.send(new UpdateTimeToLiveCommand({
+      TableName: TABLE_NAME,
+      TimeToLiveSpecification: { AttributeName: "expiresAt", Enabled: true },
+    }));
+  }
+}
+
 async function main() {
-  if (await tableExists()) {
-    console.log(
-      `Table "${TABLE_NAME}" already exists in ${REGION} — nothing to do.`
-    );
+  if (await describeTable()) {
+    console.log(`Table "${TABLE_NAME}" already exists in ${REGION} — checking stream and TTL.`);
+    await ensureStreamAndTtl();
     return;
   }
 
@@ -55,6 +77,7 @@ async function main() {
           Projection: { ProjectionType: "ALL" },
         },
       ],
+      StreamSpecification: { StreamEnabled: true, StreamViewType: "NEW_AND_OLD_IMAGES" },
     })
   );
 
@@ -64,7 +87,8 @@ async function main() {
     { TableName: TABLE_NAME }
   );
 
-  console.log(`Table "${TABLE_NAME}" is ACTIVE with GSI1.`);
+  await ensureStreamAndTtl();
+  console.log(`Table "${TABLE_NAME}" is ACTIVE with GSI1, stream, and TTL.`);
 }
 
 main().catch((err) => {

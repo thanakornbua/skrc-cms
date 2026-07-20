@@ -19,6 +19,16 @@ all rows before any Cognito write and accepts the supplied `comittee` spelling a
 delete the local CSV after staff have changed their temporary passwords.
 Use `npm run bootstrap-staff -- ../roster.csv --validate-only` for a no-AWS preflight.
 
+## Transactional registration email
+
+SES runs in `ap-southeast-1` because the competition's Bangkok region does not
+offer SES. Onboard `notify.suankularb.space`, publish its DKIM and custom MAIL-FROM
+records, and obtain SES production access before setting `EMAIL_ENABLED=true`.
+Run `npm run create-table` to ensure the DynamoDB stream and notification TTL,
+then `npm run create-notifications` to deploy the retrying worker and 14-day DLQ.
+The no-reply messages direct recipients to `CONTACT_EMAIL`; inspect and drain the
+DLQ before assuming every notification was accepted by SES.
+
 ## EC2 API permissions
 
 The EC2 instance role must allow `cognito-idp:AdminResetUserPassword` on the
