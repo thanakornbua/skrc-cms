@@ -11,6 +11,7 @@
     "create-regweek": "tsx src/create-regweek.ts",
     "simulate-gates": "tsx src/simulate-gates.ts",
     "stress-gates": "tsx src/stress-gates.ts",
+    "rehearse-local": "tsx src/local-rehearsal.ts",
     "purge-pii": "tsx src/purge-pii.ts",
     "serial-bridge": "tsx src/serial-bridge.ts",
     "test:serial": "tsx src/serial-bridge.test.ts",

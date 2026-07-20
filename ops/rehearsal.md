@@ -3,6 +3,10 @@
 Use disposable identities only. Complete `DRY_RUN.md`, then retain this evidence without
 tokens, passwords, device keys, or participant data.
 
+For the code-only local rehearsal, start DynamoDB Local, build `backend` and `ops`, then
+run `npm run rehearse-local`. It creates and deletes a uniquely named table and writes
+only the privacy-safe static result to `/tmp/skrc-local-results.json`.
+
 1. Record UTC timestamp, operator, Git commit, frontend build ID, and backend image ID.
 2. Run `npm run build` in `backend`, `frontend`, and `ops`.
 3. Configure two disposable lanes and arm one inspected competitor on each.
