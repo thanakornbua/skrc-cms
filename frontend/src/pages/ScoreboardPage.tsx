@@ -67,16 +67,21 @@ export default function ScoreboardPage() {
 
       {categories.map((category) => (
         <section className="card" key={category.category}>
-          <span className="section-kicker">{stageLabel[category.stage]} · {category.scoringMode === "CHECKPOINT_LAP" ? "CHECKPOINT / LAP" : "TWO-ATTEMPT AVERAGE"}</span>
+          <span className="section-kicker">
+            {state === "FINAL"
+              ? t("ผลอย่างเป็นทางการ", "Final standings")
+              : `${stageLabel[category.stage]} · ${category.scoringMode === "CHECKPOINT_LAP" ? "CHECKPOINT / LAP" : "TWO-ATTEMPT AVERAGE"}`}
+          </span>
           <h2>{category.category}</h2>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>{t("อันดับ", "Rank")}</th><th>{t("ทีม", "Team")}</th><th>{category.scoringMode === "CHECKPOINT_LAP" ? t("ผลรอบ", "Stage result") : t("เฉลี่ย", "Average")}</th><th>{t("โทษ", "Penalty")}</th><th>{t("สุทธิ", "Final")}</th></tr></thead>
+              <thead><tr><th>{t("อันดับ", "Rank")}</th><th>{t("ทีม", "Team")}</th><th>{t("รอบที่ถึง", "Reached")}</th><th>{state === "FINAL" ? t("ผล", "Result") : (category.scoringMode === "CHECKPOINT_LAP" ? t("ผลรอบ", "Stage result") : t("เฉลี่ย", "Average"))}</th><th>{t("โทษ", "Penalty")}</th><th>{t("สุทธิ", "Final")}</th></tr></thead>
               <tbody>
                 {category.ranked.map((item) => (
                   <tr key={`${item.rank}-${item.teamName}`}>
                     <td><span className={`rank-mark rank-${item.rank}`}>{item.rank}</span></td>
                     <td><strong>{item.teamName}</strong></td>
+                    <td>{stageLabel[item.stage]}</td>
                     <td className="technical">{item.scoringMode === "CHECKPOINT_LAP" ? (item.completedLap && item.lapTimeMs != null ? seconds(item.lapTimeMs) : `${item.furthestCheckpoint} checkpoint${item.furthestCheckpoint === 1 ? "" : "s"}`) : (item.aggregateTimeMs == null ? "—" : seconds(item.aggregateTimeMs))}</td>
                     <td className="technical">+{seconds(item.penaltyTimeMs)}</td>
                     <td className="technical"><strong>{item.finalTimeMs == null ? "—" : seconds(item.finalTimeMs)}</strong></td>

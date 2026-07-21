@@ -7,6 +7,8 @@ import { config } from "../config.js";
 import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
 import { STAGE_SCORING } from "../competition/types.js";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
+import { listCorrections } from "../timing/repo.js";
+import { consumedStageBudgetMs } from "../timing/budget.js";
 import type { GateEventInput, RunRecord, RunSplit } from "./types.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -118,10 +120,8 @@ export async function processGateEvent(
     }
     let maxTimeMs = configuredMaxTimeMs;
     if (STAGE_SCORING[competition.activeStage] === "CHECKPOINT_LAP") {
-      const stageRuns = (await listRuns(lane.competitorId)).filter((run) => (run.stage ?? "ROUND_1") === competition.activeStage);
-      const used = stageRuns
-        .filter((run) => ["COMPLETE", "TIMED_OUT", "INVALID"].includes(run.status ?? ""))
-        .reduce((sum, run) => sum + (typeof run.elapsedMs === "number" ? Math.min(run.elapsedMs, run.maxTimeMs) : run.maxTimeMs), 0);
+      const [stageRuns, corrections] = await Promise.all([listRuns(lane.competitorId), listCorrections(lane.competitorId)]);
+      const used = consumedStageBudgetMs(stageRuns, corrections, competition.activeStage);
       maxTimeMs = configuredMaxTimeMs - used;
       if (maxTimeMs <= 0) return { accepted: false, reason: "invalid_state" };
     }

@@ -9,7 +9,7 @@ import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
 import { rankStageCategory, type StageScoringInput } from "./scoring.js";
 import { COMPETITION_STATE_KEY, getCompetitionState } from "./state.js";
 import {
-  ADVANCEMENT_COUNT, NEXT_STAGE, type CategoryStageResults, type CompetitionStage,
+  ADVANCEMENT_COUNT, COMPETITION_STAGES, NEXT_STAGE, type CategoryStageResults, type CompetitionStage,
   type CompetitionState, type StageRankedResult,
 } from "./types.js";
 
@@ -64,12 +64,32 @@ function publicize(results: CategoryStageResults[]): CategoryStageResults[] {
   }));
 }
 
+/** Highest completed stage a competitor appears in (ranked or unranked); that stage is their elimination point. */
+export function getFrozenStageResult(
+  state: CompetitionState,
+  category: string,
+  competitorId: string,
+): { stage: CompetitionStage; result: StageRankedResult | null; rank: number | null } | null {
+  for (const stage of [...COMPETITION_STAGES].reverse()) {
+    const snapshot = state.stageResults?.[stage]?.find((item) => item.category === category);
+    if (!snapshot) continue;
+    const ranked = snapshot.ranked.find((item) => item.competitorId === competitorId);
+    if (ranked) return { stage, result: ranked, rank: ranked.rank };
+    if (snapshot.unranked.some((item) => item.competitorId === competitorId)) return { stage, result: null, rank: null };
+  }
+  return null;
+}
+
 export async function calculateStageRankings(
   stage?: CompetitionStage,
   includeInternalIds = false,
 ): Promise<CategoryStageResults[]> {
   const state = await getCompetitionState();
   const selectedStage = stage ?? state.activeStage;
+  if (stage !== undefined && stage !== state.activeStage && stage !== "ROUND_1" && state.stageResults?.[stage]) {
+    const stored = state.stageResults[stage]!;
+    return includeInternalIds ? stored : publicize(stored);
+  }
   let inputs = await scoringInputs();
   if (selectedStage !== "ROUND_1") {
     const eligible = new Set(state.activeStage === selectedStage

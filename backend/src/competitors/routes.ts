@@ -7,9 +7,10 @@ import { checkIn, disqualifyCompetitor, getCompetitor, inspectCompetitor, listCo
 import { getActiveLaneForCompetitor } from "../lanes/repo.js";
 import { listRuns } from "../runs/repo.js";
 import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
-import { getCompetitorRank } from "../competition/repo.js";
-import { getCompetitionState } from "../competition/state.js";
+import { getCompetitorRank, getFrozenStageResult } from "../competition/repo.js";
+import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
 import { scoreCompetitorStage } from "../competition/scoring.js";
+import type { StageRankedResult } from "../competition/types.js";
 
 export const competitorsRouter = Router();
 
@@ -24,12 +25,24 @@ competitorsRouter.get(
 
       const lane = await getActiveLaneForCompetitor(competitor.competitorId);
       const competition = await getCompetitionState();
-      const [runs, corrections, penalties, rank] = await Promise.all([
+      const [runs, corrections, penalties] = await Promise.all([
         listRuns(competitor.competitorId), listCorrections(competitor.competitorId),
         listAppliedPenalties(competitor.competitorId),
-        getCompetitorRank(competitor.category, competitor.competitorId),
       ]);
-      const stageResult = scoreCompetitorStage({ competitor, runs, corrections, penalties }, competition.activeStage);
+      const eligible = isEligibleForStage(competition, competitor.competitorId);
+      const eliminated = !eligible && competition.activeStage !== "ROUND_1";
+      let resultStage = competition.activeStage;
+      let stageResult: StageRankedResult | Omit<StageRankedResult, "rank"> | null;
+      let rank: number | null;
+      if (eligible) {
+        stageResult = scoreCompetitorStage({ competitor, runs, corrections, penalties }, resultStage);
+        rank = await getCompetitorRank(competitor.category, competitor.competitorId);
+      } else {
+        const frozen = getFrozenStageResult(competition, competitor.category, competitor.competitorId);
+        resultStage = frozen?.stage ?? competition.activeStage;
+        stageResult = frozen?.result ?? null;
+        rank = frozen?.rank ?? null;
+      }
       const correctionByRun = new Map(corrections.map((item) => [item.runId, item]));
 
       res.status(200).json({
@@ -60,11 +73,15 @@ competitorsRouter.get(
           reviewResolution: run.reviewResolution ?? null,
           createdAt: run.createdAt,
         })),
-        stageResult: stageResult ? (() => { const { competitorId: _id, ...result } = stageResult; return result; })() : null,
+        stageResult: stageResult
+          ? (() => { const { competitorId: _id, rank: _rank, tieTimestamp: _tie, ...result } = stageResult as unknown as StageRankedResult; return result; })()
+          : null,
         aggregateTimeMs: stageResult?.aggregateTimeMs ?? null,
         penaltyTimeMs: stageResult?.penaltyTimeMs ?? 0,
         finalTimeMs: stageResult?.finalTimeMs ?? null,
         activeStage: competition.activeStage,
+        resultStage,
+        eliminated,
         rank,
       });
     } catch (err) {

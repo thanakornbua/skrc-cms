@@ -9,6 +9,7 @@ import { getCompetitor } from "../competitors/repo.js";
 import { listRuns } from "../runs/repo.js";
 import type { RunRecord } from "../runs/types.js";
 import type { AppliedPenalty, CategoryTiming, PenaltyRule, TimeCorrection, TimeResult } from "./types.js";
+import { consumedStageBudgetMs } from "./budget.js";
 
 const categoryKey = (category: string) => ({ PK: `CONFIG#CATEGORY#${category}`, SK: "PROFILE" });
 const ruleKey = (ruleId: string) => ({ PK: `CONFIG#PENALTY#${ruleId}`, SK: "PROFILE" });
@@ -253,7 +254,7 @@ export async function getAttemptState(competitorId: string, stage?: CompetitionS
   const consumedRuns = selectedRuns.filter((run) =>
     run.status === "COMPLETE" || run.status === "TIMED_OUT" || run.status === "INVALID" || corrected.has(run.runId)
   );
-  const consumedTimeMs = consumedRuns.reduce((sum, run) => sum + (typeof run.elapsedMs === "number" ? Math.min(run.elapsedMs, run.maxTimeMs) : run.maxTimeMs), 0);
+  const consumedTimeMs = stage ? consumedStageBudgetMs(runs, corrections, stage) : 0;
   return { consumed: consumedRuns.length, unresolved, consumedTimeMs };
 }
 
