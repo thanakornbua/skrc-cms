@@ -14,6 +14,8 @@
     "stress-gates": "tsx src/stress-gates.ts",
     "rehearse-local": "tsx src/local-rehearsal.ts",
     "purge-pii": "tsx src/purge-pii.ts",
+    "wipe-competitors": "tsx src/wipe-competitors.ts",
+    "reset-staff": "tsx src/reset-staff.ts",
     "serial-bridge": "tsx src/serial-bridge.ts",
     "test:serial": "tsx src/serial-bridge.test.ts",
     "test:serial-e2e": "tsx src/serial-e2e.test.ts"
