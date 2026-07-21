@@ -52,7 +52,7 @@ and configure SPA fallback to `index.html`.
 Set build variables outside source control:
 
 ```text
-VITE_REGISTRATION_API_BASE_URL=<production registration API>
+VITE_REGWEEK_API_URL=<production registration API>
 VITE_API_BASE_URL=<competition EC2 API>
 VITE_COGNITO_USER_POOL_ID=ap-southeast-7_ZWnRxXneN
 VITE_COGNITO_CLIENT_ID=4jennh6lfhjddhd0uksueu9rm4
