@@ -32,6 +32,7 @@ async function ensureLane(entry: LaneConfigEntry): Promise<void> {
           competitorId: null,
           deviceId: entry.deviceId,
           armedBy: null,
+          runStartedAt: null,
           updatedAt: new Date().toISOString(),
         },
         ConditionExpression: "attribute_not_exists(PK)",
@@ -77,6 +78,7 @@ export async function listLanes(): Promise<LaneRecord[]> {
         competitorId: null,
         deviceId: entry.deviceId,
         armedBy: null,
+        runStartedAt: null,
         updatedAt: null,
       };
     }
@@ -177,7 +179,7 @@ export async function assignLane(
             TableName: TABLE_NAME,
             Key: keyLane(laneId),
             UpdateExpression:
-              "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+              "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
             ConditionExpression: "#state = :assigned AND competitorId = :cid",
             ExpressionAttributeNames: { "#state": "state" },
             ExpressionAttributeValues: {
@@ -270,7 +272,7 @@ export async function resetLane(laneId: string): Promise<LaneRecord> {
       TableName: TABLE_NAME,
       Key: keyLane(laneId),
       UpdateExpression:
-        "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+        "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
       ConditionExpression: "#state = :beforeState AND competitorId = :beforeCompetitorId",
       ExpressionAttributeNames: { "#state": "state" },
       ExpressionAttributeValues: {

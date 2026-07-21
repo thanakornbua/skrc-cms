@@ -130,7 +130,7 @@ export async function processGateEvent(
       await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
         { Update: {
           TableName: TABLE_NAME, Key: laneKey(event.laneId),
-          UpdateExpression: "SET #state = :running, updatedAt = :at",
+          UpdateExpression: "SET #state = :running, runStartedAt = :at, updatedAt = :at",
           ConditionExpression: "#state = :armed AND competitorId = :cid",
           ExpressionAttributeNames: { "#state": "state" },
           ExpressionAttributeValues: { ":running": "RUNNING", ":armed": "ARMED", ":cid": lane.competitorId, ":at": now },
@@ -213,7 +213,7 @@ export async function processGateEvent(
       } },
       { Update: {
         TableName: TABLE_NAME, Key: laneKey(event.laneId),
-        UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+        UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
         ConditionExpression: "#state = :running AND competitorId = :cid",
         ExpressionAttributeNames: { "#state": "state" },
         ExpressionAttributeValues: { ":idle": "IDLE", ":running": "RUNNING", ":cid": lane.competitorId, ":none": null, ":at": new Date().toISOString() },
@@ -259,7 +259,7 @@ export async function voidActiveRunAndResetLane(
     // A legacy/inconsistent RUNNING lane should remain operator-resettable.
     await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME, Key: laneKey(laneId),
-      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
       ConditionExpression: "#state = :running AND competitorId = :cid",
       ExpressionAttributeNames: { "#state": "state" },
       ExpressionAttributeValues: {
@@ -278,7 +278,7 @@ export async function voidActiveRunAndResetLane(
     } },
     { Update: {
       TableName: TABLE_NAME, Key: laneKey(laneId),
-      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+      UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
       ConditionExpression: "#state = :running AND competitorId = :cid",
       ExpressionAttributeNames: { "#state": "state" },
       ExpressionAttributeValues: {
@@ -313,7 +313,7 @@ export async function sweepTimedOutRuns(nowMs = Date.now()): Promise<number> {
         } },
         { Update: {
           TableName: TABLE_NAME, Key: laneKey(entry.laneId),
-          UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, updatedAt = :at",
+          UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
           ConditionExpression: "#state = :running AND competitorId = :cid",
           ExpressionAttributeNames: { "#state": "state" },
           ExpressionAttributeValues: { ":idle": "IDLE", ":running": "RUNNING", ":cid": lane.competitorId, ":none": null, ":at": new Date(nowMs).toISOString() },

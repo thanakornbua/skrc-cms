@@ -24,6 +24,7 @@ lanesRouter.get(
           competitorId: l.competitorId,
           deviceId: l.deviceId,
           armedBy: l.armedBy,
+          runStartedAt: l.runStartedAt,
           updatedAt: l.updatedAt,
         })),
       });

@@ -12,6 +12,7 @@ interface Lane {
   competitorId: string | null;
   deviceId: string | null;
   armedBy: string | null;
+  runStartedAt: string | null;
   updatedAt: string | null;
 }
 
@@ -23,6 +24,7 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyLane, setBusyLane] = useState<string | null>(null);
   const [assignValues, setAssignValues] = useState<Record<string, string>>({});
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const assignInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const teamNamesRef = useRef<Record<string, string>>({});
@@ -73,6 +75,13 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ticks independently of the 2s lane poll so a running lane's elapsed time
+  // reads smoothly instead of jumping in 2-second steps.
+  useEffect(() => {
+    const interval = setInterval(() => setNowMs(Date.now()), 100);
+    return () => clearInterval(interval);
   }, []);
 
   async function laneAction(laneId: string, action: string, body?: object): Promise<boolean> {
@@ -131,6 +140,11 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
             </p>
             {lane.deviceId && <p>{t("อุปกรณ์", "Device")}: <span className="technical">{lane.deviceId}</span></p>}
             {lane.armedBy && lane.state !== "IDLE" && <p>{t("เตรียมโดย", "Armed by")}: {lane.armedBy}</p>}
+            {lane.state === "RUNNING" && lane.runStartedAt && (
+              <p className="lane-elapsed">
+                {t("เวลาที่ผ่านไป", "Elapsed")}: <span className="technical">{Math.max(0, (nowMs - Date.parse(lane.runStartedAt)) / 1000).toFixed(1)} s</span>
+              </p>
+            )}
 
             {lane.state === "IDLE" && (
               <div className="field">
