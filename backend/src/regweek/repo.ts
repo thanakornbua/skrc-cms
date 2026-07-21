@@ -40,6 +40,10 @@ interface RawRegistrationItem {
   name: string;
   teamName: string;
   category: Category;
+  school: string;
+  advisorName: string;
+  advisorPhone: string;
+  advisorEmail: string;
   contactEmail: string;
   contactPhone: string;
   student1NameThai: string;
@@ -62,6 +66,10 @@ function fromRawRegistration(item: RawRegistrationItem): RegistrationRecord {
     name: item.name,
     teamName: item.teamName,
     category: item.category,
+    school: item.school,
+    advisorName: item.advisorName,
+    advisorPhone: item.advisorPhone,
+    advisorEmail: item.advisorEmail,
     contactEmail: item.contactEmail,
     contactPhone: item.contactPhone,
     student1NameThai: item.student1NameThai,
@@ -102,6 +110,10 @@ export async function createRegistration(input: StudentNames & {
   name: string;
   teamName: string;
   category: Category;
+  school: string;
+  advisorName: string;
+  advisorPhone: string;
+  advisorEmail: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsentVersion: string;
@@ -136,6 +148,10 @@ export async function createRegistration(input: StudentNames & {
           name: input.name,
           teamName: input.teamName,
           category: input.category,
+          school: input.school,
+          advisorName: input.advisorName,
+          advisorPhone: input.advisorPhone,
+          advisorEmail: input.advisorEmail,
           contactEmail: input.contactEmail,
           contactPhone: input.contactPhone,
           student1NameThai: input.student1NameThai,
@@ -297,6 +313,10 @@ async function createCompetitorItem(
           name: reg.name,
           teamName: reg.teamName,
           category: reg.category,
+          school: reg.school,
+          advisorName: reg.advisorName,
+          advisorPhone: reg.advisorPhone,
+          advisorEmail: reg.advisorEmail,
           contactEmail: reg.contactEmail,
           contactPhone: reg.contactPhone,
           student1NameThai: reg.student1NameThai,

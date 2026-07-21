@@ -12,6 +12,10 @@ export interface CompetitorRecord {
   name: string;
   teamName: string;
   category: string;
+  school: string;
+  advisorName: string;
+  advisorPhone: string;
+  advisorEmail: string;
   contactEmail: string;
   contactPhone: string;
   student1NameThai: string;

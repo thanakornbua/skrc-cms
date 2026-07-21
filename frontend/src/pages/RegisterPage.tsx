@@ -24,6 +24,10 @@ export default function RegisterPage() {
   const [student1NameEnglish, setStudent1NameEnglish] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [school, setSchool] = useState("");
+  const [advisorName, setAdvisorName] = useState("");
+  const [advisorPhone, setAdvisorPhone] = useState("");
+  const [advisorEmail, setAdvisorEmail] = useState("");
   const [student2NameThai, setStudent2NameThai] = useState("");
   const [student2NameEnglish, setStudent2NameEnglish] = useState("");
   const [student3NameThai, setStudent3NameThai] = useState("");
@@ -74,6 +78,7 @@ export default function RegisterPage() {
           teamName, category, student1NameThai, student1NameEnglish,
           contactEmail, contactPhone, student2NameThai, student2NameEnglish,
           student3NameThai, student3NameEnglish,
+          school, advisorName, advisorPhone, advisorEmail,
           pdpaConsent: true,
           pdpaAuthorityConfirmed: true,
         }),
@@ -131,6 +136,16 @@ export default function RegisterPage() {
       </section>
 
       <section className="form-section">
+        <span className="section-kicker">SCHOOL & ADVISOR</span><h2>{t("โรงเรียนและอาจารย์ที่ปรึกษา", "School & advisor")}</h2>
+        <div className="field"><label htmlFor={fid("school")}>{t("โรงเรียน", "School")}</label><input id={fid("school")} required value={school} onChange={(e) => setSchool(e.target.value)} aria-invalid={fieldErrors.school ? true : undefined} aria-describedby={fieldErrors.school ? errId("school") : undefined} />{fieldErrors.school && <small id={errId("school")}>{fieldErrors.school}</small>}</div>
+        <div className="field-grid">
+          <div className="field"><label htmlFor={fid("advisorName")}>{t("ชื่ออาจารย์ที่ปรึกษา", "Advisor name")}</label><input id={fid("advisorName")} required value={advisorName} onChange={(e) => setAdvisorName(e.target.value)} aria-invalid={fieldErrors.advisorName ? true : undefined} aria-describedby={fieldErrors.advisorName ? errId("advisorName") : undefined} />{fieldErrors.advisorName && <small id={errId("advisorName")}>{fieldErrors.advisorName}</small>}</div>
+          <div className="field"><label htmlFor={fid("advisorPhone")}>{t("หมายเลขโทรศัพท์อาจารย์ที่ปรึกษา", "Advisor phone number")}</label><input id={fid("advisorPhone")} type="tel" inputMode="tel" autoComplete="tel" required value={advisorPhone} onChange={(e) => setAdvisorPhone(e.target.value)} aria-invalid={fieldErrors.advisorPhone ? true : undefined} aria-describedby={fieldErrors.advisorPhone ? errId("advisorPhone") : undefined} />{fieldErrors.advisorPhone && <small id={errId("advisorPhone")}>{fieldErrors.advisorPhone}</small>}</div>
+          <div className="field"><label htmlFor={fid("advisorEmail")}>{t("อีเมลอาจารย์ที่ปรึกษา", "Advisor email")}</label><input id={fid("advisorEmail")} type="email" autoComplete="email" required value={advisorEmail} onChange={(e) => setAdvisorEmail(e.target.value)} aria-invalid={fieldErrors.advisorEmail ? true : undefined} aria-describedby={fieldErrors.advisorEmail ? errId("advisorEmail") : undefined} />{fieldErrors.advisorEmail && <small id={errId("advisorEmail")}>{fieldErrors.advisorEmail}</small>}</div>
+        </div>
+      </section>
+
+      <section className="form-section">
         <span className="section-kicker">STUDENT 01 · TEAM LEADER</span><h2>{t("นักเรียนคนที่ 1 — หัวหน้าทีมและผู้ประสานงาน", "Student 1 — Team leader and correspondent")}</h2>
         <div className="field"><label htmlFor={fid("student1NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student1NameThai")} lang="th" required value={student1NameThai} onChange={(e) => setStudent1NameThai(e.target.value)} aria-invalid={fieldErrors.student1NameThai ? true : undefined} aria-describedby={fieldErrors.student1NameThai ? errId("student1NameThai") : undefined} />{fieldErrors.student1NameThai && <small id={errId("student1NameThai")}>{fieldErrors.student1NameThai}</small>}</div>
         <div className="field"><label htmlFor={fid("student1NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student1NameEnglish")} required value={student1NameEnglish} onChange={(e) => setStudent1NameEnglish(e.target.value)} aria-invalid={fieldErrors.student1NameEnglish ? true : undefined} aria-describedby={fieldErrors.student1NameEnglish ? errId("student1NameEnglish") : undefined} />{fieldErrors.student1NameEnglish && <small id={errId("student1NameEnglish")}>{fieldErrors.student1NameEnglish}</small>}</div>
@@ -143,16 +158,16 @@ export default function RegisterPage() {
       <section className="form-section">
         <span className="section-kicker">STUDENT 02</span><h2>{t("นักเรียนคนที่ 2", "Student 2")}</h2>
         <div className="field-grid">
-          <div className="field"><label htmlFor={fid("student2NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student2NameThai")} lang="th" required value={student2NameThai} onChange={(e) => setStudent2NameThai(e.target.value)} aria-invalid={fieldErrors.student2NameThai ? true : undefined} aria-describedby={fieldErrors.student2NameThai ? errId("student2NameThai") : undefined} />{fieldErrors.student2NameThai && <small id={errId("student2NameThai")}>{fieldErrors.student2NameThai}</small>}</div>
-          <div className="field"><label htmlFor={fid("student2NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student2NameEnglish")} required value={student2NameEnglish} onChange={(e) => setStudent2NameEnglish(e.target.value)} aria-invalid={fieldErrors.student2NameEnglish ? true : undefined} aria-describedby={fieldErrors.student2NameEnglish ? errId("student2NameEnglish") : undefined} />{fieldErrors.student2NameEnglish && <small id={errId("student2NameEnglish")}>{fieldErrors.student2NameEnglish}</small>}</div>
+          <div className="field"><label htmlFor={fid("student2NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student2NameThai")} lang="th" value={student2NameThai} onChange={(e) => setStudent2NameThai(e.target.value)} aria-invalid={fieldErrors.student2NameThai ? true : undefined} aria-describedby={fieldErrors.student2NameThai ? errId("student2NameThai") : undefined} />{fieldErrors.student2NameThai && <small id={errId("student2NameThai")}>{fieldErrors.student2NameThai}</small>}</div>
+          <div className="field"><label htmlFor={fid("student2NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student2NameEnglish")} value={student2NameEnglish} onChange={(e) => setStudent2NameEnglish(e.target.value)} aria-invalid={fieldErrors.student2NameEnglish ? true : undefined} aria-describedby={fieldErrors.student2NameEnglish ? errId("student2NameEnglish") : undefined} />{fieldErrors.student2NameEnglish && <small id={errId("student2NameEnglish")}>{fieldErrors.student2NameEnglish}</small>}</div>
         </div>
       </section>
 
       <section className="form-section">
         <span className="section-kicker">STUDENT 03</span><h2>{t("นักเรียนคนที่ 3", "Student 3")}</h2>
         <div className="field-grid">
-          <div className="field"><label htmlFor={fid("student3NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student3NameThai")} lang="th" required value={student3NameThai} onChange={(e) => setStudent3NameThai(e.target.value)} aria-invalid={fieldErrors.student3NameThai ? true : undefined} aria-describedby={fieldErrors.student3NameThai ? errId("student3NameThai") : undefined} />{fieldErrors.student3NameThai && <small id={errId("student3NameThai")}>{fieldErrors.student3NameThai}</small>}</div>
-          <div className="field"><label htmlFor={fid("student3NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student3NameEnglish")} required value={student3NameEnglish} onChange={(e) => setStudent3NameEnglish(e.target.value)} aria-invalid={fieldErrors.student3NameEnglish ? true : undefined} aria-describedby={fieldErrors.student3NameEnglish ? errId("student3NameEnglish") : undefined} />{fieldErrors.student3NameEnglish && <small id={errId("student3NameEnglish")}>{fieldErrors.student3NameEnglish}</small>}</div>
+          <div className="field"><label htmlFor={fid("student3NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student3NameThai")} lang="th" value={student3NameThai} onChange={(e) => setStudent3NameThai(e.target.value)} aria-invalid={fieldErrors.student3NameThai ? true : undefined} aria-describedby={fieldErrors.student3NameThai ? errId("student3NameThai") : undefined} />{fieldErrors.student3NameThai && <small id={errId("student3NameThai")}>{fieldErrors.student3NameThai}</small>}</div>
+          <div className="field"><label htmlFor={fid("student3NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student3NameEnglish")} value={student3NameEnglish} onChange={(e) => setStudent3NameEnglish(e.target.value)} aria-invalid={fieldErrors.student3NameEnglish ? true : undefined} aria-describedby={fieldErrors.student3NameEnglish ? errId("student3NameEnglish") : undefined} />{fieldErrors.student3NameEnglish && <small id={errId("student3NameEnglish")}>{fieldErrors.student3NameEnglish}</small>}</div>
         </div>
       </section>
 

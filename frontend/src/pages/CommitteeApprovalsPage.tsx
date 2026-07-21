@@ -11,6 +11,10 @@ interface PendingItem {
   name: string;
   teamName: string;
   category: string;
+  school?: string;
+  advisorName?: string;
+  advisorPhone?: string;
+  advisorEmail?: string;
   contactPhone: string;
   contactEmail: string;
   student1NameThai?: string;
@@ -101,6 +105,9 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
           </p>
           <p>
             {item.contactEmail} · {item.contactPhone}
+          </p>
+          <p>
+            {t("โรงเรียน", "School")}: {item.school ?? "—"} · {t("อาจารย์ที่ปรึกษา", "Advisor")}: {item.advisorName ?? "—"} ({item.advisorPhone ?? "—"}) · {item.advisorEmail ?? "—"}
           </p>
           <div className="student-review-grid">
             <div><span className="section-kicker">STUDENT 01 · LEADER</span><strong lang="th">{item.student1NameThai ?? "—"}</strong><span>{item.student1NameEnglish ?? "—"}</span></div>
