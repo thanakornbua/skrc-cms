@@ -533,6 +533,27 @@ textarea:focus-visible,
 .lane-card[data-state="RUNNING"] { border-color: var(--color-success); box-shadow: inset 3px 0 0 var(--color-success); }
 .lane-card[data-state="ARMED"] { border-color: var(--color-warning); box-shadow: inset 3px 0 0 var(--color-warning); }
 .lane-card h2 { margin-top: var(--space-3); }
+
+.lane-elapsed { margin-top: var(--space-3); }
+.lane-elapsed-label {
+  display: block;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+}
+.lane-elapsed-value {
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+  color: var(--color-success);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .admin-config-grid { margin-bottom: var(--space-4); }
 .admin-config-grid form { margin-top: var(--space-5); }
 .rule-list { display: grid; gap: 0; margin-top: var(--space-5); border-top: 1px solid var(--hairline); }

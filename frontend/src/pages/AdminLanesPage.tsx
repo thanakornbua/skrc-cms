@@ -141,9 +141,10 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
             {lane.deviceId && <p>{t("อุปกรณ์", "Device")}: <span className="technical">{lane.deviceId}</span></p>}
             {lane.armedBy && lane.state !== "IDLE" && <p>{t("เตรียมโดย", "Armed by")}: {lane.armedBy}</p>}
             {lane.state === "RUNNING" && lane.runStartedAt && (
-              <p className="lane-elapsed">
-                {t("เวลาที่ผ่านไป", "Elapsed")}: <span className="technical">{Math.max(0, (nowMs - Date.parse(lane.runStartedAt)) / 1000).toFixed(1)} s</span>
-              </p>
+              <div className="lane-elapsed">
+                <span className="lane-elapsed-label">{t("เวลาที่ผ่านไป", "Elapsed")}</span>
+                <span className="lane-elapsed-value">{Math.max(0, (nowMs - Date.parse(lane.runStartedAt)) / 1000).toFixed(1)}s</span>
+              </div>
             )}
 
             {lane.state === "IDLE" && (

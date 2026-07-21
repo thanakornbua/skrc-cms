@@ -37,6 +37,16 @@ competitorsRouter.get(
       if (eligible) {
         stageResult = scoreCompetitorStage({ competitor, runs, corrections, penalties }, resultStage);
         rank = await getCompetitorRank(competitor.category, competitor.competitorId);
+        // Just advanced, no runs yet in the new active stage — show the frozen
+        // result from the stage they just completed instead of a blank summary.
+        if (!stageResult) {
+          const frozen = getFrozenStageResult(competition, competitor.category, competitor.competitorId);
+          if (frozen) {
+            resultStage = frozen.stage;
+            stageResult = frozen.result;
+            rank = frozen.rank;
+          }
+        }
       } else {
         const frozen = getFrozenStageResult(competition, competitor.category, competitor.competitorId);
         resultStage = frozen?.stage ?? competition.activeStage;
