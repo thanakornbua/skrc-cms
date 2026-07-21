@@ -107,7 +107,7 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
             {item.contactEmail} · {item.contactPhone}
           </p>
           <p>
-            {t("โรงเรียน", "School")}: {item.school ?? "—"} · {t("อาจารย์ที่ปรึกษา", "Advisor")}: {item.advisorName ?? "—"} ({item.advisorPhone ?? "—"}) · {item.advisorEmail ?? "—"}
+            {t("โรงเรียน", "School")}: {item.school || "—"} · {t("อาจารย์ที่ปรึกษา", "Advisor")}: {item.advisorName ?? "—"} ({item.advisorPhone ?? "—"}) · {item.advisorEmail ?? "—"}
           </p>
           <div className="student-review-grid">
             <div><span className="section-kicker">STUDENT 01 · LEADER</span><strong lang="th">{item.student1NameThai ?? "—"}</strong><span>{item.student1NameEnglish ?? "—"}</span></div>

@@ -42,7 +42,7 @@ const phoneNumber = z.string().trim().regex(/^[0-9+() -]{8,20}$/, "กรุณ�
 const registerSchema = z.object({
   teamName: z.string().trim().min(2).max(100),
   category: z.enum(CATEGORIES),
-  school: z.string().trim().min(2).max(200),
+  school: z.string().trim().max(200).default(""),
   advisorName: z.string().trim().min(2).max(120),
   advisorPhone: phoneNumber,
   advisorEmail: z.string().trim().email().max(254),

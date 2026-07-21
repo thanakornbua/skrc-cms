@@ -5,6 +5,7 @@ import BrandHeader from "../components/BrandHeader";
 import LoadingScreen from "../components/LoadingScreen";
 import NavBar from "../components/NavBar";
 import PdpaAgreement from "../components/PdpaAgreement";
+import SchoolAutocomplete from "../components/SchoolAutocomplete";
 import { t } from "../i18n";
 
 const CATEGORIES = ["Line Tracing - Open"];
@@ -137,7 +138,7 @@ export default function RegisterPage() {
 
       <section className="form-section">
         <span className="section-kicker">SCHOOL & ADVISOR</span><h2>{t("โรงเรียนและอาจารย์ที่ปรึกษา", "School & advisor")}</h2>
-        <div className="field"><label htmlFor={fid("school")}>{t("โรงเรียน", "School")}</label><input id={fid("school")} required value={school} onChange={(e) => setSchool(e.target.value)} aria-invalid={fieldErrors.school ? true : undefined} aria-describedby={fieldErrors.school ? errId("school") : undefined} />{fieldErrors.school && <small id={errId("school")}>{fieldErrors.school}</small>}</div>
+        <div className="field"><label htmlFor={fid("school")}>{t("โรงเรียน", "School")}</label><SchoolAutocomplete id={fid("school")} value={school} onChange={setSchool} aria-invalid={fieldErrors.school ? true : undefined} aria-describedby={fieldErrors.school ? errId("school") : undefined} />{fieldErrors.school && <small id={errId("school")}>{fieldErrors.school}</small>}</div>
         <div className="field-grid">
           <div className="field"><label htmlFor={fid("advisorName")}>{t("ชื่ออาจารย์ที่ปรึกษา", "Advisor name")}</label><input id={fid("advisorName")} required value={advisorName} onChange={(e) => setAdvisorName(e.target.value)} aria-invalid={fieldErrors.advisorName ? true : undefined} aria-describedby={fieldErrors.advisorName ? errId("advisorName") : undefined} />{fieldErrors.advisorName && <small id={errId("advisorName")}>{fieldErrors.advisorName}</small>}</div>
           <div className="field"><label htmlFor={fid("advisorPhone")}>{t("หมายเลขโทรศัพท์อาจารย์ที่ปรึกษา", "Advisor phone number")}</label><input id={fid("advisorPhone")} type="tel" inputMode="tel" autoComplete="tel" required value={advisorPhone} onChange={(e) => setAdvisorPhone(e.target.value)} aria-invalid={fieldErrors.advisorPhone ? true : undefined} aria-describedby={fieldErrors.advisorPhone ? errId("advisorPhone") : undefined} />{fieldErrors.advisorPhone && <small id={errId("advisorPhone")}>{fieldErrors.advisorPhone}</small>}</div>

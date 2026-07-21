@@ -299,6 +299,29 @@ a:hover { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
   gap: var(--space-4);
 }
 
+.combobox { position: relative; }
+.combobox-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--hairline-2);
+  box-shadow: var(--shadow-lg);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) 0;
+}
+.combobox-list li {
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.combobox-list li.active,
+.combobox-list li:hover { background: var(--sunk); }
+
 .registration-page { max-width: var(--content-default); }
 .form-section {
   padding: 0 0 var(--space-8);
