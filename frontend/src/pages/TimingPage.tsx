@@ -24,6 +24,8 @@ interface Competitor {
   aggregateTimeMs: number | null; penaltyTimeMs: number; finalTimeMs: number | null;
 }
 
+const EVENT_MODE = import.meta.env.VITE_EVENT_MODE;
+
 const seconds = (ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
 const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
 
@@ -258,6 +260,19 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.ruleId}><span><span className={`status-badge ${rule.active ? "success" : ""}`}>{rule.active ? "ACTIVE" : "INACTIVE"}</span> {rule.label} <span className="technical">+{seconds(rule.penaltyMs)}</span></span><button className="secondary" type="button" onClick={() => toggleRule(rule)}>{rule.active ? t("ปิด", "Deactivate") : t("เปิด", "Activate")}</button></div>)}</div>
       </div>
       <div className="card"><span className="section-kicker">COMPETITION STATE</span><h2>{competitionState ? stageLabel[competitionState.activeStage] : t("สถานะการแข่งขัน", "State")}</h2><p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p><p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p><div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div></div>
+      <div className="card">
+        <span className="section-kicker">EVENT MODE</span>
+        <h2>{EVENT_MODE ?? "unset"}</h2>
+        <p>{t("โหมดนี้กำหนดตอน build บน Amplify และเปลี่ยนรันไทม์ไม่ได้", "This is baked in at Amplify build time and cannot be changed at runtime.")}</p>
+        {EVENT_MODE !== "competition" && (
+          <p className="error-banner">
+            {t(
+              "พอร์ทัลจะไม่แสดงเวลาแข่งขันจนกว่าจะตั้งค่า VITE_EVENT_MODE=competition ใน Amplify แล้ว deploy ใหม่ (ดู ops/RUNBOOK.md)",
+              "The competitor portal cannot show times until VITE_EVENT_MODE=competition is set in Amplify and redeployed (see ops/RUNBOOK.md)."
+            )}
+          </p>
+        )}
+      </div>
     </div>}
 
     <div className="card lookup-card"><span className="section-kicker">OPERATIONS</span><h2>{t("ค้นหาผู้เข้าแข่งขัน", "Competitor lookup")}</h2>
