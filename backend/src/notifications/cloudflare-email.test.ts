@@ -12,6 +12,8 @@ const content = { subject: "Subject", text: "Text", html: "<p>HTML</p>" };
 
 test("requires a JSON secret with a non-empty API token", () => {
   assert.equal(parseCloudflareApiToken('{"apiToken":"cf_test"}'), "cf_test");
+  // Accepts the Resend-era `apiKey` convention as a fallback.
+  assert.equal(parseCloudflareApiToken('{"apiKey":"cf_test"}'), "cf_test");
   assert.throws(() => parseCloudflareApiToken(undefined), /empty/);
   assert.throws(() => parseCloudflareApiToken("cf_test"), /must be JSON/);
   assert.throws(() => parseCloudflareApiToken("{}"), /non-empty/);

@@ -30,8 +30,13 @@ export function parseCloudflareApiToken(secretString: string | undefined): strin
   } catch {
     throw new Error("Cloudflare email API token secret must be JSON with an apiToken property");
   }
-  const apiToken = typeof parsed === "object" && parsed !== null ? (parsed as { apiToken?: unknown }).apiToken : undefined;
-  if (typeof apiToken !== "string" || !apiToken.trim()) throw new Error("Cloudflare email API token secret must contain a non-empty apiToken");
+  // Accept `apiToken` (canonical) or `apiKey` (the prior Resend-era secret
+  // convention some secrets were created with) so a key-name mismatch can't
+  // silently break the production email path.
+  const apiToken = typeof parsed === "object" && parsed !== null
+    ? (parsed as { apiToken?: unknown; apiKey?: unknown }).apiToken ?? (parsed as { apiKey?: unknown }).apiKey
+    : undefined;
+  if (typeof apiToken !== "string" || !apiToken.trim()) throw new Error("Cloudflare email API token secret must contain a non-empty apiToken (or apiKey)");
   return apiToken;
 }
 
