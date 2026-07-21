@@ -19,7 +19,7 @@ type FetchLike = typeof fetch;
 interface CloudflareSendResponse {
   success: boolean;
   errors?: Array<{ code: number; message: string }>;
-  result?: { delivered: string[]; permanent_bounces: string[]; queued: string[] };
+  result?: { message_id?: string; delivered: string[]; permanent_bounces: string[]; queued: string[] };
 }
 
 export function parseCloudflareApiToken(secretString: string | undefined): string {
@@ -80,7 +80,9 @@ export function createCloudflareEmailSender(
         const message = body.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
         throw new Error(`Cloudflare email send failed: ${message}`);
       }
-      return idempotencyKey;
+      // Prefer Cloudflare's real message id for ledger traceability; fall back
+      // to the stable idempotency key if the response ever omits it.
+      return body.result?.message_id ?? idempotencyKey;
     },
   };
 }

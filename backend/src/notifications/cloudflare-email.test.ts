@@ -28,12 +28,12 @@ test("sends with sender, reply-to, and a stable idempotency-derived id", async (
       requests.push({ url, init });
       return new Response(JSON.stringify({
         success: true, errors: [], messages: [],
-        result: { delivered: ["leader@example.com"], permanent_bounces: [], queued: [] },
+        result: { message_id: "<abc@skrc.suankularb.space>", delivered: ["leader@example.com"], permanent_bounces: [], queued: [] },
       }), { status: 200 });
     }) as typeof fetch,
   );
   const messageId = await sender.send(event, content);
-  assert.equal(messageId, "skrc/registration_received/sub-123");
+  assert.equal(messageId, "<abc@skrc.suankularb.space>");
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, "https://api.cloudflare.com/client/v4/accounts/acct-1/email/sending/send");
   assert.equal((requests[0].init.headers as Record<string, string>).authorization, "Bearer cf_test");
@@ -43,6 +43,18 @@ test("sends with sender, reply-to, and a stable idempotency-derived id", async (
     reply_to: "skrc@skrc.suankularb.space",
     subject: "Subject", text: "Text", html: "<p>HTML</p>",
   });
+});
+
+test("falls back to the idempotency key when no message_id is returned", async () => {
+  const sender = createCloudflareEmailSender(
+    { secretId: "test", accountId: "acct-1", from: "no-reply@skrc.suankularb.space", replyTo: "skrc@skrc.suankularb.space" },
+    { send: async () => ({ SecretString: '{"apiToken":"cf_test"}' }) },
+    (async () => new Response(JSON.stringify({
+      success: true, errors: [], messages: [],
+      result: { delivered: ["leader@example.com"], permanent_bounces: [], queued: [] },
+    }), { status: 200 })) as typeof fetch,
+  );
+  assert.equal(await sender.send(event, content), "skrc/registration_received/sub-123");
 });
 
 test("treats a Cloudflare returned error as a failed send", async () => {
