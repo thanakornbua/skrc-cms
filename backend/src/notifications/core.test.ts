@@ -35,10 +35,10 @@ test("ignores notification ledger records", () => {
 
 test("builds bilingual escaped HTML and plain text", () => {
   const event = classifyRecord(record("INSERT", registration))!;
-  const email = buildEmail(event, "https://staging.skrc.suankularb.space/portal", "thanakorn@thanakorn.site");
+  const email = buildEmail(event, "https://staging.skrc.suankularb.space/portal", "skrc@skrc.suankularb.space");
   assert.match(email.subject, /Registration received/);
   assert.match(email.text, /ได้รับใบสมัคร/);
-  assert.match(email.text, /thanakorn@thanakorn\.site/);
+  assert.match(email.text, /skrc@skrc\.suankularb\.space/);
   assert.match(email.html, /A&amp;B &lt;Robots&gt;/);
   assert.doesNotMatch(email.html, /A&B <Robots>/);
   assert.match(email.html, /background:linear-gradient\(135deg,#e040fb,#7c3aed 50%,#3b82f6\)/);

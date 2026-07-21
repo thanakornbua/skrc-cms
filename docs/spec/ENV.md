@@ -12,12 +12,13 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `COGNITO_USER_POOL_ID` | `ap-southeast-7_xxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `COGNITO_CLIENT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `CORS_ORIGIN` | `https://competitive.skrc.suankularb.space` | Fixed frontend origin. |
-| `RESEND_API_KEY_SECRET_ID` | required | Exact AWS Secrets Manager secret name containing JSON `{\"apiKey\":\"re_...\"}`. Keep its value out of configuration files and Lambda environment variables. |
-| `EMAIL_FROM` | `no-reply@thanakorn.site` | Transactional sender shown to competitors; `thanakorn.site` must be verified in Resend. |
-| `EMAIL_REPLY_TO` | `thanakorn@thanakorn.site` | Address used when a recipient replies. |
+| `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` | required | Exact AWS Secrets Manager secret name containing JSON `{\"apiToken\":\"...\"}` — a Cloudflare API token scoped to Email Sending only. Keep its value out of configuration files and Lambda environment variables. |
+| `CLOUDFLARE_ACCOUNT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` | Cloudflare account ID the Email Sending REST API call targets. Not secret. |
+| `EMAIL_FROM` | `no-reply@skrc.suankularb.space` | Transactional sender shown to competitors; `skrc.suankularb.space` must be onboarded onto Cloudflare Email Sending. |
+| `EMAIL_REPLY_TO` | `skrc@skrc.suankularb.space` | Address used when a recipient replies. |
 | `PORTAL_URL` | `https://competitive.skrc.suankularb.space/portal` | Included in notification emails. |
-| `CONTACT_EMAIL` | `thanakorn@thanakorn.site` | Human contact printed in no-reply messages. |
-| `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after Resend domain/DNS verification. |
+| `CONTACT_EMAIL` | `skrc@skrc.suankularb.space` | Human contact printed in no-reply messages. |
+| `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after the Cloudflare Email Sending domain is onboarded and DNS (SPF/DKIM) has propagated. |
 
 Neither service ever reads or stores a JWT signing secret — Cognito verification is JWKS-based (`aws-jwt-verify`, pool ID + client ID above).
 

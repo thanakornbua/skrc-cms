@@ -22,17 +22,20 @@ import { bundleLambdaFromDist } from "./bundle-lambda.js";
 const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
 const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
 const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@thanakorn.site";
-const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
-const RESEND_API_KEY_SECRET_ID = process.env.RESEND_API_KEY_SECRET_ID;
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@skrc.suankularb.space";
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "skrc@skrc.suankularb.space";
+const CLOUDFLARE_EMAIL_TOKEN_SECRET_ID = process.env.CLOUDFLARE_EMAIL_TOKEN_SECRET_ID;
+const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "skrc@skrc.suankularb.space";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED ?? "false";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("Invalid RESOURCE_PREFIX");
 if (!/^https:\/\//.test(PORTAL_URL)) throw new Error("PORTAL_URL must use HTTPS");
 if (![EMAIL_FROM, EMAIL_REPLY_TO, CONTACT_EMAIL].every((value) => /^\S+@\S+\.\S+$/.test(value))) throw new Error("Invalid email configuration");
-if (!RESEND_API_KEY_SECRET_ID) throw new Error("RESEND_API_KEY_SECRET_ID is required");
-const resendApiKeySecretId = RESEND_API_KEY_SECRET_ID;
+if (!CLOUDFLARE_EMAIL_TOKEN_SECRET_ID) throw new Error("CLOUDFLARE_EMAIL_TOKEN_SECRET_ID is required");
+if (!CLOUDFLARE_ACCOUNT_ID) throw new Error("CLOUDFLARE_ACCOUNT_ID is required");
+const cloudflareEmailTokenSecretId = CLOUDFLARE_EMAIL_TOKEN_SECRET_ID;
+const cloudflareAccountId = CLOUDFLARE_ACCOUNT_ID;
 
 const FUNCTION_NAME = `${RESOURCE_PREFIX}-email-worker`;
 const ROLE_NAME = `${RESOURCE_PREFIX}-email-worker-role`;
@@ -51,9 +54,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function requireResendSecret(): Promise<string> {
-  const secret = await secrets.send(new DescribeSecretCommand({ SecretId: resendApiKeySecretId }));
-  if (!secret.ARN) throw new Error(`Resend secret ${resendApiKeySecretId} did not return an ARN`);
+async function requireCloudflareEmailSecret(): Promise<string> {
+  const secret = await secrets.send(new DescribeSecretCommand({ SecretId: cloudflareEmailTokenSecretId }));
+  if (!secret.ARN) throw new Error(`Cloudflare email token secret ${cloudflareEmailTokenSecretId} did not return an ARN`);
   return secret.ARN;
 }
 
@@ -73,7 +76,7 @@ async function ensureDlq(): Promise<{ url: string; arn: string }> {
   return { url, arn: attrs.Attributes!.QueueArn! };
 }
 
-async function ensureRole(tableArn: string, dlqArn: string, resendSecretArn: string): Promise<string> {
+async function ensureRole(tableArn: string, dlqArn: string, cloudflareEmailSecretArn: string): Promise<string> {
   let roleArn: string;
   try {
     roleArn = (await iam.send(new GetRoleCommand({ RoleName: ROLE_NAME }))).Role!.Arn!;
@@ -95,7 +98,7 @@ async function ensureRole(tableArn: string, dlqArn: string, resendSecretArn: str
     PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
       { Effect: "Allow", Action: ["dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator", "dynamodb:ListStreams"], Resource: `${tableArn}/stream/*` },
       { Effect: "Allow", Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"], Resource: tableArn },
-      { Effect: "Allow", Action: "secretsmanager:GetSecretValue", Resource: resendSecretArn },
+      { Effect: "Allow", Action: "secretsmanager:GetSecretValue", Resource: cloudflareEmailSecretArn },
       { Effect: "Allow", Action: "sqs:SendMessage", Resource: dlqArn },
     ] }),
   }));
@@ -105,7 +108,7 @@ async function ensureRole(tableArn: string, dlqArn: string, resendSecretArn: str
 async function ensureFunction(roleArn: string): Promise<string> {
   const zip = await bundleLambdaFromDist(HANDLER_DIST_PATH);
   const environment = { Variables: {
-    DYNAMO_TABLE: TABLE_NAME, RESEND_API_KEY_SECRET_ID: resendApiKeySecretId, EMAIL_FROM, EMAIL_REPLY_TO, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
+    DYNAMO_TABLE: TABLE_NAME, CLOUDFLARE_EMAIL_TOKEN_SECRET_ID: cloudflareEmailTokenSecretId, CLOUDFLARE_ACCOUNT_ID: cloudflareAccountId, EMAIL_FROM, EMAIL_REPLY_TO, PORTAL_URL, CONTACT_EMAIL, EMAIL_ENABLED,
   } };
   try {
     const existing = await lambda.send(new GetFunctionCommand({ FunctionName: FUNCTION_NAME }));
@@ -125,7 +128,7 @@ async function ensureFunction(roleArn: string): Promise<string> {
       created = await lambda.send(new CreateFunctionCommand({
         FunctionName: FUNCTION_NAME, Runtime: "nodejs20.x", Handler: "index.handler", Role: roleArn,
         Code: { ZipFile: zip }, Timeout: 30, MemorySize: 256, Environment: environment,
-        Description: "Sends idempotent registration and approval notifications through Resend",
+        Description: "Sends idempotent registration and approval notifications through Cloudflare Email Sending",
         Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },
       }));
       break;
@@ -162,9 +165,9 @@ async function ensureEventSource(functionArn: string, streamArn: string, dlqArn:
 async function main(): Promise<void> {
   const table = (await dynamo.send(new DescribeTableCommand({ TableName: TABLE_NAME }))).Table;
   if (!table?.TableArn || !table.LatestStreamArn) throw new Error(`Table ${TABLE_NAME} must have a stream; run create-table first`);
-  const resendSecretArn = await requireResendSecret();
+  const cloudflareEmailSecretArn = await requireCloudflareEmailSecret();
   const dlq = await ensureDlq();
-  const roleArn = await ensureRole(table.TableArn, dlq.arn, resendSecretArn);
+  const roleArn = await ensureRole(table.TableArn, dlq.arn, cloudflareEmailSecretArn);
   const functionArn = await ensureFunction(roleArn);
   await ensureEventSource(functionArn, table.LatestStreamArn, dlq.arn);
   console.log(`Email worker ready: ${functionArn}`);

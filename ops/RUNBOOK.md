@@ -21,14 +21,18 @@ Use `npm run bootstrap-staff -- ../roster.csv --validate-only` for a no-AWS pref
 
 ## Transactional registration email
 
-Verify `thanakorn.site` in Resend and publish the SPF and DKIM records it supplies;
-do not replace unrelated MX, forwarding, or inbound-mail records. Store a restricted
-Resend sending key as JSON in AWS Secrets Manager, set
-`RESEND_API_KEY_SECRET_ID` to its exact name, then set `EMAIL_ENABLED=true` only
-after verification. Run `npm run create-table` to ensure the DynamoDB stream and
-notification TTL, then `npm run create-notifications` to deploy the retrying worker
-and 14-day DLQ. The no-reply messages direct recipients to `CONTACT_EMAIL`; inspect
-the ledger and DLQ before assuming every notification was accepted by Resend.
+Onboard `skrc.suankularb.space` onto Cloudflare Email Sending (Dashboard → Email
+Service → Email Sending → Onboard Domain, or `npx wrangler email sending enable
+skrc.suankularb.space`) — this auto-adds the SPF and DKIM records; do not replace
+unrelated MX, forwarding, or inbound-mail records. Create a Cloudflare API token
+scoped to Email Sending only, store it as JSON (`{"apiToken":"..."}`) in AWS
+Secrets Manager, set `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` to its exact name and
+`CLOUDFLARE_ACCOUNT_ID` to the Cloudflare account ID, then set
+`EMAIL_ENABLED=true` only after DNS has propagated. Run `npm run create-table` to
+ensure the DynamoDB stream and notification TTL, then `npm run create-notifications`
+to deploy the retrying worker and 14-day DLQ. The no-reply messages direct
+recipients to `CONTACT_EMAIL`; inspect the ledger and DLQ before assuming every
+notification was accepted by Cloudflare.
 
 ## EC2 API permissions
 

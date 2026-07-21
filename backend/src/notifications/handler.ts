@@ -3,19 +3,25 @@ import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { buildEmail, classifyRecord, notificationKey, ttlFromDeleteBy, type NotificationEvent } from "./core.js";
-import { createResendSender } from "./resend.js";
+import { createCloudflareEmailSender } from "./cloudflare-email.js";
 
-const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@thanakorn.site";
-const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "thanakorn@thanakorn.site";
+const EMAIL_FROM = process.env.EMAIL_FROM ?? "no-reply@skrc.suankularb.space";
+const EMAIL_REPLY_TO = process.env.EMAIL_REPLY_TO ?? "skrc@skrc.suankularb.space";
 const PORTAL_URL = process.env.PORTAL_URL ?? "https://competitive.skrc.suankularb.space/portal";
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "thanakorn@thanakorn.site";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL ?? "skrc@skrc.suankularb.space";
 const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
-const RESEND_API_KEY_SECRET_ID = process.env.RESEND_API_KEY_SECRET_ID;
+const CLOUDFLARE_EMAIL_TOKEN_SECRET_ID = process.env.CLOUDFLARE_EMAIL_TOKEN_SECRET_ID;
+const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CLAIM_STALE_MS = 5 * 60 * 1000;
 
 const ledger = ddbDoc as DynamoDBDocumentClient;
-const sender = RESEND_API_KEY_SECRET_ID
-  ? createResendSender({ secretId: RESEND_API_KEY_SECRET_ID, from: `SKRC Robotics Competition <${EMAIL_FROM}>`, replyTo: EMAIL_REPLY_TO })
+const sender = CLOUDFLARE_EMAIL_TOKEN_SECRET_ID && CLOUDFLARE_ACCOUNT_ID
+  ? createCloudflareEmailSender({
+      secretId: CLOUDFLARE_EMAIL_TOKEN_SECRET_ID,
+      accountId: CLOUDFLARE_ACCOUNT_ID,
+      from: EMAIL_FROM,
+      replyTo: EMAIL_REPLY_TO,
+    })
   : undefined;
 
 async function claim(event: NotificationEvent): Promise<boolean> {
@@ -88,7 +94,7 @@ async function markFailed(event: NotificationEvent, err: unknown): Promise<void>
 async function processRecord(record: DynamoDBRecord): Promise<void> {
   const event = classifyRecord(record);
   if (!event || !EMAIL_ENABLED) return;
-  if (!sender) throw new Error("RESEND_API_KEY_SECRET_ID is required when EMAIL_ENABLED=true");
+  if (!sender) throw new Error("CLOUDFLARE_EMAIL_TOKEN_SECRET_ID and CLOUDFLARE_ACCOUNT_ID are required when EMAIL_ENABLED=true");
   if (!(await claim(event))) return;
 
   try {

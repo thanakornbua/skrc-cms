@@ -9,17 +9,20 @@ purge, or replace production data.
 - Region/table: `ap-southeast-7` / `robo-compet`.
 - Cognito: pool `ap-southeast-7_ZWnRxXneN`, client `4jennh6lfhjddhd0uksueu9rm4`.
 - Browser CORS origin: `https://competitive.skrc.suankularb.space` exactly.
-- Resend secret: `/robo-compet/production/resend-api-key`, holding only
-  `{"apiKey":"re_..."}`. Never put its value in Git, Lambda environment, output,
-  logs, or PRs.
-- Sender/reply-to: `no-reply@thanakorn.site` / `thanakorn@thanakorn.site`.
+- Cloudflare email token secret: `/robo-compet/production/cloudflare-email-token`,
+  holding only `{"apiToken":"..."}`. Never put its value in Git, Lambda environment,
+  output, logs, or PRs.
+- `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID owning `skrc.suankularb.space`
+  (not secret).
+- Sender/reply-to: `no-reply@skrc.suankularb.space` / `skrc@skrc.suankularb.space`.
 
 ## Staging gate
 
 Deploy with staging-specific resources and `EMAIL_ENABLED=false`; enable notifications
-only after `thanakorn.site` is verified in Resend. Rehearse registration and CORS,
-received/approval emails, all four stages, serial simulation, scoring, advancement,
-and final ordering. Attach results to the PR.
+only after `skrc.suankularb.space` is onboarded onto Cloudflare Email Sending and its
+SPF/DKIM records have propagated. Rehearse registration and CORS, received/approval
+emails, all four stages, serial simulation, scoring, advancement, and final ordering.
+Attach results to the PR.
 
 ## Production data and worker
 
@@ -36,8 +39,8 @@ aws lambda get-function-configuration --region ap-southeast-7 --function-name ro
 Run `npm run create-table` with `DYNAMO_TABLE=robo-compet`; it updates stream/TTL in
 place and never replaces data. Deploy the registration Lambda using the fixed values.
 Deploy the email worker with the production secret, 14-day DLQ, and notifications
-disabled. Once Resend is verified, enable its mapping and lifecycle-test a disposable
-registration and approval.
+disabled. Once the Cloudflare Email Sending domain is verified, enable its mapping
+and lifecycle-test a disposable registration and approval.
 
 ## Amplify Hosting
 
@@ -75,9 +78,10 @@ redeploy. Admin must configure all four stage limits for every category before R
 
 ## Finalization and rollback
 
-After Resend lifecycle evidence, export SES/DNS inventory, then delete only approved
-SES identities `suankularb.space`, `notify.suankularb.space`, and
-`thanakorn@thanakorn.site` plus verified SES-only DNS records. Preserve unrelated MX,
-forwarding, SPF, and Resend records. Merge only after review and green checks; tag the
-merged commit. Roll back Lambda/configuration and Amplify first; restore DynamoDB only
-for confirmed corruption with explicit authorization.
+After Cloudflare Email Sending lifecycle evidence, revoke the Resend API key,
+delete the `/robo-compet/{staging,production}/resend-api-key` secrets, and remove
+the `resend` dependency if any residual references remain. Preserve unrelated MX,
+forwarding, and DNS records — only Resend-specific records may be removed. Merge
+only after review and green checks; tag the merged commit. Roll back
+Lambda/configuration and Amplify first; restore DynamoDB only for confirmed
+corruption with explicit authorization.
