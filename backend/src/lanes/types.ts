@@ -6,6 +6,8 @@ export interface LaneRecord {
   competitorId: string | null;
   deviceId: string | null;
   armedBy: string | null;
+  /** Server time the lane entered RUNNING from a device START event; null outside RUNNING. */
+  runStartedAt: string | null;
   updatedAt: string | null;
 }
 

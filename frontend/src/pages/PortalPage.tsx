@@ -25,6 +25,8 @@ interface Registration {
 
 interface Competitor {
   activeStage?: "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
+  resultStage?: "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
+  eliminated?: boolean;
   competitorId: string;
   name: string;
   teamName: string;
@@ -179,8 +181,8 @@ function PortalDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       </div>
 
       <div className="card">
-        <span className="section-kicker">{competitor?.activeStage ? STAGE_LABEL[competitor.activeStage] : "COMPETITION"}</span>
-        <h2>{t("ผลรอบปัจจุบัน", "Current stage result")}</h2>
+        <span className="section-kicker">{competitor?.resultStage ? STAGE_LABEL[competitor.resultStage] : competitor?.activeStage ? STAGE_LABEL[competitor.activeStage] : "COMPETITION"}</span>
+        <h2>{competitor?.eliminated ? t("ผลรอบสุดท้ายที่ผ่าน", "Frozen final-stage result") : t("ผลรอบปัจจุบัน", "Current stage result")}</h2>
         <div className="metric-grid">
           <div className="metric"><span className="metric-label">{competitor?.stageResult?.scoringMode === "CHECKPOINT_LAP" ? t("ผลงานดีที่สุด", "Best progress") : t("ค่าเฉลี่ยสูงสุด 2 ครั้ง", "Best-two average")}</span><span className="metric-value">{competitor?.stageResult?.scoringMode === "CHECKPOINT_LAP" ? (competitor.stageResult.completedLap && competitor.stageResult.lapTimeMs != null ? `${(competitor.stageResult.lapTimeMs / 1000).toFixed(3)} s` : `${competitor.stageResult.furthestCheckpoint} checkpoint${competitor.stageResult.furthestCheckpoint === 1 ? "" : "s"}`) : (competitor?.aggregateTimeMs == null ? "—" : `${(competitor.aggregateTimeMs / 1000).toFixed(3)} s`)}</span></div>
           <div className="metric"><span className="metric-label">{t("เวลาปรับ", "Penalties")}</span><span className="metric-value">+{((competitor?.penaltyTimeMs ?? 0) / 1000).toFixed(3)} s</span></div>
@@ -188,9 +190,9 @@ function PortalDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
           {competitor?.rank != null && <div className="metric"><span className="metric-label">{t("อันดับ", "Rank")}</span><span className="metric-value">#{competitor.rank}</span></div>}
         </div>
         <h3>{t("บทลงโทษ", "Penalties")}</h3>
-        {competitor?.penalties && competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.activeStage ?? "ROUND_1")).length > 0 ? (
+        {competitor?.penalties && competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.resultStage ?? competitor.activeStage ?? "ROUND_1")).length > 0 ? (
           <ul>
-            {competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.activeStage ?? "ROUND_1")).map((penalty) => (
+            {competitor.penalties.filter((penalty) => !penalty.revocation && (penalty.stage ?? "ROUND_1") === (competitor.resultStage ?? competitor.activeStage ?? "ROUND_1")).map((penalty) => (
               <li key={penalty.SK}>
                 {penalty.label} (+{(penalty.penaltyMs / 1000).toFixed(3)} s) — {penalty.at}
               </li>

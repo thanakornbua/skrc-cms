@@ -3,8 +3,14 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y docker.io awscli jq curl
+apt-get install -y docker.io jq curl unzip
 systemctl enable --now docker
+
+# Ubuntu 24.04 (noble) dropped the legacy `awscli` apt package; install AWS CLI v2 directly.
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/awscliv2.zip /tmp/aws
 
 region='__AWS_REGION__'
 image='__ECR_IMAGE__'
@@ -24,7 +30,7 @@ docker rm -f robo-compet-api robo-compet-caddy >/dev/null 2>&1 || true
 docker run -d --name robo-compet-api --restart unless-stopped --network robo-compet --env-file /opt/robo-compet/backend.env "$image"
 
 cat > /opt/robo-compet/Caddyfile <<EOF
-{$api_domain} {
+${api_domain} {
   encode zstd gzip
   reverse_proxy robo-compet-api:3000
 }
