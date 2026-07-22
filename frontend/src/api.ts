@@ -22,24 +22,47 @@ export class ApiClientError extends Error {
   }
 }
 
-async function authHeaders(): Promise<Record<string, string>> {
-  const session = await fetchAuthSession();
+/** The browser has no usable Cognito ID-token session for a protected call. */
+export class SessionUnavailableError extends Error {
+  constructor() { super("Session expired—sign in again."); }
+}
+
+interface ApiErrorBody {
+  error?: { code?: string; message?: string };
+  fields?: Array<{ field: string; message: string }>;
+}
+
+async function authHeaders(forceRefresh = false): Promise<Record<string, string>> {
+  let session: Awaited<ReturnType<typeof fetchAuthSession>>;
+  try {
+    session = await fetchAuthSession({ forceRefresh });
+  } catch {
+    throw new SessionUnavailableError();
+  }
   const token = session.tokens?.idToken?.toString();
-  return token ? { authorization: `Bearer ${token}` } : {};
+  if (!token) throw new SessionUnavailableError();
+  return { authorization: `Bearer ${token}` };
 }
 
 async function callJson<T>(
   baseUrl: string,
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  retryUnauthorized = false
 ): Promise<T> {
-  const headers = {
-    "content-type": "application/json",
-    ...(await authHeaders()),
-    ...(init.headers as Record<string, string> | undefined),
-  };
-  const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
-  const body = await res.json().catch(() => ({}));
+  async function request(forceRefresh: boolean): Promise<{ res: Response; body: ApiErrorBody }> {
+    const headers = {
+      "content-type": "application/json",
+      ...(await authHeaders(forceRefresh)),
+      ...(init.headers as Record<string, string> | undefined),
+    };
+    const res = await fetch(`${baseUrl}${path}`, { ...init, headers });
+    return { res, body: await res.json().catch((): ApiErrorBody => ({})) };
+  }
+  let { res, body } = await request(false);
+  // A control-plane request may encounter an expired cached ID token. Refresh
+  // once only; an invalid session must remain a visible authentication error.
+  if (res.status === 401 && retryUnauthorized) ({ res, body } = await request(true));
 
   if (!res.ok) {
     throw new ApiClientError(
@@ -64,7 +87,7 @@ export function ec2Json<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /** Calls the always-available admin deployment control plane. */
 export function controlJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return callJson<T>(CONTROL_API_URL, path, init);
+  return callJson<T>(CONTROL_API_URL, path, init, true);
 }
 
 /** Calls a deliberately unauthenticated public EC2 endpoint. */

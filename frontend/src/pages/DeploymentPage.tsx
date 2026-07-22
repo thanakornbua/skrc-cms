@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiClientError, controlJson } from "../api";
+import { ApiClientError, controlJson, SessionUnavailableError } from "../api";
 import BrandHeader from "../components/BrandHeader";
 import LoadingScreen from "../components/LoadingScreen";
 import LoginGate from "../components/LoginGate";
@@ -8,7 +8,7 @@ import NavBar from "../components/NavBar";
 type EventMode = "registration" | "competition" | "concluded";
 interface DeploymentStatus { appId: string; branchName: string; activeJobId: string; commitId: string | null; jobStatus: string | null; mode: EventMode | null; requestedMode?: EventMode; jobId?: string | null; }
 
-function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
+function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: (message?: string) => Promise<void> }) {
   const [status, setStatus] = useState<DeploymentStatus | null>(null);
   const [mode, setMode] = useState<EventMode>("competition");
   const [resultsCommitted, setResultsCommitted] = useState(false);
@@ -23,7 +23,15 @@ function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
       const next = await controlJson<DeploymentStatus>("/deployment/status");
       setStatus(next);
       if (next.mode === "registration" || next.mode === "competition" || next.mode === "concluded") setMode(next.mode === "registration" ? "competition" : next.mode);
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not load deployment status"); }
+    } catch (err) {
+      if (err instanceof SessionUnavailableError || (err instanceof ApiClientError && err.status === 401)) {
+        await signOutAndReset("Session expired—sign in again.");
+        return;
+      }
+      if (err instanceof ApiClientError && err.status === 403) setError("This account is signed in but is not an administrator.");
+      else if (err instanceof TypeError) setError("Could not reach the deployment service. Check your connection and try again.");
+      else setError(err instanceof Error ? err.message : "The deployment service returned an unexpected error.");
+    }
   }
   useEffect(() => { void refresh(); }, []);
   const expected = `DEPLOY_${mode.toUpperCase()}`;

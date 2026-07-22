@@ -3,7 +3,7 @@ import { AmplifyClient, GetAppCommand, GetBranchCommand, GetJobCommand, StartJob
 import { z } from "zod";
 import { config } from "../config.js";
 import { ApiError } from "../errors.js";
-import { authenticate, requireAdminOnly } from "../regweek/auth.js";
+import { authenticate, AuthenticationError, requireAdminOnly } from "../regweek/auth.js";
 import { errorResponse, jsonResponse } from "../regweek/responses.js";
 
 const modeSchema = z.object({
@@ -20,6 +20,16 @@ function body(event: APIGatewayProxyEventV2): unknown {
 }
 
 function client(): AmplifyClient { return new AmplifyClient({ region: config.amplifyControl.region }); }
+
+export function authorizationHeader(headers: APIGatewayProxyEventV2["headers"]): string | undefined {
+  return headers.authorization ?? headers.Authorization;
+}
+
+function logAuthFailure(event: APIGatewayProxyEventV2, category: string): void {
+  // Deliberately limited to a request ID and a fixed category: never log a
+  // bearer token, its claims, or user-identifying data.
+  console.info(JSON.stringify({ event: "control_auth_failure", requestId: event.requestContext.requestId, category }));
+}
 
 async function status() {
   const { appId, branchName } = config.amplifyControl;
@@ -53,7 +63,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     // HTTP API commonly normalizes header names, but the event contract permits
     // either casing. Keep this consistent with the registration Lambda so a
     // valid browser token can never be mistaken for an absent one.
-    const user = await authenticate(event.headers.authorization ?? event.headers.Authorization);
+    const user = await authenticate(authorizationHeader(event.headers));
     requireAdminOnly(user);
     if (event.requestContext.http.method === "GET" && event.rawPath === "/deployment/status") return jsonResponse(200, await status());
     if (event.requestContext.http.method === "POST" && event.rawPath === "/deployment/mode") {
@@ -62,5 +72,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       return jsonResponse(202, await deploy(parsed.data));
     }
     throw new ApiError(404, "NOT_FOUND", "Route not found");
-  } catch (error) { return errorResponse(error); }
+  } catch (error) {
+    if (error instanceof AuthenticationError) logAuthFailure(event, error.category);
+    else if (error instanceof ApiError && error.status === 403) logAuthFailure(event, "non_admin");
+    return errorResponse(error);
+  }
 }

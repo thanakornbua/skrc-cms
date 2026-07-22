@@ -2,6 +2,29 @@ import { CognitoJwtVerifier } from "aws-jwt-verify";
 import { config } from "../config.js";
 import type { Role } from "./types.js";
 
+export type AuthFailureCategory =
+  | "missing_token"
+  | "expired_token"
+  | "wrong_pool"
+  | "wrong_client"
+  | "wrong_token_use"
+  | "invalid_signature";
+
+/**
+ * Converts verifier failures into stable, token-safe operational categories.
+ * The original verifier error must never be logged because it can contain
+ * untrusted JWT-derived values.
+ */
+export function classifyJwtVerificationFailure(error: unknown): Exclude<AuthFailureCategory, "missing_token"> {
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (name === "JwtExpiredError" || message.includes("expired")) return "expired_token";
+  if (message.includes("token use") || message.includes("token_use")) return "wrong_token_use";
+  if (message.includes("client id") || message.includes("client_id") || message.includes("audience")) return "wrong_client";
+  if (message.includes("issuer") || message.includes("user pool")) return "wrong_pool";
+  return "invalid_signature";
+}
+
 /**
  * Framework-agnostic Cognito ID-token verification and role derivation.
  * Phase 3's registration-week Lambda imports this same module so both

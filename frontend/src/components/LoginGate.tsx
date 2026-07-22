@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
-import { confirmSignIn, getCurrentUser, signIn, signOut } from "aws-amplify/auth";
+import { confirmSignIn, fetchAuthSession, signIn, signOut } from "aws-amplify/auth";
 import BrandHeader from "./BrandHeader";
 import LoadingScreen from "./LoadingScreen";
 import NavBar from "./NavBar";
@@ -7,7 +7,7 @@ import { t } from "../i18n";
 
 interface LoginGateProps {
   title: string;
-  children: (actions: { signOutAndReset: () => Promise<void> }) => ReactNode;
+  children: (actions: { signOutAndReset: (message?: string) => Promise<void> }) => ReactNode;
   footer?: ReactNode;
   notice?: ReactNode;
 }
@@ -24,7 +24,12 @@ export default function LoginGate({ title, children, footer, notice }: LoginGate
   const newPasswordId = useId();
 
   useEffect(() => {
-    getCurrentUser().then(() => setState("authed")).catch(() => setState("login"));
+    // A remembered Cognito user is not sufficient for an API page. Require an
+    // actual ID token before allowing children to issue protected requests.
+    fetchAuthSession().then((session) => {
+      if (!session.tokens?.idToken) throw new Error("No ID token");
+      setState("authed");
+    }).catch(() => setState("login"));
   }, []);
 
   async function handleLogin(event: FormEvent): Promise<void> {
@@ -57,8 +62,9 @@ export default function LoginGate({ title, children, footer, notice }: LoginGate
     }
   }
 
-  async function signOutAndReset(): Promise<void> {
+  async function signOutAndReset(message?: string): Promise<void> {
     await signOut();
+    setAuthError(message ?? null);
     setState("login");
   }
 

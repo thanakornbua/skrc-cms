@@ -1,8 +1,10 @@
 import { ApiError } from "../errors.js";
 import {
+  classifyJwtVerificationFailure,
   deriveRole,
   extractBearerToken,
   verifyIdToken,
+  type AuthFailureCategory,
   type VerifiedClaims,
 } from "../auth/verifyToken.js";
 import type { Role } from "../auth/types.js";
@@ -15,17 +17,24 @@ export interface RegweekUser {
   competitorId: string | null;
 }
 
+/** An API-safe authentication error with a token-safe diagnostic category. */
+export class AuthenticationError extends ApiError {
+  constructor(readonly category: AuthFailureCategory, message: string) {
+    super(401, "UNAUTHORIZED", message);
+  }
+}
+
 export async function authenticate(
   authorizationHeader: string | undefined
 ): Promise<RegweekUser> {
   const token = extractBearerToken(authorizationHeader);
-  if (!token) throw new ApiError(401, "UNAUTHORIZED", "Missing bearer token");
+  if (!token) throw new AuthenticationError("missing_token", "Missing bearer token");
 
   let claims: VerifiedClaims;
   try {
     claims = await verifyIdToken(token);
-  } catch {
-    throw new ApiError(401, "UNAUTHORIZED", "Invalid or expired token");
+  } catch (error) {
+    throw new AuthenticationError(classifyJwtVerificationFailure(error), "Invalid or expired token");
   }
 
   return {
