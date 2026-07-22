@@ -7,14 +7,32 @@ import LoginGate from "../components/LoginGate";
 import NavBar from "../components/NavBar";
 import { t } from "../i18n";
 
+type CompetitorStatus = "REGISTERED" | "CHECKED_IN" | "INSPECTED" | "RUN_COMPLETE";
+
 interface CompetitorCard {
   competitorId: string;
   teamName: string;
   category: string;
-  status: "REGISTERED" | "CHECKED_IN" | "INSPECTED" | "RUN_COMPLETE";
+  status: CompetitorStatus;
 }
 
 const CAMERA_READER_ID = "committee-scan-camera-reader";
+
+/** Semantic status-badge class per competitor state (see status-badge in CSS). */
+const STATUS_BADGE: Record<CompetitorStatus, string> = {
+  REGISTERED: "warning",
+  CHECKED_IN: "success",
+  INSPECTED: "",
+  RUN_COMPLETE: "",
+};
+
+/** Whether this competitor can be inspected now — drives the verdict rule/CTA. */
+type Verdict = "ready" | "blocked" | "done";
+function verdictFor(status: CompetitorStatus): Verdict {
+  if (status === "CHECKED_IN") return "ready";
+  if (status === "REGISTERED") return "blocked";
+  return "done"; // INSPECTED | RUN_COMPLETE
+}
 
 function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
   const [inputValue, setInputValue] = useState("");
@@ -122,6 +140,8 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     setCameraActive(false);
   }
 
+  const verdict = card ? verdictFor(card.status) : null;
+
   return (
     <div className="page">
       {busy && <LoadingScreen overlay label="กำลังบันทึกผลตรวจ / Saving inspection…" />}
@@ -131,40 +151,62 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
       <div role="status" aria-live="polite">{toast && <div className="notice-banner">{toast}</div>}</div>
       {lookupError && <div className="error-banner" role="alert">{lookupError}</div>}
 
-      <div className="card">
-      <div className="field">
-        <label htmlFor={inputId}>{t("สแกนหรือกรอกหมายเลขผู้เข้าแข่งขัน", "Competitor ID")}</label>
-        <input
-          id={inputId}
-          ref={inputRef}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleInputKeyDown}
-          autoFocus
-          placeholder="C-0042"
-        />
+      <div className="card scan-console">
+        <span className="section-kicker">{t("สแกน", "Scan")}</span>
+        <div className="scan-input-row">
+          <div className="field">
+            <label htmlFor={inputId}>{t("สแกนหรือกรอกหมายเลขผู้เข้าแข่งขัน", "Competitor ID")}</label>
+            <input
+              id={inputId}
+              ref={inputRef}
+              className="technical"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              autoFocus
+              placeholder="C-0042"
+            />
+          </div>
+          <button
+            className="secondary scan-camera-btn"
+            type="button"
+            onClick={cameraActive ? stopCamera : startCamera}
+          >
+            {cameraActive ? t("หยุดกล้อง", "Stop camera") : t("ใช้กล้อง", "Use camera")}
+          </button>
+        </div>
+        <p className="scan-hint">{t("สแกนคิวอาร์หรือพิมพ์หมายเลขแล้วกด Enter", "Scan the QR or type an ID, then press Enter")}</p>
+        {cameraActive && (
+          <div className="scan-camera">
+            <div id={CAMERA_READER_ID} />
+          </div>
+        )}
       </div>
 
-      {!cameraActive ? (
-        <button className="secondary" type="button" onClick={startCamera}>
-          {t("ใช้กล้อง", "Use camera")}
-        </button>
-      ) : (
-        <button className="secondary" type="button" onClick={stopCamera}>
-          {t("หยุดกล้อง", "Stop camera")}
-        </button>
-      )}
-      <div id={CAMERA_READER_ID} style={{ width: "100%", maxWidth: 320, marginTop: "0.5rem" }} />
-      </div>
+      {card && verdict && (
+        <div className="card scan-result" data-verdict={verdict}>
+          <div className="scan-result-head">
+            <span className="section-kicker technical">{card.competitorId}</span>
+            <span className={`status-badge ${STATUS_BADGE[card.status]}`}>{card.status}</span>
+          </div>
+          <h2>{card.teamName}</h2>
+          <p className="scan-category">{card.category}</p>
 
-      {card && (
-        <div className="card">
-          <span className={`status-badge ${card.status === "CHECKED_IN" ? "success" : "warning"}`}>{card.status}</span>
-          <h2 className="technical">{card.competitorId}</h2>
-          <p>{card.teamName}</p>
-          <p>{card.category}</p>
-          <p>Status: {card.status}</p>
-          <button type="button" disabled={busy} onClick={handleMarkInspected}>{t("ผ่านการตรวจ", "Mark inspected")}</button>
+          {verdict === "ready" && (
+            <button className="scan-action" type="button" disabled={busy} onClick={handleMarkInspected}>
+              {t("ผ่านการตรวจ", "Mark inspected")}
+            </button>
+          )}
+          {verdict === "blocked" && (
+            <p className="warning-banner">{t("ต้องเช็คอินก่อนจึงจะตรวจสภาพได้", "Competitor must check in before inspection.")}</p>
+          )}
+          {verdict === "done" && (
+            <p className="notice-banner">
+              {card.status === "INSPECTED"
+                ? t("ผ่านการตรวจแล้ว", "Already inspected.")
+                : t("แข่งขันเสร็จแล้ว", "Run complete — inspection no longer applicable.")}
+            </p>
+          )}
         </div>
       )}
     </div>

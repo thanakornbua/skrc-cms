@@ -805,11 +805,100 @@ tbody tr:hover { background: var(--sunk); }
   letter-spacing: 0.02em;
 }
 
+/* ---- Committee inspection scan station --------------------------------- */
+
+/* The scan entry is the hero of this station: an oversized monospace field
+   paired with the camera toggle, sized for fast, glance-and-go operation. */
+.scan-console { padding: clamp(var(--space-6), 4vw, var(--space-8)); }
+.scan-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+.scan-input-row .field { margin-bottom: 0; }
+.scan-input-row input {
+  font-size: var(--text-2xl);
+  letter-spacing: 0.08em;
+  padding: var(--space-4);
+}
+.scan-camera-btn { align-self: end; padding: var(--space-4) var(--space-5); white-space: nowrap; }
+.scan-hint {
+  margin: var(--space-3) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.scan-camera { margin-top: var(--space-4); }
+
 #committee-scan-camera-reader {
+  width: 100%;
+  max-width: 360px;
   overflow: hidden;
   border: 1px solid var(--hairline-2);
+  border-radius: var(--radius-sm);
   background: var(--ink);
 }
+
+/* The verdict card: a left rule encodes inspection readiness at a glance —
+   green = ready to inspect, amber = blocked (not checked in), violet = done. */
+.scan-result { border-left: 3px solid var(--hairline-2); }
+.scan-result[data-verdict="ready"]   { border-left-color: var(--color-success); }
+.scan-result[data-verdict="blocked"] { border-left-color: var(--color-warning); }
+.scan-result[data-verdict="done"]    { border-left-color: var(--accent); }
+.scan-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.scan-result h2 { margin-bottom: var(--space-1); }
+.scan-category {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  letter-spacing: 0.02em;
+}
+.scan-action { width: 100%; padding: var(--space-4); font-size: var(--text-sm); }
+.scan-result .warning-banner,
+.scan-result .notice-banner { margin: 0; }
+
+/* ---- Timing station: run attempts & competition state ------------------ */
+
+.stage-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.stage-hero h2 { font-size: var(--text-3xl); margin-bottom: 0; }
+
+.attempt-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.attempt-id { color: var(--color-muted); font-size: var(--text-xs); letter-spacing: 0.04em; }
+.attempt-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-2);
+}
+.attempt-times .corrected { color: var(--accent); font-weight: var(--weight-semibold); }
+.attempt-row .button-row { margin-top: var(--space-3); }
+.attempt-row .button-row:empty { display: none; margin-top: 0; }
 
 /* ---- Timeline ---------------------------------------------------------- */
 
@@ -847,7 +936,7 @@ tbody tr:hover { background: var(--sunk); }
   .page { padding-top: var(--space-8); padding-inline: var(--space-4); }
   .brand-emblem { width: 44px; height: 44px; }
   .brand-title-en { display: block; margin: var(--space-1) 0 0; }
-  .toolbar, .admin-search, .split-layout, .lookup-row, .field-grid, .student-review-grid { grid-template-columns: 1fr; }
+  .toolbar, .admin-search, .split-layout, .lookup-row, .field-grid, .student-review-grid, .scan-input-row { grid-template-columns: 1fr; }
   button { width: 100%; }
   .button-row > button { width: 100%; }
   .card { padding: var(--space-5); }

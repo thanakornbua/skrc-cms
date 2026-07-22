@@ -29,6 +29,10 @@ const AMPLIFY_CONSOLE_URL = import.meta.env.VITE_AMPLIFY_CONSOLE_URL;
 
 const seconds = (ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
 const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
+/** Semantic status-badge class per run outcome (see status-badge in CSS). */
+const RUN_BADGE: Record<Run["status"], string> = {
+  RUNNING: "", COMPLETE: "success", TIMED_OUT: "warning", UNDER_REVIEW: "warning", INVALID: "error", VOID: "",
+};
 
 function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
   const [role, setRole] = useState<Role>("competitor");
@@ -265,7 +269,15 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       </form>
       <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.ruleId}><span><span className={`status-badge ${rule.active ? "success" : ""}`}>{rule.active ? "ACTIVE" : "INACTIVE"}</span> {rule.label} <span className="technical">+{seconds(rule.penaltyMs)}</span></span><button className="secondary" type="button" onClick={() => toggleRule(rule)}>{rule.active ? t("ปิด", "Deactivate") : t("เปิด", "Activate")}</button></div>)}</div>
       </div>
-      <div className="card"><span className="section-kicker">COMPETITION STATE</span><h2>{competitionState ? stageLabel[competitionState.activeStage] : t("สถานะการแข่งขัน", "State")}</h2><p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p><p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p><div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div></div>
+      <div className="card"><span className="section-kicker">COMPETITION STATE</span>
+        <div className="stage-hero">
+          <h2>{competitionState ? stageLabel[competitionState.activeStage] : t("สถานะการแข่งขัน", "State")}</h2>
+          {competitionState && <span className={`status-badge ${competitionState.phase === "OPEN" ? "success" : "error"}`}>{competitionState.phase}</span>}
+        </div>
+        <p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p>
+        <p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p>
+        <div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div>
+      </div>
       <div className="card">
         <span className="section-kicker">EVENT MODE</span>
         <h2>{EVENT_MODE ?? "unset"}</h2>
@@ -307,7 +319,10 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       <div className="metric-grid"><div className="metric"><span className="metric-label">{t("เฉลี่ย", "Average")}</span><span className="metric-value">{seconds(competitor.aggregateTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("เวลาปรับ", "Penalties")}</span><span className="metric-value">+{seconds(competitor.penaltyTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("สุทธิ", "Final")}</span><span className="metric-value">{seconds(competitor.finalTimeMs)}</span></div></div>
       <h3>{t("เพิ่มบทลงโทษ", "Apply penalty")}</h3><div className="button-row">{rules.filter((rule) => rule.active).map((rule) => <button type="button" key={rule.ruleId} className="secondary" onClick={() => applyRule(rule.ruleId)}>{rule.label} (+{seconds(rule.penaltyMs)})</button>)}</div>
       <h3>{t("บทลงโทษที่ใช้งาน", "Active-stage penalties")}</h3>{competitor.penalties.filter((item) => !item.revocation && (item.stage ?? "ROUND_1") === competitor.activeStage).map((item) => <div className="rule-row" key={item.SK}><span>{item.label} <span className="technical">+{seconds(item.penaltyMs)}</span></span>{role === "admin" && <button type="button" className="danger" onClick={() => revoke(item.SK)}>{t("เพิกถอน", "Revoke")}</button>}</div>)}
-      <h3>{t("การวิ่ง", "Attempts")}</h3>{competitor.runs.map((run) => <div key={run.runId} className="attempt-row"><p><span className="status-badge">{run.status}</span> <span className="technical">{run.stage ? stageLabel[run.stage] : stageLabel.ROUND_1} · {run.runId}</span> · raw {seconds(run.elapsedMs)} {run.correction && `· corrected ${seconds(run.correction.elapsedMs)}`}</p><div className="button-row">
+      <h3>{t("การวิ่ง", "Attempts")}</h3>{competitor.runs.map((run) => <div key={run.runId} className="attempt-row">
+        <div className="attempt-head"><span className={`status-badge ${RUN_BADGE[run.status]}`}>{run.status}</span><span className="technical attempt-id">{run.stage ? stageLabel[run.stage] : stageLabel.ROUND_1} · {run.runId}</span></div>
+        <div className="attempt-times"><span>{t("ดิบ", "raw")} {seconds(run.elapsedMs)}</span>{run.correction && <span className="corrected">{t("แก้เป็น", "corrected")} {seconds(run.correction.elapsedMs)}</span>}</div>
+        <div className="button-row">
         {role === "admin" && run.status === "UNDER_REVIEW" && !run.correction && <><button type="button" onClick={() => resolve(run, "consume")}>{t("ใช้ผล", "Consume invalid")}</button><button type="button" className="secondary" onClick={() => resolve(run, "void")}>{t("ยกเลิก", "Void")}</button></>}
         {role === "admin" && (run.status === "UNDER_REVIEW" || run.status === "TIMED_OUT") && !run.correction && <button type="button" className="secondary" onClick={() => correct(run)}>{t("แก้เวลา", "Correct time")}</button>}
         </div>
