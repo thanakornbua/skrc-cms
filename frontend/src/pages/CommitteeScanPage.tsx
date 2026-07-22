@@ -143,7 +143,7 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
   const verdict = card ? verdictFor(card.status) : null;
 
   return (
-    <div className="page page-mid">
+    <div className="page page-wide">
       {busy && <LoadingScreen overlay label="กำลังบันทึกผลตรวจ / Saving inspection…" />}
       <NavBar onSignOut={signOutAndReset} />
       <BrandHeader title="Inspection Scan" home="/committee/approvals" description="สแกนหมายเลขผู้เข้าแข่งขันหลังเช็คอิน / Scan after competitor check-in" />
@@ -151,7 +151,7 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
       <div role="status" aria-live="polite">{toast && <div className="notice-banner">{toast}</div>}</div>
       {lookupError && <div className="error-banner" role="alert">{lookupError}</div>}
 
-      <div className="split-layout scan-layout">
+      <div className="scan-layout">
         <div className="card scan-console">
           <span className="section-kicker">{t("สแกน", "Scan")}</span>
           <div className="scan-input-row">

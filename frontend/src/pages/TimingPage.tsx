@@ -70,6 +70,13 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     if (currentRole === "admin") {
       const categoryResult = await ec2Json<{ categories: Timing[] }>("/admin/config/categories");
       setTimings(categoryResult.categories);
+      const current = categoryResult.categories.find((item) => item.category === category) ?? categoryResult.categories[0];
+      if (current) {
+        setCategory(current.category);
+        setMinSeconds(String(current.minTimeMs / 1000));
+        setStageMaxSeconds(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, String((current.stageMaxTimeMs?.[stage] ?? current.maxTimeMs) / 1000)])) as Record<Stage, string>);
+        setStageMaxAttempts(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, String(current.stageMaxAttempts?.[stage] ?? 2)])) as Record<Stage, string>);
+      }
     }
   }
 
@@ -237,28 +244,32 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     }
   }
 
-  return <div className="page page-mid">
+  return <div className="page page-wide">
     {busy && <LoadingScreen overlay label="กำลังดำเนินการ / Working…" />}
     <NavBar onSignOut={signOutAndReset} />
     <BrandHeader title="Timing and penalties" home="/admin" description="ตั้งค่าขอบเขตเวลา ตรวจผล และจัดการบทลงโทษ / Configure limits, review runs, and manage penalties" />
     {error && <div className="error-banner" role="alert">{error}</div>}
     {notice && <div className="notice-banner" role="status" aria-live="polite">{notice}</div>}
 
-    {role === "admin" && <div className="admin-config-grid">
-      <div className="card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
-        {timings.map((item) => <div key={item.category}><strong>{item.category}</strong><div className="metric-grid">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · {item.stageMaxAttempts?.[stage] ?? 2} {t("ครั้ง", "tries")}</span></div>)}</div></div>)}
+    {role === "admin" && <div className="timing-admin-grid">
+      <div className="card timing-category-card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
+        {timings.map((item) => <section className="timing-category-summary" key={item.category}><strong>{item.category}</strong><div className="timing-stage-summary">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · {item.stageMaxAttempts?.[stage] ?? 2} {t("ครั้ง", "tries")}</span></div>)}</div></section>)}
         <form onSubmit={saveTiming}>
           <div className="field"><label htmlFor={categoryId}>{t("ประเภท", "Category")}</label><input id={categoryId} required value={category} onChange={(e) => setCategory(e.target.value)} /></div>
           <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0.001" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
-          {([
+          <div className="timing-stage-settings">{([
             ["ROUND_1", round1MaxId], ["BEST_OF_4", best4MaxId], ["BEST_OF_2", best2MaxId], ["THE_BEST", finalMaxId],
-          ] as Array<[Stage, string]>).map(([stage, id]) => <div className="field-grid" key={stage}>
-            <div className="field"><label htmlFor={id}>{stageLabel[stage]} — {t("เวลาสูงสุด (วินาที)", "maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>
-            <div className="field"><label htmlFor={`${id}-attempts`}>{stageLabel[stage]} — {t("จำนวนครั้งสูงสุด", "maximum tries")}</label><input id={`${id}-attempts`} required type="number" min="1" max="20" step="1" value={stageMaxAttempts[stage]} onChange={(event) => setStageMaxAttempts((current) => ({ ...current, [stage]: event.target.value }))} /></div>
-          </div>)}
+          ] as Array<[Stage, string]>).map(([stage, id]) => <fieldset className="timing-stage-setting" key={stage}>
+            <legend>{stageLabel[stage]}</legend>
+            <div className="timing-stage-fields">
+              <div className="field"><label htmlFor={id}>{t("เวลาสูงสุด (วินาที)", "Maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>
+              <div className="field"><label htmlFor={`${id}-attempts`}>{t("จำนวนครั้งสูงสุด", "Maximum tries")}</label><input id={`${id}-attempts`} required type="number" min="1" max="20" step="1" value={stageMaxAttempts[stage]} onChange={(event) => setStageMaxAttempts((current) => ({ ...current, [stage]: event.target.value }))} /></div>
+            </div>
+          </fieldset>)}</div>
           <button type="submit">{t("บันทึก", "Save limits")}</button>
         </form>
       </div>
+      <div className="timing-secondary-grid">
       <div className="card"><span className="section-kicker">PENALTY RULES</span><h2>{t("สร้างบทลงโทษ", "Create rule")}</h2><form onSubmit={createRule}>
         <div className="field"><label htmlFor={ruleLabelId}>{t("ชื่อบทลงโทษ", "Label")}</label><input id={ruleLabelId} required value={ruleLabel} onChange={(e) => setRuleLabel(e.target.value)} /></div>
         <div className="field"><label htmlFor={penaltyId}>{t("เวลาปรับ (วินาที)", "Penalty seconds")}</label><input id={penaltyId} required type="number" min="0.001" step="0.001" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
@@ -274,6 +285,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         <p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p>
         <p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p>
         <div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div>
+      </div>
       </div>
     </div>}
 
