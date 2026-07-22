@@ -60,6 +60,9 @@ async function deploy(input: z.infer<typeof modeSchema>) {
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   try {
+    // The explicit OPTIONS route shares this Lambda integration. It must bypass
+    // Cognito so API Gateway can add the configured CORS preflight headers.
+    if (event.requestContext.http.method === "OPTIONS") return { statusCode: 204, body: "" };
     // HTTP API commonly normalizes header names, but the event contract permits
     // either casing. Keep this consistent with the registration Lambda so a
     // valid browser token can never be mistaken for an absent one.

@@ -17,6 +17,7 @@ Ensure a fresh Cognito administrator receives `200` from `GET /deployment/status
 2. Control API calls retry exactly once with `fetchAuthSession({ forceRefresh: true })` after a `401`. A second `401` signs the user out locally and displays `Session expired—sign in again.`
 3. The Lambda emits only `{ event, requestId, category }` for failed authentication. Categories are `missing_token`, `expired_token`, `wrong_pool`, `wrong_client`, `wrong_token_use`, `invalid_signature`, and `non_admin`.
 4. UI errors distinguish expired session (`401`), insufficient admin role (`403`), network failure, and unexpected server failure.
+5. The HTTP API provisioning creates `OPTIONS /{proxy+}` above its `$default` Lambda route. Its Lambda handler returns `204` before authentication so API Gateway can add the configured CORS preflight response.
 
 ## Verification procedure
 

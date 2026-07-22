@@ -3,7 +3,7 @@ import path from "node:path";
 import { STSClient, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 import { IAMClient, CreateRoleCommand, GetRoleCommand, PutRolePolicyCommand, NoSuchEntityException } from "@aws-sdk/client-iam";
 import { LambdaClient, AddPermissionCommand, CreateFunctionCommand, GetFunctionCommand, ResourceConflictException, ResourceNotFoundException, UpdateFunctionCodeCommand, UpdateFunctionConfigurationCommand, waitUntilFunctionActiveV2, waitUntilFunctionUpdatedV2 } from "@aws-sdk/client-lambda";
-import { ApiGatewayV2Client, CreateApiCommand, GetApisCommand, UpdateApiCommand } from "@aws-sdk/client-apigatewayv2";
+import { ApiGatewayV2Client, CreateApiCommand, CreateRouteCommand, GetApisCommand, GetRoutesCommand, UpdateApiCommand } from "@aws-sdk/client-apigatewayv2";
 import { bundleLambdaFromDist } from "./bundle-lambda.js";
 
 const region = process.env.AWS_REGION ?? "ap-southeast-7";
@@ -59,9 +59,21 @@ async function functionArn(roleArn: string): Promise<string> {
 async function httpApi(target: string): Promise<{ id: string; endpoint: string }> {
   const cors = { AllowOrigins: [corsOrigin], AllowMethods: ["GET", "POST"], AllowHeaders: ["authorization", "content-type"], MaxAge: 300 };
   const existing = (await api.send(new GetApisCommand({}))).Items?.find((item) => item.Name === apiName);
-  if (existing?.ApiId) { await api.send(new UpdateApiCommand({ ApiId: existing.ApiId, CorsConfiguration: cors })); return { id: existing.ApiId, endpoint: existing.ApiEndpoint! }; }
-  const created = await api.send(new CreateApiCommand({ Name: apiName, ProtocolType: "HTTP", Target: target, CorsConfiguration: cors }));
-  return { id: created.ApiId!, endpoint: created.ApiEndpoint! };
+  const apiId = existing?.ApiId;
+  const endpoint = existing?.ApiEndpoint;
+  if (apiId && endpoint) await api.send(new UpdateApiCommand({ ApiId: apiId, CorsConfiguration: cors }));
+  const created = apiId ? undefined : await api.send(new CreateApiCommand({ Name: apiName, ProtocolType: "HTTP", Target: target, CorsConfiguration: cors }));
+  const resolvedApiId = apiId ?? created!.ApiId!;
+  const routes = (await api.send(new GetRoutesCommand({ ApiId: resolvedApiId }))).Items ?? [];
+  // A quick-created HTTP API has a $default Lambda route, which otherwise
+  // captures OPTIONS and turns a browser preflight into the Lambda's 401.
+  // The explicit higher-priority route lets API Gateway answer CORS preflight.
+  if (!routes.some((route) => route.RouteKey === "OPTIONS /{proxy+}")) {
+    const defaultTarget = routes.find((route) => route.RouteKey === "$default")?.Target;
+    if (!defaultTarget) throw new Error("Control HTTP API is missing its $default integration");
+    await api.send(new CreateRouteCommand({ ApiId: resolvedApiId, RouteKey: "OPTIONS /{proxy+}", AuthorizationType: "NONE", Target: defaultTarget }));
+  }
+  return { id: resolvedApiId, endpoint: endpoint ?? created!.ApiEndpoint! };
 }
 const roleArn = await role();
 await iam.send(new PutRolePolicyCommand({ RoleName: roleName, PolicyName: `${prefix}-control-plane`, PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
