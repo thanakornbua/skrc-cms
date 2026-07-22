@@ -78,6 +78,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   } catch (error) {
     if (error instanceof AuthenticationError) logAuthFailure(event, error.category);
     else if (error instanceof ApiError && error.status === 403) logAuthFailure(event, "non_admin");
+    else if (!(error instanceof ApiError)) {
+      // Do not let SDK errors (which may include AWS resource details) spill
+      // into production logs. Request ID + fixed category is enough to trace.
+      console.error(JSON.stringify({ event: "control_internal_error", requestId: event.requestContext.requestId, category: "upstream_failure" }));
+      return jsonResponse(500, { error: { code: "INTERNAL_ERROR", message: "Internal server error" } });
+    }
     return errorResponse(error);
   }
 }

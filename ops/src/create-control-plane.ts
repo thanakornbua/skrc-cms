@@ -76,8 +76,11 @@ async function httpApi(target: string): Promise<{ id: string; endpoint: string }
   return { id: resolvedApiId, endpoint: endpoint ?? created!.ApiEndpoint! };
 }
 const roleArn = await role();
+const amplifyAppArn = `arn:aws:amplify:${amplifyRegion}:${account}:apps/${amplifyAppId}`;
 await iam.send(new PutRolePolicyCommand({ RoleName: roleName, PolicyName: `${prefix}-control-plane`, PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
-  { Effect: "Allow", Action: ["amplify:GetApp", "amplify:GetBranch", "amplify:GetJob", "amplify:UpdateBranch", "amplify:StartJob"], Resource: `arn:aws:amplify:${amplifyRegion}:${account}:apps/${amplifyAppId}/*` },
+  // GetApp targets the parent app ARN; branch and job actions target children.
+  { Effect: "Allow", Action: ["amplify:GetApp"], Resource: amplifyAppArn },
+  { Effect: "Allow", Action: ["amplify:GetBranch", "amplify:GetJob", "amplify:UpdateBranch", "amplify:StartJob"], Resource: `${amplifyAppArn}/*` },
   { Effect: "Allow", Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource: "arn:aws:logs:*:*:*" },
 ] }) }));
 const arn = await functionArn(roleArn); const createdApi = await httpApi(arn);

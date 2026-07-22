@@ -18,6 +18,7 @@ Ensure a fresh Cognito administrator receives `200` from `GET /deployment/status
 3. The Lambda emits only `{ event, requestId, category }` for failed authentication. Categories are `missing_token`, `expired_token`, `wrong_pool`, `wrong_client`, `wrong_token_use`, `invalid_signature`, and `non_admin`.
 4. UI errors distinguish expired session (`401`), insufficient admin role (`403`), network failure, and unexpected server failure.
 5. The HTTP API provisioning creates `OPTIONS /{proxy+}` above its `$default` Lambda route. Its Lambda handler returns `204` before authentication so API Gateway can add the configured CORS preflight response.
+6. The control role grants `GetApp` on the exact Amplify app ARN and branch/job operations on child ARNs; this prevents an authenticated status request from failing with an IAM `500`.
 
 ## Verification procedure
 
