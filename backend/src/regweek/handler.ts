@@ -29,31 +29,19 @@ const englishName = z.string().trim().min(2).max(120).refine(
   (value) => /[A-Za-z]/.test(value),
   "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name"
 );
-const optionalThaiName = z.string().trim().max(120).refine(
-  (value) => value === "" || (value.length >= 2 && /[฀-๿]/.test(value)),
-  "กรุณากรอกชื่อภาษาไทย / Please enter a Thai name"
-).default("");
-const optionalEnglishName = z.string().trim().max(120).refine(
-  (value) => value === "" || (value.length >= 2 && /[A-Za-z]/.test(value)),
-  "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name"
-).default("");
 const phoneNumber = z.string().trim().regex(/^[0-9+() -]{8,20}$/, "กรุณากรอกหมายเลขโทรศัพท์ที่ถูกต้อง / Invalid phone number");
 
-const registerSchema = z.object({
+export const registerSchema = z.object({
   teamName: z.string().trim().min(2).max(100),
   category: z.enum(CATEGORIES),
-  school: z.string().trim().max(200).default(""),
-  advisorName: z.string().trim().min(2).max(120),
-  advisorPhone: phoneNumber,
-  advisorEmail: z.string().trim().email().max(254),
   student1NameThai: thaiName,
   student1NameEnglish: englishName,
   contactEmail: z.string().trim().email().max(254),
   contactPhone: phoneNumber,
-  student2NameThai: optionalThaiName,
-  student2NameEnglish: optionalEnglishName,
-  student3NameThai: optionalThaiName,
-  student3NameEnglish: optionalEnglishName,
+  student2NameThai: thaiName,
+  student2NameEnglish: englishName,
+  student3NameThai: thaiName,
+  student3NameEnglish: englishName,
   pdpaConsent: z.literal(true, {
     errorMap: () => ({ message: "ต้องยอมรับความยินยอม PDPA / PDPA consent is required" }),
   }),
@@ -93,10 +81,6 @@ async function handleRegister(
     name: input.student1NameEnglish,
     teamName: input.teamName,
     category: input.category,
-    school: input.school,
-    advisorName: input.advisorName,
-    advisorPhone: input.advisorPhone,
-    advisorEmail: input.advisorEmail.toLowerCase(),
     student1NameThai: input.student1NameThai,
     student1NameEnglish: input.student1NameEnglish,
     contactEmail: input.contactEmail.toLowerCase(),
@@ -141,6 +125,13 @@ async function handleMe(sub: string): Promise<APIGatewayProxyResultV2> {
           checkedInAt: competitor.checkedInAt,
           inspectedAt: competitor.inspectedAt,
           disqualified: competitor.disqualified,
+          lane: null,
+          penalties: [],
+          runs: [],
+          aggregateTimeMs: null,
+          penaltyTimeMs: 0,
+          finalTimeMs: null,
+          rank: null,
         }
       : null,
   });
@@ -157,22 +148,10 @@ async function handlePending(
 
   const items = filtered.map((r) => ({
       sub: r.sub,
-      name: r.name,
       teamName: r.teamName,
       category: r.category,
-      school: r.school,
-      advisorName: r.advisorName,
-      advisorPhone: r.advisorPhone,
-      advisorEmail: r.advisorEmail,
       contactPhone: r.contactPhone,
       contactEmail: r.contactEmail,
-      student1NameThai: r.student1NameThai,
-      student1NameEnglish: r.student1NameEnglish,
-      student2NameThai: r.student2NameThai,
-      student2NameEnglish: r.student2NameEnglish,
-      student3NameThai: r.student3NameThai,
-      student3NameEnglish: r.student3NameEnglish,
-      pdpaConsent: r.pdpaConsent,
       createdAt: r.createdAt,
     }));
 
@@ -189,15 +168,13 @@ async function handleApprove(
 
 const EXPORT_COLUMNS: Record<string, string[]> = {
   registrations: [
-    "PK", "status", "teamName", "category", "school", "advisorName",
-    "advisorPhone", "advisorEmail", "contactEmail",
+    "PK", "status", "teamName", "category", "contactEmail",
     "contactPhone", "student1NameThai", "student1NameEnglish",
     "student2NameThai", "student2NameEnglish", "student3NameThai",
     "student3NameEnglish", "pdpaConsent", "createdAt",
   ],
   competitors: [
-    "competitorId", "status", "teamName", "category", "school", "advisorName",
-    "advisorPhone", "advisorEmail", "contactEmail",
+    "competitorId", "status", "teamName", "category", "contactEmail",
     "contactPhone", "student1NameThai", "student1NameEnglish",
     "student2NameThai", "student2NameEnglish", "student3NameThai",
     "student3NameEnglish", "pdpaConsent", "cognitoSub", "checkedInAt", "inspectedAt", "createdAt",

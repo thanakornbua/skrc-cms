@@ -159,7 +159,7 @@ async function findOrCreateFunction(roleArn: string): Promise<string> {
         const created = await lambda.send(
           new CreateFunctionCommand({
             FunctionName: FUNCTION_NAME,
-            Runtime: "nodejs20.x",
+            Runtime: "nodejs22.x",
             Handler: "index.handler",
             Role: roleArn,
             Code: { ZipFile: zip },
@@ -197,6 +197,7 @@ async function findOrCreateFunction(roleArn: string): Promise<string> {
   const updated = await lambda.send(
     new UpdateFunctionConfigurationCommand({
       FunctionName: FUNCTION_NAME,
+      Runtime: "nodejs22.x",
       Role: roleArn,
       Timeout: 15,
       MemorySize: 256,

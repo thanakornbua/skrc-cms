@@ -39,10 +39,6 @@ export interface RegistrationRecord extends StudentNames {
   name: string;
   teamName: string;
   category: Category;
-  school: string;
-  advisorName: string;
-  advisorPhone: string;
-  advisorEmail: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsent: PdpaConsent;
@@ -66,10 +62,6 @@ export interface CompetitorRecord extends StudentNames {
   name: string;
   teamName: string;
   category: Category;
-  school: string;
-  advisorName: string;
-  advisorPhone: string;
-  advisorEmail: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsent: PdpaConsent;

@@ -33,3 +33,13 @@ test("time-average stages average two fastest valid times and use one when alone
   assert.equal(results.ranked[1].aggregateTimeMs, 2000);
   assert.deepEqual(results.unranked.map((item) => item.competitorId), ["C-3"]);
 });
+
+test("void and invalid runs never contribute checkpoint progress or a time", () => {
+  const results = rankStageCategory([
+    entry("C-1", [{ stage: "ROUND_1", status: "VOID", splits: [{ gateId: "A" }, { gateId: "B" }] }]),
+    entry("C-2", [{ stage: "ROUND_1", status: "INVALID", splits: [{ gateId: "A" }] }]),
+    entry("C-3", [{ stage: "ROUND_1", status: "TIMED_OUT", splits: [{ gateId: "A" }] }]),
+  ], "ROUND_1", true)[0];
+  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-3"]);
+  assert.deepEqual(results.unranked.map((item) => item.competitorId), ["C-1", "C-2"]);
+});

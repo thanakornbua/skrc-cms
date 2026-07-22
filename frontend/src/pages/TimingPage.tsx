@@ -8,7 +8,7 @@ import { t } from "../i18n";
 
 type Role = "admin" | "committee" | "competitor";
 type Stage = "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
-interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number> }
+interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number>; stageMaxAttempts?: Record<Stage, number> }
 interface CompetitionState { phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[] }
 interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean }
 interface Run {
@@ -25,6 +25,7 @@ interface Competitor {
 }
 
 const EVENT_MODE = import.meta.env.VITE_EVENT_MODE;
+const AMPLIFY_CONSOLE_URL = import.meta.env.VITE_AMPLIFY_CONSOLE_URL;
 
 const seconds = (ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
 const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
@@ -38,6 +39,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [category, setCategory] = useState("Line Tracing - Open");
   const [minSeconds, setMinSeconds] = useState("");
   const [stageMaxSeconds, setStageMaxSeconds] = useState<Record<Stage, string>>({ ROUND_1: "180", BEST_OF_4: "180", BEST_OF_2: "180", THE_BEST: "180" });
+  const [stageMaxAttempts, setStageMaxAttempts] = useState<Record<Stage, string>>({ ROUND_1: "2", BEST_OF_4: "2", BEST_OF_2: "2", THE_BEST: "2" });
   const [competitionState, setCompetitionState] = useState<CompetitionState | null>(null);
   const [ruleLabel, setRuleLabel] = useState("");
   const [penaltySeconds, setPenaltySeconds] = useState("");
@@ -92,6 +94,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         body: JSON.stringify({
           category, minTimeMs: Math.round(Number(minSeconds) * 1000),
           stageMaxTimeMs: Object.fromEntries(Object.entries(stageMaxSeconds).map(([stage, value]) => [stage, Math.round(Number(value) * 1000)])),
+          stageMaxAttempts: Object.fromEntries(Object.entries(stageMaxAttempts).map(([stage, value]) => [stage, Number(value)])),
         }),
       });
       await loadConfig("admin"); setNotice("Timing limits saved for future attempts.");
@@ -242,13 +245,16 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
 
     {role === "admin" && <div className="card-grid admin-config-grid">
       <div className="card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
-        {timings.map((item) => <div key={item.category}><strong>{item.category}</strong><div className="metric-grid">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)}</span></div>)}</div></div>)}
+        {timings.map((item) => <div key={item.category}><strong>{item.category}</strong><div className="metric-grid">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · {item.stageMaxAttempts?.[stage] ?? 2} {t("ครั้ง", "tries")}</span></div>)}</div></div>)}
         <form onSubmit={saveTiming}>
           <div className="field"><label htmlFor={categoryId}>{t("ประเภท", "Category")}</label><input id={categoryId} required value={category} onChange={(e) => setCategory(e.target.value)} /></div>
           <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0.001" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
           {([
             ["ROUND_1", round1MaxId], ["BEST_OF_4", best4MaxId], ["BEST_OF_2", best2MaxId], ["THE_BEST", finalMaxId],
-          ] as Array<[Stage, string]>).map(([stage, id]) => <div className="field" key={stage}><label htmlFor={id}>{stageLabel[stage]} — {t("เวลาสูงสุด (วินาที)", "maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>)}
+          ] as Array<[Stage, string]>).map(([stage, id]) => <div className="field-grid" key={stage}>
+            <div className="field"><label htmlFor={id}>{stageLabel[stage]} — {t("เวลาสูงสุด (วินาที)", "maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>
+            <div className="field"><label htmlFor={`${id}-attempts`}>{stageLabel[stage]} — {t("จำนวนครั้งสูงสุด", "maximum tries")}</label><input id={`${id}-attempts`} required type="number" min="1" max="20" step="1" value={stageMaxAttempts[stage]} onChange={(event) => setStageMaxAttempts((current) => ({ ...current, [stage]: event.target.value }))} /></div>
+          </div>)}
           <button type="submit">{t("บันทึก", "Save limits")}</button>
         </form>
       </div>
@@ -272,6 +278,8 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
             )}
           </p>
         )}
+        {AMPLIFY_CONSOLE_URL && <div className="button-row"><a className="button-link" href={AMPLIFY_CONSOLE_URL} target="_blank" rel="noreferrer">{t("เปิดการตั้งค่า Amplify", "Open Amplify deployment settings")}</a></div>}
+        <p><small>{t("การเปลี่ยนโหมดจะเริ่ม build/deploy ใหม่ และมีผลเมื่อ job สำเร็จเท่านั้น", "Changing mode requires a new build/deploy and takes effect only after the job succeeds.")}</small></p>
       </div>
     </div>}
 

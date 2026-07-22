@@ -72,4 +72,11 @@ export const config = {
     }
     return lanes;
   },
+  get amplifyControl(): { appId: string; branchName: string; region: string } {
+    return {
+      appId: required("AMPLIFY_APP_ID"),
+      branchName: process.env.AMPLIFY_BRANCH ?? "main",
+      region: process.env.AMPLIFY_REGION ?? "ap-southeast-1",
+    };
+  },
 };

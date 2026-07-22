@@ -3,7 +3,7 @@ import { requireAuth, requireRole, requireSelfOrStaff } from "../auth/middleware
 import { requestPasswordReset } from "../auth/admin.js";
 import { z } from "zod";
 import { ApiError, zodToFields } from "../errors.js";
-import { checkIn, disqualifyCompetitor, getCompetitor, inspectCompetitor, listCompetitors, recordPasswordResetRequest, reinstateCompetitor } from "./repo.js";
+import { checkIn, disqualifyCompetitor, getCompetitor, inspectCompetitor, listCompetitors, recordPasswordResetRequest, reinstateCompetitor, scanProfiles } from "./repo.js";
 import { getActiveLaneForCompetitor } from "../lanes/repo.js";
 import { listRuns } from "../runs/repo.js";
 import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
@@ -108,12 +108,6 @@ competitorsRouter.get(
     try {
       const { category, status, q } = req.query;
       const search = typeof q === "string" ? q.trim() : "";
-      // Empty searches intentionally return without touching DynamoDB. The
-      // admin UI requires an explicit term to protect on-demand read costs.
-      if (!search) {
-        res.status(200).json({ items: [] });
-        return;
-      }
       const items = await listCompetitors({
         category: typeof category === "string" ? category : undefined,
         status: typeof status === "string" ? status : undefined,
@@ -139,7 +133,7 @@ competitorsRouter.get(
 competitorsRouter.post(
   "/admin/competitors/:id/check-in",
   requireAuth,
-  requireRole("committee"),
+  requireRole("admin"),
   async (req, res, next) => {
     try {
       const result = await checkIn(req.params.id);
@@ -153,6 +147,40 @@ competitorsRouter.post(
     }
   }
 );
+
+const COMPETITOR_CSV_COLUMNS = [
+  "competitorId", "status", "teamName", "category", "contactEmail", "contactPhone",
+  "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
+  "student3NameThai", "student3NameEnglish", "pdpaConsent", "cognitoSub",
+  "checkedInAt", "inspectedAt", "disqualified", "createdAt",
+];
+const REGISTRATION_CSV_COLUMNS = [
+  "PK", "status", "teamName", "category", "contactEmail", "contactPhone",
+  "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
+  "student3NameThai", "student3NameEnglish", "pdpaConsent", "rejection", "approval", "createdAt",
+];
+
+function csvCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+competitorsRouter.get("/export.csv", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const entity = req.query.entity;
+    if (entity !== "registrations" && entity !== "competitors") {
+      throw new ApiError(400, "VALIDATION_ERROR", "entity must be registrations or competitors");
+    }
+    const columns = entity === "registrations" ? REGISTRATION_CSV_COLUMNS : COMPETITOR_CSV_COLUMNS;
+    const items = await scanProfiles(entity === "registrations" ? "REGISTRATION" : "COMPETITOR");
+    const rows = [columns.join(","), ...items.map((item) => columns.map((column) => csvCell(item[column])).join(","))];
+    res.status(200)
+      .type("text/csv")
+      .attachment(`${entity}.csv`)
+      .send(`${rows.join("\r\n")}\r\n`);
+  } catch (error) { next(error); }
+});
 
 competitorsRouter.post(
   "/admin/competitors/:id/reset-password",

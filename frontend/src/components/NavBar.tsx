@@ -33,13 +33,23 @@ const STAFF_NAV: NavItem[] = [
   { to: "/staff/timing", label: "เวลาและโทษ / Timing" },
   { to: "/scoreboard", label: "ผลการแข่งขัน / Results" },
 ];
+const ADMIN_NAV: NavItem[] = [...STAFF_NAV, { to: "/admin/deployment", label: "ปรับใช้ระบบ / Deploy" }];
 
 const NAV_BY_ROLE: Record<NavigationRole, NavItem[]> = {
   public: PUBLIC_NAV,
   competitor: COMPETITOR_NAV,
   committee: STAFF_NAV,
-  admin: STAFF_NAV,
+  admin: ADMIN_NAV,
 };
+
+function itemsForEra(role: NavigationRole): NavItem[] {
+  const mode = import.meta.env.VITE_EVENT_MODE;
+  if (mode === "concluded") return [{ to: "/scoreboard", label: "ผลการแข่งขัน / Results" }];
+  if (mode === "registration") {
+    return NAV_BY_ROLE[role].filter((item) => ["/register", "/portal", "/committee/approvals", "/admin/deployment"].includes(item.to));
+  }
+  return NAV_BY_ROLE[role].filter((item) => item.to !== "/register" && item.to !== "/committee/approvals");
+}
 
 const ROLE_LABEL: Record<NavigationRole, string> = {
   public: "PUBLIC",
@@ -89,7 +99,7 @@ export default function NavBar({ onSignOut }: NavBarProps) {
     if (!onSignOut) window.location.assign("/portal");
   }
 
-  const items = NAV_BY_ROLE[role];
+  const items = itemsForEra(role);
   return (
     <nav className="nav-bar" aria-label={`Primary navigation — ${ROLE_LABEL[role]}`}>
       <div className="nav-main">

@@ -4,6 +4,7 @@ import {
   DescribeUserPoolCommand,
   CreateUserPoolCommand,
   UpdateUserPoolCommand,
+  SetUserPoolMfaConfigCommand,
   ListUserPoolClientsCommand,
   CreateUserPoolClientCommand,
   CreateGroupCommand,
@@ -20,10 +21,12 @@ import {
   LambdaClient,
   GetFunctionCommand,
   CreateFunctionCommand,
+  UpdateFunctionConfigurationCommand,
   AddPermissionCommand,
   ResourceNotFoundException as LambdaResourceNotFoundException,
   ResourceConflictException,
   InvalidParameterValueException,
+  waitUntilFunctionUpdatedV2,
 } from "@aws-sdk/client-lambda";
 import { buildSingleFileZip } from "./zip.js";
 
@@ -32,6 +35,8 @@ const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("RESOURCE_PREFIX must match ^[a-z0-9-]{3,40}$");
 const POOL_NAME = process.env.COGNITO_POOL_NAME ?? `${RESOURCE_PREFIX} - Users`;
 const CLIENT_NAME = process.env.COGNITO_CLIENT_NAME ?? `${RESOURCE_PREFIX} - Web App`;
+const EXISTING_POOL_ID = process.env.COGNITO_USER_POOL_ID;
+const EXISTING_CLIENT_ID = process.env.COGNITO_CLIENT_ID;
 const GROUP_NAMES = ["committee", "admin"] as const;
 const TRIGGER_FUNCTION_NAME = `${RESOURCE_PREFIX}-auto-confirm-signup`;
 const TRIGGER_ROLE_NAME = `${RESOURCE_PREFIX}-auto-confirm-signup-role`;
@@ -98,6 +103,10 @@ async function findOrCreateTriggerFunction(roleArn: string): Promise<string> {
     const existing = await lambda.send(
       new GetFunctionCommand({ FunctionName: TRIGGER_FUNCTION_NAME })
     );
+    if (existing.Configuration?.Runtime !== "nodejs22.x") {
+      await lambda.send(new UpdateFunctionConfigurationCommand({ FunctionName: TRIGGER_FUNCTION_NAME, Runtime: "nodejs22.x" }));
+      await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: TRIGGER_FUNCTION_NAME });
+    }
     console.log(`Lambda function "${TRIGGER_FUNCTION_NAME}" already exists — reusing.`);
     return existing.Configuration!.FunctionArn!;
   } catch (err) {
@@ -115,7 +124,7 @@ async function findOrCreateTriggerFunction(roleArn: string): Promise<string> {
       const created = await lambda.send(
         new CreateFunctionCommand({
           FunctionName: TRIGGER_FUNCTION_NAME,
-          Runtime: "nodejs20.x",
+          Runtime: "nodejs22.x",
           Handler: "index.handler",
           Role: roleArn,
           Code: { ZipFile: zip },
@@ -156,6 +165,11 @@ async function grantCognitoInvokePermission(poolArn: string): Promise<void> {
 }
 
 async function findOrCreateUserPool(): Promise<{ id: string; arn: string }> {
+  if (EXISTING_POOL_ID) {
+    const described = await cognito.send(new DescribeUserPoolCommand({ UserPoolId: EXISTING_POOL_ID }));
+    console.log(`User pool id "${EXISTING_POOL_ID}" configured — reusing "${described.UserPool?.Name}".`);
+    return { id: EXISTING_POOL_ID, arn: described.UserPool!.Arn! };
+  }
   const list = await cognito.send(new ListUserPoolsCommand({ MaxResults: 60 }));
   const existing = list.UserPools?.find((p) => p.Name === POOL_NAME);
 
@@ -175,11 +189,11 @@ async function findOrCreateUserPool(): Promise<{ id: string; arn: string }> {
       AutoVerifiedAttributes: ["email"],
       Policies: {
         PasswordPolicy: {
-          MinimumLength: 8,
-          RequireUppercase: false,
-          RequireLowercase: false,
-          RequireNumbers: false,
-          RequireSymbols: false,
+          MinimumLength: 12,
+          RequireUppercase: true,
+          RequireLowercase: true,
+          RequireNumbers: true,
+          RequireSymbols: true,
           TemporaryPasswordValidityDays: 7,
         },
       },
@@ -211,15 +225,40 @@ async function wirePreSignUpTrigger(poolId: string, functionArn: string): Promis
   await cognito.send(
     new UpdateUserPoolCommand({
       UserPoolId: poolId,
-      Policies: pool.Policies,
+      // Existing passwords continue to work; this policy applies when users
+      // create or change passwords.
+      Policies: {
+        ...pool.Policies,
+        PasswordPolicy: {
+          MinimumLength: 12,
+          RequireUppercase: true,
+          RequireLowercase: true,
+          RequireNumbers: true,
+          RequireSymbols: true,
+          TemporaryPasswordValidityDays: 7,
+        },
+      },
       AutoVerifiedAttributes: pool.AutoVerifiedAttributes,
       AccountRecoverySetting: pool.AccountRecoverySetting,
       LambdaConfig: { ...pool.LambdaConfig, PreSignUp: functionArn },
     })
   );
+  await cognito.send(new SetUserPoolMfaConfigCommand({
+    UserPoolId: poolId,
+    MfaConfiguration: "OPTIONAL",
+    SoftwareTokenMfaConfiguration: { Enabled: true },
+  }));
 }
 
 async function findOrCreateAppClient(poolId: string): Promise<string> {
+  if (EXISTING_CLIENT_ID) {
+    const list = await cognito.send(new ListUserPoolClientsCommand({ UserPoolId: poolId, MaxResults: 60 }));
+    if (!list.UserPoolClients?.some((client) => client.ClientId === EXISTING_CLIENT_ID)) {
+      throw new Error(`COGNITO_CLIENT_ID ${EXISTING_CLIENT_ID} does not belong to user pool ${poolId}`);
+    }
+    console.log(`App client id "${EXISTING_CLIENT_ID}" configured — reusing.`);
+    return EXISTING_CLIENT_ID;
+  }
   const list = await cognito.send(
     new ListUserPoolClientsCommand({ UserPoolId: poolId, MaxResults: 60 })
   );

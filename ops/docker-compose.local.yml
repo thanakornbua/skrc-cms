@@ -1,0 +1,7 @@
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.6.1
+    command: -jar DynamoDBLocal.jar -sharedDb -inMemory
+    ports:
+      - "127.0.0.1:${DYNAMODB_LOCAL_PORT:-18000}:8000"
+    restart: "no"

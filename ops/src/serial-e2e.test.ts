@@ -7,7 +7,7 @@ import { DynamoDBClient, CreateTableCommand, DeleteTableCommand } from "@aws-sdk
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { DurableSpool, deliverOne, parseEventLine } from "./serial-bridge-core.js";
 
-const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://127.0.0.1:8000";
+const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://127.0.0.1:18000";
 const table = `serial-e2e-${Date.now()}`;
 const raw = new DynamoDBClient({ endpoint, region: "ap-southeast-7", credentials: { accessKeyId: "local", secretAccessKey: "local" } });
 const ddb = DynamoDBDocumentClient.from(raw);

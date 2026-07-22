@@ -2,6 +2,7 @@ import { fetchAuthSession } from "aws-amplify/auth";
 
 const REGWEEK_API_URL = import.meta.env.VITE_REGWEEK_API_URL;
 const EC2_API_URL = import.meta.env.VITE_API_BASE_URL;
+const CONTROL_API_URL = import.meta.env.VITE_CONTROL_API_URL;
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -59,6 +60,11 @@ export function regweekJson<T>(path: string, init: RequestInit = {}): Promise<T>
 /** Calls the competition-day EC2 API, attaching the Cognito ID token. */
 export function ec2Json<T>(path: string, init: RequestInit = {}): Promise<T> {
   return callJson<T>(EC2_API_URL, path, init);
+}
+
+/** Calls the always-available admin deployment control plane. */
+export function controlJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return callJson<T>(CONTROL_API_URL, path, init);
 }
 
 /** Calls a deliberately unauthenticated public EC2 endpoint. */

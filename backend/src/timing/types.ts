@@ -6,6 +6,8 @@ export interface CategoryTiming {
   /** Legacy fallback retained while old configurations are migrated. */
   maxTimeMs: number;
   stageMaxTimeMs?: Record<CompetitionStage, number>;
+  /** Maximum consumed attempts allowed independently in each stage. */
+  stageMaxAttempts?: Record<CompetitionStage, number>;
   updatedAt: string;
   updatedBy: string;
 }

@@ -21,12 +21,14 @@ function stagePenalty(input: StageScoringInput, stage: CompetitionStage): number
 
 function scoredRuns(input: StageScoringInput, stage: CompetitionStage) {
   const corrections = new Map(input.corrections.filter((item) => correctionStage(item) === stage).map((item) => [item.runId, item]));
-  return input.runs.filter((run) => runStage(run) === stage).map((run) => {
-    const correction = corrections.get(run.runId);
-    const elapsedMs = correction?.elapsedMs ?? (run.status === "COMPLETE" ? run.elapsedMs : null);
-    const uniqueCheckpoints = new Set((run.splits ?? []).map((split) => split.gateId)).size;
-    return { run, elapsedMs, uniqueCheckpoints };
-  });
+  return input.runs
+    .filter((run) => runStage(run) === stage && run.status !== "VOID" && run.status !== "INVALID")
+    .map((run) => {
+      const correction = corrections.get(run.runId);
+      const elapsedMs = correction?.elapsedMs ?? (run.status === "COMPLETE" ? run.elapsedMs : null);
+      const uniqueCheckpoints = new Set((run.splits ?? []).map((split) => split.gateId)).size;
+      return { run, elapsedMs, uniqueCheckpoints };
+    });
 }
 
 export function scoreCompetitorStage(input: StageScoringInput, stage: CompetitionStage): Omit<StageRankedResult, "rank"> | null {

@@ -6,7 +6,7 @@ import { writeFile } from "node:fs/promises";
 import { DynamoDBClient, CreateTableCommand, DeleteTableCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 
-const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://127.0.0.1:8000";
+const endpoint = process.env.AWS_ENDPOINT_URL_DYNAMODB ?? "http://127.0.0.1:18000";
 const table = `local-rehearsal-${Date.now()}`;
 const credentials = { accessKeyId: "local", secretAccessKey: "local" };
 const raw = new DynamoDBClient({ endpoint, region: "ap-southeast-7", credentials });

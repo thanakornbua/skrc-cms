@@ -1,4 +1,4 @@
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
@@ -51,7 +51,6 @@ export interface ListFilters {
  */
 export async function listCompetitors(filters: ListFilters): Promise<CompetitorRecord[]> {
   const search = filters.q?.trim() ?? "";
-  if (!search) return [];
 
   // Badge/QR scans and typed competitor numbers are the common check-in path.
   // Resolve those with one keyed read rather than querying the whole GSI.
@@ -79,10 +78,29 @@ export async function listCompetitors(filters: ListFilters): Promise<CompetitorR
   if (filters.status) {
     items = items.filter((i) => i.status === filters.status);
   }
-  const q = search.toLowerCase();
-  items = items.filter(
-    (i) => i.teamName.toLowerCase().includes(q) || (i.name ?? "").toLowerCase().includes(q)
-  );
+  if (search) {
+    const q = search.toLowerCase();
+    items = items.filter(
+      (i) => i.teamName.toLowerCase().includes(q) || (i.name ?? "").toLowerCase().includes(q)
+    );
+  }
+  return items;
+}
+
+/** Admin-only D18 raw export, paginated because DynamoDB Scan pages at 1 MB. */
+export async function scanProfiles(entityType: "REGISTRATION" | "COMPETITOR"): Promise<Array<Record<string, unknown>>> {
+  const items: Array<Record<string, unknown>> = [];
+  let lastKey: Record<string, unknown> | undefined;
+  do {
+    const result = await ddbDoc.send(new ScanCommand({
+      TableName: TABLE_NAME,
+      FilterExpression: "GSI1PK = :entityType",
+      ExpressionAttributeValues: { ":entityType": entityType },
+      ExclusiveStartKey: lastKey,
+    }));
+    items.push(...((result.Items as Array<Record<string, unknown>>) ?? []));
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
   return items;
 }
 

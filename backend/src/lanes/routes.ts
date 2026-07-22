@@ -37,7 +37,7 @@ lanesRouter.get(
 lanesRouter.post(
   "/admin/lanes/:laneId/assign",
   requireAuth,
-  requireRole("committee"),
+  requireRole("admin"),
   async (req, res, next) => {
     try {
       const parsed = assignSchema.safeParse(req.body);
@@ -64,7 +64,7 @@ lanesRouter.post(
 lanesRouter.post(
   "/admin/lanes/:laneId/arm",
   requireAuth,
-  requireRole("committee"),
+  requireRole("admin"),
   async (req, res, next) => {
     try {
       const lane = await armLane(req.params.laneId, req.user!.username);

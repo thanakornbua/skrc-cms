@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { consumedStageBudgetMs } from "./budget.js";
+import { consumedStageBudgetMs, stageAttemptState } from "./budget.js";
 import type { RunRecord } from "../runs/types.js";
 import type { TimeCorrection } from "./types.js";
 
@@ -49,4 +49,15 @@ test("does not charge an uncorrected RUNNING or UNDER_REVIEW run", () => {
     run("2", { status: "UNDER_REVIEW", elapsedMs: null }),
   ];
   assert.equal(consumedStageBudgetMs(runs, [], "ROUND_1"), 0);
+});
+
+test("counts consumed attempts per stage and blocks unresolved reviews", () => {
+  const runs = [
+    run("1", { status: "COMPLETE", elapsedMs: 50000 }),
+    run("2", { status: "TIMED_OUT", elapsedMs: null }),
+    run("3", { status: "VOID", elapsedMs: null }),
+    run("4", { status: "UNDER_REVIEW", elapsedMs: 100 }),
+  ];
+  assert.deepEqual(stageAttemptState(runs, [], "ROUND_1"), { consumed: 2, unresolved: true });
+  assert.deepEqual(stageAttemptState(runs, [correction("4", 2000)], "ROUND_1"), { consumed: 3, unresolved: false });
 });

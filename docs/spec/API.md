@@ -183,10 +183,10 @@ Never call the wrong service from the wrong era — the frontend switches which 
 
 ### Phase 9 — timing, corrections, and penalties
 
-- `GET /admin/config/categories` (admin): `{categories:[{category,minTimeMs,maxTimeMs}]}`.
-- `PUT /admin/config/categories` (admin): `{category,minTimeMs,maxTimeMs}`; requires
-  positive integers and `minTimeMs < maxTimeMs`.
-- `GET /admin/config/penalties` (admin): returns the penalty-rule catalog.
+- `GET /admin/config/categories` (admin): `{categories:[{category,minTimeMs,maxTimeMs,stageMaxTimeMs,stageMaxAttempts}]}`.
+- `PUT /admin/config/categories` (admin): `{category,minTimeMs,stageMaxTimeMs,stageMaxAttempts}`; requires
+  positive integer milliseconds, `minTimeMs` below every stage maximum, and 1–20 attempts per stage.
+- `GET /admin/config/penalties` (committee/admin): returns the penalty-rule catalog so committee can apply a configured rule.
 - `POST /admin/config/penalties` (admin): `{label,penaltyMs}`.
 - `PUT /admin/config/penalties/:ruleId` (admin): `{label,penaltyMs,active}`.
 - `POST /committee/competitors/:id/penalties` (committee/admin): `{ruleId}`; snapshots

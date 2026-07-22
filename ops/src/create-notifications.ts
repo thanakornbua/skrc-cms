@@ -115,7 +115,7 @@ async function ensureFunction(roleArn: string): Promise<string> {
     await lambda.send(new UpdateFunctionCodeCommand({ FunctionName: FUNCTION_NAME, ZipFile: zip }));
     await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: FUNCTION_NAME });
     await lambda.send(new UpdateFunctionConfigurationCommand({
-      FunctionName: FUNCTION_NAME, Role: roleArn, Timeout: 30, MemorySize: 256, Environment: environment,
+      FunctionName: FUNCTION_NAME, Runtime: "nodejs22.x", Role: roleArn, Timeout: 30, MemorySize: 256, Environment: environment,
     }));
     await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: FUNCTION_NAME });
     return existing.Configuration!.FunctionArn!;
@@ -126,7 +126,7 @@ async function ensureFunction(roleArn: string): Promise<string> {
   for (let attempt = 1; attempt <= 6; attempt++) {
     try {
       created = await lambda.send(new CreateFunctionCommand({
-        FunctionName: FUNCTION_NAME, Runtime: "nodejs20.x", Handler: "index.handler", Role: roleArn,
+        FunctionName: FUNCTION_NAME, Runtime: "nodejs22.x", Handler: "index.handler", Role: roleArn,
         Code: { ZipFile: zip }, Timeout: 30, MemorySize: 256, Environment: environment,
         Description: "Sends idempotent registration and approval notifications through Cloudflare Email Sending",
         Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },

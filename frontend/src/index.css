@@ -446,7 +446,8 @@ textarea:focus {
 
 /* ---- Buttons ----------------------------------------------------------- */
 
-button {
+button,
+.button-link {
   cursor: pointer;
   font-family: var(--font-mono);
   font-weight: var(--weight-semibold);
@@ -462,6 +463,8 @@ button {
   line-height: 1;
 }
 
+.button-link { display: inline-block; text-decoration: none; }
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -471,7 +474,8 @@ button {
 }
 .button-row > * { margin: 0; }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+.button-link:hover {
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: 0 2px 0 var(--ink);

@@ -61,12 +61,24 @@ request audit item.
    [SERIAL_BRIDGE.md](./SERIAL_BRIDGE.md). Never flash both variants to one board.
 6. Complete [rehearsal.md](./rehearsal.md) before admitting real competitors.
 
+Use the guarded mode switch only after the target branch's deployed job is the exact
+expected commit. It updates branch-level build variables and starts a new Amplify job:
+
+```bash
+npm run switch-amplify-mode -- --app-id <app-id> --branch <branch> --mode competition --expected-commit <full-sha> --confirm DEPLOY-COMPETITION
+```
+
+Concluded mode additionally requires `--results-committed`; the frontend build itself
+refuses concluded mode when `public/results.json` is absent. The admin UI links to the
+Amplify branch when `VITE_AMPLIFY_CONSOLE_URL` is configured, but credentials and the
+deployment action remain server-side/operator-controlled.
+
 ## During competition
 
 Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY_RUN.md).
 
-1. Admin saves the minimum safeguard and separate Round 1, Best of 4,
-   Best of 2, and The Best maximum times for every active category.
+1. Admin saves the minimum safeguard plus separate maximum time and maximum tries for
+   Round 1, Best of 4, Best of 2, and The Best for every active category.
 2. Admin creates the allowed time-penalty rules.
 3. Committee/admin uses signed-in competitor, lane, inspection, and timing pages.
 4. Resolve every under-minimum run before giving that team another attempt.

@@ -34,16 +34,21 @@ export function stageMaximum(timing: CategoryTiming, stage: CompetitionStage): n
   return timing.stageMaxTimeMs?.[stage] ?? timing.maxTimeMs;
 }
 
+export function stageAttemptMaximum(timing: CategoryTiming, stage: CompetitionStage): number {
+  return timing.stageMaxAttempts?.[stage] ?? 2;
+}
+
 export async function putCategoryTiming(
   category: string,
   minTimeMs: number,
   stageMaxTimeMs: Record<CompetitionStage, number>,
+  stageMaxAttempts: Record<CompetitionStage, number>,
   byUser: string
 ): Promise<CategoryTiming> {
   const item: CategoryTiming & { PK: string; SK: string } = {
     ...categoryKey(category), category, minTimeMs,
     // Retained for old clients/readers; Round 1 is the migration fallback.
-    maxTimeMs: stageMaxTimeMs.ROUND_1, stageMaxTimeMs,
+    maxTimeMs: stageMaxTimeMs.ROUND_1, stageMaxTimeMs, stageMaxAttempts,
     updatedAt: new Date().toISOString(), updatedBy: byUser,
   };
   await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));

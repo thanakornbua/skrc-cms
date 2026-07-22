@@ -14,3 +14,14 @@ export function consumedStageBudgetMs(runs: RunRecord[], corrections: TimeCorrec
     return sum + (typeof elapsed === "number" ? Math.min(elapsed, run.maxTimeMs) : run.maxTimeMs);
   }, 0);
 }
+
+export function stageAttemptState(runs: RunRecord[], corrections: TimeCorrection[], stage: CompetitionStage): { consumed: number; unresolved: boolean } {
+  const stageRuns = runs.filter((run) => (run.stage ?? "ROUND_1") === stage);
+  const corrected = new Set(corrections.filter((item) => (item.stage ?? "ROUND_1") === stage).map((item) => item.runId));
+  return {
+    consumed: stageRuns.filter((run) =>
+      run.status === "COMPLETE" || run.status === "TIMED_OUT" || run.status === "INVALID" || corrected.has(run.runId)
+    ).length,
+    unresolved: stageRuns.some((run) => run.status === "UNDER_REVIEW" && !corrected.has(run.runId)),
+  };
+}

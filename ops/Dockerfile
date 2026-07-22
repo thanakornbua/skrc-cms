@@ -1,5 +1,5 @@
 # Build context is the repo root (see ops/docker-compose.yml).
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json* ./
 RUN npm install
@@ -7,7 +7,7 @@ COPY backend/tsconfig.json ./
 COPY backend/src ./src
 RUN npm run build
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY backend/package.json backend/package-lock.json* ./

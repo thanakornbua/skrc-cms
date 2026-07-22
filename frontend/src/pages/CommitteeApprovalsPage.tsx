@@ -8,22 +8,10 @@ import { t } from "../i18n";
 
 interface PendingItem {
   sub: string;
-  name: string;
   teamName: string;
   category: string;
-  school?: string;
-  advisorName?: string;
-  advisorPhone?: string;
-  advisorEmail?: string;
   contactPhone: string;
   contactEmail: string;
-  student1NameThai?: string;
-  student1NameEnglish?: string;
-  student2NameThai?: string;
-  student2NameEnglish?: string;
-  student3NameThai?: string;
-  student3NameEnglish?: string;
-  pdpaConsent?: { accepted: true; at: string; deleteBy: string };
   createdAt: string;
 }
 
@@ -106,17 +94,6 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
           <p>
             {item.contactEmail} · {item.contactPhone}
           </p>
-          <p>
-            {t("โรงเรียน", "School")}: {item.school || "—"} · {t("อาจารย์ที่ปรึกษา", "Advisor")}: {item.advisorName ?? "—"} ({item.advisorPhone ?? "—"}) · {item.advisorEmail ?? "—"}
-          </p>
-          <div className="student-review-grid">
-            <div><span className="section-kicker">STUDENT 01 · LEADER</span><strong lang="th">{item.student1NameThai ?? "—"}</strong><span>{item.student1NameEnglish ?? "—"}</span></div>
-            <div><span className="section-kicker">STUDENT 02</span><strong lang="th">{item.student2NameThai ?? "—"}</strong><span>{item.student2NameEnglish ?? "—"}</span></div>
-            <div><span className="section-kicker">STUDENT 03</span><strong lang="th">{item.student3NameThai ?? "—"}</strong><span>{item.student3NameEnglish ?? "—"}</span></div>
-          </div>
-          {item.pdpaConsent
-            ? <p className="consent-proof"><span className="status-badge success">PDPA CONSENTED</span> <span className="technical">{item.pdpaConsent.at}</span> · {t("ลบภายใน", "delete by")} <span className="technical">{item.pdpaConsent.deleteBy}</span></p>
-            : <div className="error-banner">{t("ไม่มีหลักฐานความยินยอม PDPA — ไม่สามารถอนุมัติได้", "Missing PDPA consent — approval blocked")}</div>}
           {rejectingSub === item.sub ? (
             <div className="field">
               <label htmlFor={`reject-reason-${item.sub}`}>{t("เหตุผลที่ไม่อนุมัติ", "Rejection reason")}</label>
@@ -149,7 +126,7 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
             </div>
           ) : (
             <div className="button-row">
-              <button type="button" disabled={busySub === item.sub || !item.pdpaConsent} onClick={() => handleApprove(item.sub)}>
+              <button type="button" disabled={busySub === item.sub} onClick={() => handleApprove(item.sub)}>
                 {t("อนุมัติ", "Approve")}
               </button>
               <button
