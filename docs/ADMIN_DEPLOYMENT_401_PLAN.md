@@ -28,7 +28,9 @@ Ensure a fresh Cognito administrator receives `200` from `GET /deployment/status
 
 ## Deployment record
 
-- Control Lambda updated: `2026-07-22T06:26:21.441Z`, runtime `nodejs22.x`.
+- Source commit: `b51787bd1f6b6fdfff55ad7ad2f8cf31440bafa2` (`Harden deployment control authentication`).
+- Control Lambda updated: `2026-07-22T06:28:34.471Z`, runtime `nodejs22.x`.
+- Amplify job `18` succeeded for the same source commit at `2026-07-22T06:30:12.476+07:00`.
 - Sanitized API evidence before frontend release: no bearer header returned `401 UNAUTHORIZED` and logged `missing_token`; an intentionally invalid bearer value returned `401 UNAUTHORIZED` and logged `invalid_signature`.
 - No bearer values, claims, usernames, email addresses, subjects, or refresh tokens were recorded.
 - Frontend and source commit / Amplify job ID are populated after the release. Event mode remains `registration`.
