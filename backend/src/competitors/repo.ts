@@ -112,7 +112,7 @@ export interface CheckInResult {
 
 type CompetitorStatusResult = CompetitorRecord["status"];
 
-export async function checkIn(competitorId: string): Promise<CheckInResult> {
+export async function checkIn(competitorId: string, byUser: string): Promise<CheckInResult> {
   const existing = await getCompetitor(competitorId);
   if (!existing) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
 
@@ -130,12 +130,13 @@ export async function checkIn(competitorId: string): Promise<CheckInResult> {
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: keyComp(competitorId),
-        UpdateExpression: "SET #status = :checkedIn, checkedInAt = :at, GSI1SK = :gsi1sk",
+        UpdateExpression: "SET #status = :checkedIn, checkedInAt = :at, checkedInBy = :byUser, GSI1SK = :gsi1sk",
         ConditionExpression: "#status = :registered",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: {
           ":checkedIn": "CHECKED_IN",
           ":at": checkedInAt,
+          ":byUser": byUser,
           ":registered": "REGISTERED",
           ":gsi1sk": `${existing.category}#CHECKED_IN#${competitorId}`,
         },

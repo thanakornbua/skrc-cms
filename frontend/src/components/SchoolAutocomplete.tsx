@@ -16,11 +16,13 @@ interface Props {
   id: string;
   value: string;
   onChange: (value: string) => void;
+  required?: boolean;
+  lang?: string;
   "aria-invalid"?: true;
   "aria-describedby"?: string;
 }
 
-export default function SchoolAutocomplete({ id, value, onChange, ...aria }: Props) {
+export default function SchoolAutocomplete({ id, value, onChange, required, lang, ...aria }: Props) {
   const [schools, setSchools] = useState<string[] | null>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -67,6 +69,8 @@ export default function SchoolAutocomplete({ id, value, onChange, ...aria }: Pro
         aria-controls={listboxId}
         aria-autocomplete="list"
         autoComplete="off"
+        required={required}
+        lang={lang}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);

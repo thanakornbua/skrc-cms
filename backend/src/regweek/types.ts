@@ -14,6 +14,7 @@ export interface ApprovalInfo {
 }
 
 export type RegistrationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type CertificateLanguage = "THAI" | "ENGLISH" | "BILINGUAL";
 
 export interface PdpaConsent {
   accepted: true;
@@ -39,6 +40,12 @@ export interface RegistrationRecord extends StudentNames {
   name: string;
   teamName: string;
   category: Category;
+  school: string;
+  certificateLanguage: CertificateLanguage;
+  advisorNameThai: string;
+  advisorNameEnglish: string;
+  advisorEmail: string;
+  advisorPhone: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsent: PdpaConsent;
@@ -62,6 +69,12 @@ export interface CompetitorRecord extends StudentNames {
   name: string;
   teamName: string;
   category: Category;
+  school: string;
+  certificateLanguage: CertificateLanguage;
+  advisorNameThai: string;
+  advisorNameEnglish: string;
+  advisorEmail: string;
+  advisorPhone: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsent: PdpaConsent;
@@ -69,6 +82,7 @@ export interface CompetitorRecord extends StudentNames {
   status: CompetitorStatus;
   disqualified: DisqualifiedInfo;
   checkedInAt: string | null;
+  checkedInBy: string | null;
   inspectedAt: string | null;
   createdAt: string;
 }

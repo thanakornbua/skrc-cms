@@ -13,7 +13,9 @@ export interface CompetitorRecord {
   teamName: string;
   category: string;
   school: string;
-  advisorName: string;
+  certificateLanguage: "THAI" | "ENGLISH" | "BILINGUAL";
+  advisorNameThai: string;
+  advisorNameEnglish: string;
   advisorPhone: string;
   advisorEmail: string;
   contactEmail: string;
@@ -37,6 +39,7 @@ export interface CompetitorRecord {
   status: CompetitorStatus;
   disqualified: DisqualifiedInfo;
   checkedInAt: string | null;
+  checkedInBy: string | null;
   inspectedAt: string | null;
   createdAt: string;
 }

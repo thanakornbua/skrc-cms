@@ -12,6 +12,7 @@ import { stampCompetitorId } from "./cognito.js";
 import type {
   ApprovalInfo,
   Category,
+  CertificateLanguage,
   CompetitorRecord,
   PdpaConsent,
   RegistrationRecord,
@@ -40,6 +41,12 @@ interface RawRegistrationItem {
   name: string;
   teamName: string;
   category: Category;
+  school?: string;
+  certificateLanguage?: CertificateLanguage;
+  advisorNameThai?: string;
+  advisorNameEnglish?: string;
+  advisorEmail?: string;
+  advisorPhone?: string;
   contactEmail: string;
   contactPhone: string;
   student1NameThai: string;
@@ -62,6 +69,12 @@ function fromRawRegistration(item: RawRegistrationItem): RegistrationRecord {
     name: item.name,
     teamName: item.teamName,
     category: item.category,
+    school: item.school ?? "",
+    certificateLanguage: item.certificateLanguage ?? "BILINGUAL",
+    advisorNameThai: item.advisorNameThai ?? "",
+    advisorNameEnglish: item.advisorNameEnglish ?? "",
+    advisorEmail: item.advisorEmail ?? "",
+    advisorPhone: item.advisorPhone ?? "",
     contactEmail: item.contactEmail,
     contactPhone: item.contactPhone,
     student1NameThai: item.student1NameThai,
@@ -102,6 +115,12 @@ export async function createRegistration(input: StudentNames & {
   name: string;
   teamName: string;
   category: Category;
+  school: string;
+  certificateLanguage: CertificateLanguage;
+  advisorNameThai: string;
+  advisorNameEnglish: string;
+  advisorEmail: string;
+  advisorPhone: string;
   contactEmail: string;
   contactPhone: string;
   pdpaConsentVersion: string;
@@ -136,6 +155,12 @@ export async function createRegistration(input: StudentNames & {
           name: input.name,
           teamName: input.teamName,
           category: input.category,
+          school: input.school,
+          certificateLanguage: input.certificateLanguage,
+          advisorNameThai: input.advisorNameThai,
+          advisorNameEnglish: input.advisorNameEnglish,
+          advisorEmail: input.advisorEmail,
+          advisorPhone: input.advisorPhone,
           contactEmail: input.contactEmail,
           contactPhone: input.contactPhone,
           student1NameThai: input.student1NameThai,
@@ -297,6 +322,12 @@ async function createCompetitorItem(
           name: reg.name,
           teamName: reg.teamName,
           category: reg.category,
+          school: reg.school,
+          certificateLanguage: reg.certificateLanguage,
+          advisorNameThai: reg.advisorNameThai,
+          advisorNameEnglish: reg.advisorNameEnglish,
+          advisorEmail: reg.advisorEmail,
+          advisorPhone: reg.advisorPhone,
           contactEmail: reg.contactEmail,
           contactPhone: reg.contactPhone,
           student1NameThai: reg.student1NameThai,
@@ -310,6 +341,7 @@ async function createCompetitorItem(
           status: "REGISTERED",
           disqualified: { bool: false, reason: null, byUser: null, at: null },
           checkedInAt: null,
+          checkedInBy: null,
           inspectedAt: null,
           createdAt,
           GSI1PK: "COMPETITOR",

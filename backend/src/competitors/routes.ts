@@ -136,7 +136,7 @@ competitorsRouter.post(
   requireRole("admin"),
   async (req, res, next) => {
     try {
-      const result = await checkIn(req.params.id);
+      const result = await checkIn(req.params.id, req.user!.username);
       res.status(200).json({
         status: result.status,
         checkedInAt: result.checkedInAt,
@@ -149,13 +149,15 @@ competitorsRouter.post(
 );
 
 const COMPETITOR_CSV_COLUMNS = [
-  "competitorId", "status", "teamName", "category", "contactEmail", "contactPhone",
+  "competitorId", "status", "teamName", "category", "school", "certificateLanguage",
+  "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail", "contactPhone",
   "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
   "student3NameThai", "student3NameEnglish", "pdpaConsent", "cognitoSub",
-  "checkedInAt", "inspectedAt", "disqualified", "createdAt",
+  "checkedInAt", "checkedInBy", "inspectedAt", "disqualified", "createdAt",
 ];
 const REGISTRATION_CSV_COLUMNS = [
-  "PK", "status", "teamName", "category", "contactEmail", "contactPhone",
+  "PK", "status", "teamName", "category", "school", "certificateLanguage",
+  "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail", "contactPhone",
   "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
   "student3NameThai", "student3NameEnglish", "pdpaConsent", "rejection", "approval", "createdAt",
 ];
