@@ -19,6 +19,7 @@ Ensure a fresh Cognito administrator receives `200` from `GET /deployment/status
 4. UI errors distinguish expired session (`401`), insufficient admin role (`403`), network failure, and unexpected server failure.
 5. The HTTP API provisioning creates `OPTIONS /{proxy+}` above its `$default` Lambda route. Its Lambda handler returns `204` before authentication so API Gateway can add the configured CORS preflight response.
 6. The control role grants `GetApp` on the exact Amplify app ARN and branch/job operations on child ARNs; this prevents an authenticated status request from failing with an IAM `500`.
+7. Mode deployments now poll their Amplify job, verify the cache-busted live manifest, and fully reload to `/scoreboard` after the requested mode is live. Every open tab also compares its compiled mode with the live manifest and blocks stale navigation until reloaded.
 
 ## Verification procedure
 
