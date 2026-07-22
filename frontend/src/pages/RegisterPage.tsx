@@ -36,6 +36,9 @@ export default function RegisterPage() {
   const [student2NameEnglish, setStudent2NameEnglish] = useState("");
   const [student3NameThai, setStudent3NameThai] = useState("");
   const [student3NameEnglish, setStudent3NameEnglish] = useState("");
+  const [student1FoodAllergy, setStudent1FoodAllergy] = useState("NONE");
+  const [student2FoodAllergy, setStudent2FoodAllergy] = useState("NONE");
+  const [student3FoodAllergy, setStudent3FoodAllergy] = useState("NONE");
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const uid = useId();
@@ -104,7 +107,7 @@ export default function RegisterPage() {
           teamName, category, student1NameThai, student1NameEnglish,
           school, certificateLanguage, advisorNameThai, advisorNameEnglish, advisorEmail, advisorPhone,
           contactEmail, contactPhone, student2NameThai, student2NameEnglish,
-          student3NameThai, student3NameEnglish,
+          student3NameThai, student3NameEnglish, student1FoodAllergy, student2FoodAllergy, student3FoodAllergy,
           pdpaConsent: true,
           pdpaAuthorityConfirmed: true,
         }),
@@ -196,6 +199,7 @@ export default function RegisterPage() {
           <div className="field"><label htmlFor={fid("contactEmail")}>{t("อีเมลติดต่อ", "Contact email")}</label><input id={fid("contactEmail")} type="email" autoComplete="email" required value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} aria-invalid={fieldErrors.contactEmail ? true : undefined} aria-describedby={fieldErrors.contactEmail ? errId("contactEmail") : undefined} />{fieldErrors.contactEmail && <small id={errId("contactEmail")}>{fieldErrors.contactEmail}</small>}</div>
           <div className="field"><label htmlFor={fid("contactPhone")}>{t("หมายเลขโทรศัพท์", "Phone number")}</label><input id={fid("contactPhone")} type="tel" inputMode="tel" autoComplete="tel" required value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} aria-invalid={fieldErrors.contactPhone ? true : undefined} aria-describedby={fieldErrors.contactPhone ? errId("contactPhone") : undefined} />{fieldErrors.contactPhone && <small id={errId("contactPhone")}>{fieldErrors.contactPhone}</small>}</div>
         </div>
+        <div className="field"><label htmlFor={fid("student1FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student1FoodAllergy")} required maxLength={500} value={student1FoodAllergy} onChange={(e) => setStudent1FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student1FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student1FoodAllergy ? errId("student1FoodAllergy") : undefined} />{fieldErrors.student1FoodAllergy && <small id={errId("student1FoodAllergy")}>{fieldErrors.student1FoodAllergy}</small>}</div>
       </section>
 
       <section className="form-section">
@@ -204,6 +208,7 @@ export default function RegisterPage() {
           <div className="field"><label htmlFor={fid("student2NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student2NameThai")} lang="th" required value={student2NameThai} onChange={(e) => setStudent2NameThai(e.target.value)} aria-invalid={fieldErrors.student2NameThai ? true : undefined} aria-describedby={fieldErrors.student2NameThai ? errId("student2NameThai") : undefined} />{fieldErrors.student2NameThai && <small id={errId("student2NameThai")}>{fieldErrors.student2NameThai}</small>}</div>
           <div className="field"><label htmlFor={fid("student2NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student2NameEnglish")} required value={student2NameEnglish} onChange={(e) => setStudent2NameEnglish(e.target.value)} aria-invalid={fieldErrors.student2NameEnglish ? true : undefined} aria-describedby={fieldErrors.student2NameEnglish ? errId("student2NameEnglish") : undefined} />{fieldErrors.student2NameEnglish && <small id={errId("student2NameEnglish")}>{fieldErrors.student2NameEnglish}</small>}</div>
         </div>
+        <div className="field"><label htmlFor={fid("student2FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student2FoodAllergy")} required maxLength={500} value={student2FoodAllergy} onChange={(e) => setStudent2FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student2FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student2FoodAllergy ? errId("student2FoodAllergy") : undefined} />{fieldErrors.student2FoodAllergy && <small id={errId("student2FoodAllergy")}>{fieldErrors.student2FoodAllergy}</small>}</div>
       </section>
 
       <section className="form-section">
@@ -212,6 +217,7 @@ export default function RegisterPage() {
           <div className="field"><label htmlFor={fid("student3NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student3NameThai")} lang="th" required value={student3NameThai} onChange={(e) => setStudent3NameThai(e.target.value)} aria-invalid={fieldErrors.student3NameThai ? true : undefined} aria-describedby={fieldErrors.student3NameThai ? errId("student3NameThai") : undefined} />{fieldErrors.student3NameThai && <small id={errId("student3NameThai")}>{fieldErrors.student3NameThai}</small>}</div>
           <div className="field"><label htmlFor={fid("student3NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student3NameEnglish")} required value={student3NameEnglish} onChange={(e) => setStudent3NameEnglish(e.target.value)} aria-invalid={fieldErrors.student3NameEnglish ? true : undefined} aria-describedby={fieldErrors.student3NameEnglish ? errId("student3NameEnglish") : undefined} />{fieldErrors.student3NameEnglish && <small id={errId("student3NameEnglish")}>{fieldErrors.student3NameEnglish}</small>}</div>
         </div>
+        <div className="field"><label htmlFor={fid("student3FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student3FoodAllergy")} required maxLength={500} value={student3FoodAllergy} onChange={(e) => setStudent3FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student3FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student3FoodAllergy ? errId("student3FoodAllergy") : undefined} />{fieldErrors.student3FoodAllergy && <small id={errId("student3FoodAllergy")}>{fieldErrors.student3FoodAllergy}</small>}</div>
       </section>
 
       <div className="notice-banner consent-summary"><strong>{t("ยอมรับข้อตกลง PDPA แล้ว", "PDPA agreement accepted")}</strong><button className="secondary" type="button" onClick={() => setAgreementAccepted(false)}>{t("อ่านอีกครั้ง", "Review")}</button></div>

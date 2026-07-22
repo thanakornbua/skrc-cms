@@ -41,10 +41,11 @@ Never call the wrong service from the wrong era — the frontend switches which 
     "contactEmail": "leader@example.com", "contactPhone": "string",
     "student2NameThai": "string", "student2NameEnglish": "string",
     "student3NameThai": "string", "student3NameEnglish": "string",
+    "student1FoodAllergy": "NONE or details", "student2FoodAllergy": "NONE or details", "student3FoodAllergy": "NONE or details",
     "pdpaConsent": true, "pdpaAuthorityConfirmed": true
   }
   ```
-  `teamName` is the public competition identity; category must be configured. The school is selected or completed from the official `school68.xlsx` catalogue, but free-text entry remains supported for a school not yet listed. Advisor and all three student names are required in Thai and English. Student 1 is the team leader and correspondence contact. The standalone bilingual notice is shown before authentication or registration fields. `pdpaConsent` and `pdpaAuthorityConfirmed` must explicitly be `true`; the server records the policy version, language, consent time, authority declaration, and six-calendar-month deletion deadline. Registration is free.
+  `teamName` is the public competition identity; category must be configured. The school is selected or completed from the official `school68.xlsx` catalogue, but free-text entry remains supported for a school not yet listed. Advisor and all three student names are required in Thai and English. Each student must explicitly declare `NONE` or their food-allergy details. Student 1 is the team leader and correspondence contact. The standalone bilingual notice is shown before authentication or registration fields. `pdpaConsent` and `pdpaAuthorityConfirmed` must explicitly be `true`; the server records the policy version, language, consent time, authority declaration, and six-calendar-month deletion deadline. Registration is free.
 - **Response 201:** `{ "competitorId": null, "status": "PENDING_APPROVAL" }` (no `competitorId` yet — minted at approval).
 - **Browser preflight:** `OPTIONS /register` returns an empty `204`; the browser then sends the authenticated `POST`, which returns the `201` above.
 - **Email side effect:** after the Registration item is committed, a DynamoDB Stream worker asynchronously sends a bilingual receipt to `contactEmail`. Delivery failure never rolls back registration and is retried independently.

@@ -35,7 +35,14 @@ export interface StudentNames {
   student3NameEnglish: string;
 }
 
-export interface RegistrationRecord extends StudentNames {
+/** An explicit declaration such as "NONE" or the food/allergen details. */
+export interface StudentFoodAllergies {
+  student1FoodAllergy: string;
+  student2FoodAllergy: string;
+  student3FoodAllergy: string;
+}
+
+export interface RegistrationRecord extends StudentNames, StudentFoodAllergies {
   sub: string;
   name: string;
   teamName: string;
@@ -64,7 +71,7 @@ export interface DisqualifiedInfo {
   at: string | null;
 }
 
-export interface CompetitorRecord extends StudentNames {
+export interface CompetitorRecord extends StudentNames, StudentFoodAllergies {
   competitorId: string;
   name: string;
   teamName: string;

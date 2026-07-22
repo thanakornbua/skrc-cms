@@ -16,6 +16,7 @@ import type {
   CompetitorRecord,
   PdpaConsent,
   RegistrationRecord,
+  StudentFoodAllergies,
   StudentNames,
 } from "./types.js";
 
@@ -55,6 +56,9 @@ interface RawRegistrationItem {
   student2NameEnglish: string;
   student3NameThai: string;
   student3NameEnglish: string;
+  student1FoodAllergy?: string;
+  student2FoodAllergy?: string;
+  student3FoodAllergy?: string;
   pdpaConsent: PdpaConsent;
   status: RegistrationRecord["status"];
   rejection: RegistrationRecord["rejection"];
@@ -83,6 +87,9 @@ function fromRawRegistration(item: RawRegistrationItem): RegistrationRecord {
     student2NameEnglish: item.student2NameEnglish,
     student3NameThai: item.student3NameThai,
     student3NameEnglish: item.student3NameEnglish,
+    student1FoodAllergy: item.student1FoodAllergy ?? "NONE",
+    student2FoodAllergy: item.student2FoodAllergy ?? "NONE",
+    student3FoodAllergy: item.student3FoodAllergy ?? "NONE",
     pdpaConsent: item.pdpaConsent,
     status: item.status,
     rejection: item.rejection ?? null,
@@ -110,7 +117,7 @@ export async function getCompetitor(
   return (result.Item as CompetitorRecord | undefined) ?? null;
 }
 
-export async function createRegistration(input: StudentNames & {
+export async function createRegistration(input: StudentNames & StudentFoodAllergies & {
   sub: string;
   name: string;
   teamName: string;
@@ -169,6 +176,9 @@ export async function createRegistration(input: StudentNames & {
           student2NameEnglish: input.student2NameEnglish,
           student3NameThai: input.student3NameThai,
           student3NameEnglish: input.student3NameEnglish,
+          student1FoodAllergy: input.student1FoodAllergy,
+          student2FoodAllergy: input.student2FoodAllergy,
+          student3FoodAllergy: input.student3FoodAllergy,
           pdpaConsent,
           status: "PENDING_APPROVAL",
           rejection: null,
@@ -336,6 +346,9 @@ async function createCompetitorItem(
           student2NameEnglish: reg.student2NameEnglish,
           student3NameThai: reg.student3NameThai,
           student3NameEnglish: reg.student3NameEnglish,
+          student1FoodAllergy: reg.student1FoodAllergy,
+          student2FoodAllergy: reg.student2FoodAllergy,
+          student3FoodAllergy: reg.student3FoodAllergy,
           pdpaConsent: reg.pdpaConsent,
           cognitoSub: reg.sub,
           status: "REGISTERED",

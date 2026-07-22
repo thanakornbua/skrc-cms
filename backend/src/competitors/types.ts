@@ -26,6 +26,9 @@ export interface CompetitorRecord {
   student2NameEnglish: string;
   student3NameThai: string;
   student3NameEnglish: string;
+  student1FoodAllergy: string;
+  student2FoodAllergy: string;
+  student3FoodAllergy: string;
   pdpaConsent: {
     accepted: true;
     version: string;

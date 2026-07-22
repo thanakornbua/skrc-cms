@@ -19,6 +19,9 @@ const validRegistration = {
   student2NameEnglish: "Student Two",
   student3NameThai: "นักเรียน สาม",
   student3NameEnglish: "Student Three",
+  student1FoodAllergy: "NONE",
+  student2FoodAllergy: "NONE",
+  student3FoodAllergy: "Peanut",
   pdpaConsent: true,
   pdpaAuthorityConfirmed: true,
 } as const;
@@ -30,6 +33,7 @@ test("registration accepts every applicant-supplied field in ltrc_application.do
 test("registration requires every template identity and advisor field", () => {
   for (const field of [
     "student2NameThai", "student2NameEnglish", "student3NameThai", "student3NameEnglish",
+    "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy",
   ] as const) {
     const invalid = { ...validRegistration } as Record<string, unknown>;
     delete invalid[field];

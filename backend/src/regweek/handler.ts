@@ -30,6 +30,7 @@ const englishName = z.string().trim().min(2).max(120).refine(
   "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name"
 );
 const phoneNumber = z.string().trim().regex(/^[0-9+() -]{8,20}$/, "กรุณากรอกหมายเลขโทรศัพท์ที่ถูกต้อง / Invalid phone number");
+const foodAllergy = z.string().trim().min(1).max(500);
 
 export const registerSchema = z.object({
   teamName: z.string().trim().min(2).max(100),
@@ -48,6 +49,9 @@ export const registerSchema = z.object({
   student2NameEnglish: englishName,
   student3NameThai: thaiName,
   student3NameEnglish: englishName,
+  student1FoodAllergy: foodAllergy,
+  student2FoodAllergy: foodAllergy,
+  student3FoodAllergy: foodAllergy,
   pdpaConsent: z.literal(true, {
     errorMap: () => ({ message: "ต้องยอมรับความยินยอม PDPA / PDPA consent is required" }),
   }),
@@ -101,6 +105,9 @@ async function handleRegister(
     student2NameEnglish: input.student2NameEnglish,
     student3NameThai: input.student3NameThai,
     student3NameEnglish: input.student3NameEnglish,
+    student1FoodAllergy: input.student1FoodAllergy,
+    student2FoodAllergy: input.student2FoodAllergy,
+    student3FoodAllergy: input.student3FoodAllergy,
     pdpaConsentVersion: PDPA_CONSENT_VERSION,
     pdpaAuthorityConfirmed: input.pdpaAuthorityConfirmed,
   });
@@ -172,6 +179,9 @@ async function handlePending(
       advisorNameEnglish: r.advisorNameEnglish,
       advisorEmail: r.advisorEmail,
       advisorPhone: r.advisorPhone,
+      student1FoodAllergy: r.student1FoodAllergy,
+      student2FoodAllergy: r.student2FoodAllergy,
+      student3FoodAllergy: r.student3FoodAllergy,
       contactPhone: r.contactPhone,
       contactEmail: r.contactEmail,
       createdAt: r.createdAt,
@@ -194,14 +204,16 @@ const EXPORT_COLUMNS: Record<string, string[]> = {
     "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail",
     "contactPhone", "student1NameThai", "student1NameEnglish",
     "student2NameThai", "student2NameEnglish", "student3NameThai",
-    "student3NameEnglish", "pdpaConsent", "createdAt",
+    "student3NameEnglish", "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy",
+    "pdpaConsent", "createdAt",
   ],
   competitors: [
     "competitorId", "status", "teamName", "category", "school", "certificateLanguage",
     "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail",
     "contactPhone", "student1NameThai", "student1NameEnglish",
     "student2NameThai", "student2NameEnglish", "student3NameThai",
-    "student3NameEnglish", "pdpaConsent", "cognitoSub", "checkedInAt", "checkedInBy", "inspectedAt", "createdAt",
+    "student3NameEnglish", "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy",
+    "pdpaConsent", "cognitoSub", "checkedInAt", "checkedInBy", "inspectedAt", "createdAt",
   ],
 };
 

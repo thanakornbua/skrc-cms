@@ -13,6 +13,7 @@ build/
 .vscode/
 *.swp
 roster.csv
+exports/
 
 SKILL.md
 *PLAN.md

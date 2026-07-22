@@ -152,14 +152,14 @@ const COMPETITOR_CSV_COLUMNS = [
   "competitorId", "status", "teamName", "category", "school", "certificateLanguage",
   "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail", "contactPhone",
   "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
-  "student3NameThai", "student3NameEnglish", "pdpaConsent", "cognitoSub",
+  "student3NameThai", "student3NameEnglish", "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy", "pdpaConsent", "cognitoSub",
   "checkedInAt", "checkedInBy", "inspectedAt", "disqualified", "createdAt",
 ];
 const REGISTRATION_CSV_COLUMNS = [
   "PK", "status", "teamName", "category", "school", "certificateLanguage",
   "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone", "contactEmail", "contactPhone",
   "student1NameThai", "student1NameEnglish", "student2NameThai", "student2NameEnglish",
-  "student3NameThai", "student3NameEnglish", "pdpaConsent", "rejection", "approval", "createdAt",
+  "student3NameThai", "student3NameEnglish", "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy", "pdpaConsent", "rejection", "approval", "createdAt",
 ];
 
 function csvCell(value: unknown): string {
