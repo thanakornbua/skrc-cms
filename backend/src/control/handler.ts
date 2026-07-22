@@ -50,7 +50,10 @@ async function deploy(input: z.infer<typeof modeSchema>) {
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   try {
-    const user = await authenticate(event.headers.authorization);
+    // HTTP API commonly normalizes header names, but the event contract permits
+    // either casing. Keep this consistent with the registration Lambda so a
+    // valid browser token can never be mistaken for an absent one.
+    const user = await authenticate(event.headers.authorization ?? event.headers.Authorization);
     requireAdminOnly(user);
     if (event.requestContext.http.method === "GET" && event.rawPath === "/deployment/status") return jsonResponse(200, await status());
     if (event.requestContext.http.method === "POST" && event.rawPath === "/deployment/mode") {

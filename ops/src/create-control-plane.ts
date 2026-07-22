@@ -66,6 +66,7 @@ async function httpApi(target: string): Promise<{ id: string; endpoint: string }
 const roleArn = await role();
 await iam.send(new PutRolePolicyCommand({ RoleName: roleName, PolicyName: `${prefix}-control-plane`, PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
   { Effect: "Allow", Action: ["amplify:GetApp", "amplify:GetBranch", "amplify:GetJob", "amplify:UpdateBranch", "amplify:StartJob"], Resource: `arn:aws:amplify:${amplifyRegion}:${account}:apps/${amplifyAppId}/*` },
+  { Effect: "Allow", Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource: "arn:aws:logs:*:*:*" },
 ] }) }));
 const arn = await functionArn(roleArn); const createdApi = await httpApi(arn);
 try { await lambda.send(new AddPermissionCommand({ FunctionName: functionName, StatementId: "ApiGatewayInvoke", Action: "lambda:InvokeFunction", Principal: "apigateway.amazonaws.com", SourceArn: `arn:aws:execute-api:${region}:${account}:${createdApi.id}/*/*` })); }
