@@ -24,10 +24,7 @@ interface Competitor {
   aggregateTimeMs: number | null; penaltyTimeMs: number; finalTimeMs: number | null;
 }
 
-const EVENT_MODE = import.meta.env.VITE_EVENT_MODE;
-const AMPLIFY_CONSOLE_URL = import.meta.env.VITE_AMPLIFY_CONSOLE_URL;
-
-const seconds = (ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
+const seconds =(ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
 const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
 /** Semantic status-badge class per run outcome (see status-badge in CSS). */
 const RUN_BADGE: Record<Run["status"], string> = {
@@ -240,14 +237,14 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     }
   }
 
-  return <div className="page page-wide">
+  return <div className="page page-mid">
     {busy && <LoadingScreen overlay label="กำลังดำเนินการ / Working…" />}
     <NavBar onSignOut={signOutAndReset} />
     <BrandHeader title="Timing and penalties" home="/admin" description="ตั้งค่าขอบเขตเวลา ตรวจผล และจัดการบทลงโทษ / Configure limits, review runs, and manage penalties" />
     {error && <div className="error-banner" role="alert">{error}</div>}
     {notice && <div className="notice-banner" role="status" aria-live="polite">{notice}</div>}
 
-    {role === "admin" && <div className="card-grid admin-config-grid">
+    {role === "admin" && <div className="admin-config-grid">
       <div className="card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
         {timings.map((item) => <div key={item.category}><strong>{item.category}</strong><div className="metric-grid">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · {item.stageMaxAttempts?.[stage] ?? 2} {t("ครั้ง", "tries")}</span></div>)}</div></div>)}
         <form onSubmit={saveTiming}>
@@ -277,21 +274,6 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         <p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p>
         <p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p>
         <div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div>
-      </div>
-      <div className="card">
-        <span className="section-kicker">EVENT MODE</span>
-        <h2>{EVENT_MODE ?? "unset"}</h2>
-        <p>{t("โหมดนี้กำหนดตอน build บน Amplify และเปลี่ยนรันไทม์ไม่ได้", "This is baked in at Amplify build time and cannot be changed at runtime.")}</p>
-        {EVENT_MODE !== "competition" && (
-          <p className="error-banner">
-            {t(
-              "พอร์ทัลจะไม่แสดงเวลาแข่งขันจนกว่าจะตั้งค่า VITE_EVENT_MODE=competition ใน Amplify แล้ว deploy ใหม่ (ดู ops/RUNBOOK.md)",
-              "The competitor portal cannot show times until VITE_EVENT_MODE=competition is set in Amplify and redeployed (see ops/RUNBOOK.md)."
-            )}
-          </p>
-        )}
-        {AMPLIFY_CONSOLE_URL && <div className="button-row"><a className="button-link" href={AMPLIFY_CONSOLE_URL} target="_blank" rel="noreferrer">{t("เปิดการตั้งค่า Amplify", "Open Amplify deployment settings")}</a></div>}
-        <p><small>{t("การเปลี่ยนโหมดจะเริ่ม build/deploy ใหม่ และมีผลเมื่อ job สำเร็จเท่านั้น", "Changing mode requires a new build/deploy and takes effect only after the job succeeds.")}</small></p>
       </div>
     </div>}
 

@@ -867,6 +867,18 @@ tbody tr:hover { background: var(--sunk); }
 .scan-result .warning-banner,
 .scan-result .notice-banner { margin: 0; }
 
+/* Balanced two-column station: scan console beside a persistent result panel
+   (an empty-state placeholder until a competitor is scanned). Grid gap owns the
+   spacing, so drop the cards' own bottom margin. Collapses to one column below. */
+.scan-layout > .card,
+.scan-layout > .empty-state { margin-bottom: 0; }
+.scan-empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  line-height: var(--leading-body);
+}
+
 /* ---- Timing station: run attempts & competition state ------------------ */
 
 .stage-hero {
