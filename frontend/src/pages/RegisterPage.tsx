@@ -11,6 +11,45 @@ import { t } from "../i18n";
 const CATEGORIES = ["Line Tracing - Open"];
 type Step = "loading" | "auth" | "confirm" | "form" | "submitted";
 
+/**
+ * Turns a Cognito/Amplify auth error into a clear message in the active locale.
+ * Notably, Cognito rejects a password that fails the policy — or, now that the
+ * pool flags common and previously-breached passwords, one that is too weak —
+ * so those cases get an actionable explanation instead of the raw SDK string.
+ */
+function describeAuthError(err: unknown): string {
+  const name = err instanceof Error ? err.name : "";
+  const message = err instanceof Error ? err.message : "";
+  switch (name) {
+    case "InvalidPasswordException":
+      // Cognito uses this exact phrasing for a common/compromised password.
+      if (/security reasons/i.test(message)) {
+        return t(
+          "รหัสผ่านนี้ถูกปฏิเสธเพราะเป็นรหัสที่คาดเดาง่ายหรือเคยรั่วไหล โปรดเลือกรหัสผ่านอื่น",
+          "That password was rejected because it's too common or has appeared in a data breach. Please choose a different password.",
+        );
+      }
+      return t(
+        "รหัสผ่านไม่ตรงตามข้อกำหนด: อย่างน้อย 12 ตัวอักษร พร้อมตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษ",
+        "Password doesn't meet the requirements: at least 12 characters with an uppercase letter, a lowercase letter, a number, and a symbol.",
+      );
+    case "UsernameExistsException":
+      return t("อีเมลนี้มีบัญชีอยู่แล้ว โปรดเข้าสู่ระบบแทน", "An account with this email already exists. Please sign in instead.");
+    case "NotAuthorizedException":
+      return t("อีเมลหรือรหัสผ่านไม่ถูกต้อง", "Incorrect email or password.");
+    case "UserNotFoundException":
+      return t("ไม่พบบัญชีสำหรับอีเมลนี้", "No account found for this email.");
+    case "CodeMismatchException":
+      return t("รหัสยืนยันไม่ถูกต้อง", "That confirmation code is incorrect.");
+    case "ExpiredCodeException":
+      return t("รหัสยืนยันหมดอายุแล้ว โปรดขอรหัสใหม่", "That confirmation code has expired. Please request a new one.");
+    case "LimitExceededException":
+      return t("พยายามหลายครั้งเกินไป โปรดลองอีกครั้งในภายหลัง", "Too many attempts. Please try again later.");
+    default:
+      return message || t("การยืนยันตัวตนล้มเหลว", "Authentication failed");
+  }
+}
+
 export default function RegisterPage() {
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [step, setStep] = useState<Step>("loading");
@@ -71,7 +110,7 @@ export default function RegisterPage() {
       setContactEmail(normalizedEmail);
       setStep("form");
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Authentication failed");
+      setAuthError(describeAuthError(err));
     } finally {
       setSubmitting(false);
     }
@@ -89,7 +128,7 @@ export default function RegisterPage() {
       setConfirmationCode("");
       setStep("form");
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "Confirmation failed");
+      setAuthError(describeAuthError(err));
     } finally {
       setSubmitting(false);
     }
@@ -154,8 +193,8 @@ export default function RegisterPage() {
             {authMode === "signup" && (
               <small id={errId("authPassword")}>
                 {t(
-                  "อย่างน้อย 12 ตัวอักษร ต้องมีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัว",
-                  "At least 12 characters, including uppercase, lowercase, a number, and a symbol"
+                  "อย่างน้อย 12 ตัวอักษร ต้องมีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัว และต้องไม่เป็นรหัสผ่านที่คาดเดาง่ายหรือเคยรั่วไหล",
+                  "At least 12 characters with an uppercase letter, a lowercase letter, a number, and a symbol — and not a common or previously-breached password"
                 )}
               </small>
             )}

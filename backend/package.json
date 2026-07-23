@@ -13,10 +13,12 @@
     "test:timing": "npm run build && node --test dist/timing/*.test.js",
     "test:regweek": "npm run build && node --test dist/regweek/*.test.js",
     "test:auth": "npm run build && node --test dist/auth/*.test.js",
+    "test:auth-email": "npm run build && node --test dist/auth-email/*.test.js",
     "test:control": "npm run build && node --test dist/control/*.test.js",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@aws-crypto/client-node": "^4.0.0",
     "@aws-sdk/client-amplify": "^3.1010.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.700.0",
     "@aws-sdk/client-dynamodb": "^3.700.0",

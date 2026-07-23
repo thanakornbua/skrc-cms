@@ -18,9 +18,12 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `EMAIL_REPLY_TO` | `skrc@skrc.suankularb.space` | Address used when a recipient replies. |
 | `PORTAL_URL` | `https://competitive.skrc.suankularb.space/portal` | Included in notification emails. |
 | `CONTACT_EMAIL` | `skrc@skrc.suankularb.space` | Human contact printed in no-reply messages. |
-| `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after the Cloudflare Email Sending domain is onboarded and DNS (SPF/DKIM) has propagated. |
+| `EMAIL_ENABLED` | `false` | Explicit deployment guard; enable only after the Cloudflare Email Sending domain is onboarded and DNS (SPF/DKIM) has propagated. Gates the notifications worker only — the CustomEmailSender password-reset path is active whenever the Cognito trigger is wired. |
+| `CUSTOM_EMAIL_KMS_KEY_ARN` | set by ops | KMS key Cognito uses to encrypt one-time codes for the CustomEmailSender Lambda. Created and injected by `ops/create-auth-email.ts`; not set by hand. |
 
 Neither service ever reads or stores a JWT signing secret — Cognito verification is JWKS-based (`aws-jwt-verify`, pool ID + client ID above).
+
+**Cognito password-reset email (CustomEmailSender):** `ops/create-auth-email.ts` (run after `create-auth`, needs `COGNITO_USER_POOL_ID` + the `CLOUDFLARE_*` vars above) provisions a KMS key + a Lambda and wires the pool's `CustomEmailSender` trigger, so Cognito's password-reset code is delivered as branded bilingual HTML through **Cloudflare Email Sending** rather than Cognito's default account. Enabling this routes *all* Cognito-originated emails through the Lambda; because sign-up is auto-confirmed (D13), only the forgot-password / resend-code flows actually fire.
 
 ## EC2 API only
 

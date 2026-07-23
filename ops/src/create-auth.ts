@@ -240,6 +240,9 @@ async function wirePreSignUpTrigger(poolId: string, functionArn: string): Promis
       },
       AutoVerifiedAttributes: pool.AutoVerifiedAttributes,
       AccountRecoverySetting: pool.AccountRecoverySetting,
+      // Preserve the pool's feature tier (e.g. Essentials, which flags common /
+      // breached passwords) — omitting it on UpdateUserPool can revert the tier.
+      UserPoolTier: pool.UserPoolTier,
       LambdaConfig: { ...pool.LambdaConfig, PreSignUp: functionArn },
     })
   );
