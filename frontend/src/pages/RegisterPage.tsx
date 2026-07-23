@@ -138,7 +138,28 @@ export default function RegisterPage() {
         {authError && <div className="error-banner" role="alert">{authError}</div>}
         <form onSubmit={handleAuthSubmit}>
           <div className="field"><label htmlFor={fid("authEmail")}>{t("อีเมล", "Email")}</label><input id={fid("authEmail")} type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div className="field"><label htmlFor={fid("authPassword")}>{t("รหัสผ่าน", "Password")}</label><input id={fid("authPassword")} type="password" autoComplete={authMode === "signup" ? "new-password" : "current-password"} required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <div className="field">
+            <label htmlFor={fid("authPassword")}>{t("รหัสผ่าน", "Password")}</label>
+            <input
+              id={fid("authPassword")}
+              type="password"
+              autoComplete={authMode === "signup" ? "new-password" : "current-password"}
+              required
+              minLength={authMode === "signup" ? 12 : undefined}
+              pattern={authMode === "signup" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{12,}" : undefined}
+              aria-describedby={authMode === "signup" ? errId("authPassword") : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {authMode === "signup" && (
+              <small id={errId("authPassword")}>
+                {t(
+                  "อย่างน้อย 12 ตัวอักษร ต้องมีตัวพิมพ์ใหญ่ ตัวพิมพ์เล็ก ตัวเลข และอักขระพิเศษอย่างละ 1 ตัว",
+                  "At least 12 characters, including uppercase, lowercase, a number, and a symbol"
+                )}
+              </small>
+            )}
+          </div>
           <div className="button-row"><button type="submit" disabled={submitting}>{authMode === "signup" ? t("สร้างบัญชี", "Create account") : t("เข้าสู่ระบบ", "Sign in")}</button></div>
         </form>
         <div className="button-row auth-switch"><button className="secondary" type="button" onClick={() => setAuthMode((mode) => mode === "signup" ? "signin" : "signup")}>{authMode === "signup" ? t("มีบัญชีแล้ว", "Sign in") : t("สร้างบัญชีใหม่", "Create account")}</button></div>
