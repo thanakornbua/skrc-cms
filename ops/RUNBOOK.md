@@ -25,7 +25,7 @@ Onboard `skrc.suankularb.space` onto Cloudflare Email Sending (Dashboard → Ema
 Service → Email Sending → Onboard Domain, or `npx wrangler email sending enable
 skrc.suankularb.space`) — this auto-adds the SPF and DKIM records; do not replace
 unrelated MX, forwarding, or inbound-mail records. Create a Cloudflare API token
-scoped to Email Sending only, store it as JSON (`{"apiToken":"..."}`) in AWS
+scoped to Email Sending only, store it as JSON (`{"apiKey":"..."}`) in AWS
 Secrets Manager, set `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` to its exact name and
 `CLOUDFLARE_ACCOUNT_ID` to the Cloudflare account ID, then set
 `EMAIL_ENABLED=true` only after DNS has propagated. Run `npm run create-table` to

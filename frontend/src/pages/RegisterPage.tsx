@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { confirmSignUp, getCurrentUser, signIn, signUp } from "aws-amplify/auth";
+import { getCurrentUser, signIn, signUp } from "aws-amplify/auth";
 import { ApiClientError, regweekJson } from "../api";
 import BrandHeader from "../components/BrandHeader";
 import LoadingScreen from "../components/LoadingScreen";
@@ -9,7 +9,7 @@ import SchoolAutocomplete from "../components/SchoolAutocomplete";
 import { t } from "../i18n";
 
 const CATEGORIES = ["Line Tracing - Open"];
-type Step = "loading" | "auth" | "confirm" | "form" | "submitted";
+type Step = "loading" | "auth" | "form" | "submitted";
 
 /**
  * Turns a Cognito/Amplify auth error into a clear message in the active locale.
@@ -36,13 +36,22 @@ function describeAuthError(err: unknown): string {
     case "UsernameExistsException":
       return t("อีเมลนี้มีบัญชีอยู่แล้ว โปรดเข้าสู่ระบบแทน", "An account with this email already exists. Please sign in instead.");
     case "NotAuthorizedException":
+      // Cognito reuses this name for a temporary lockout; telling those users
+      // "wrong password" makes them retry and extend their own lockout.
+      if (/attempts exceeded/i.test(message)) {
+        return t(
+          "พยายามเข้าสู่ระบบหลายครั้งเกินไป โปรดรอสักครู่แล้วลองใหม่",
+          "Too many sign-in attempts. Please wait a few minutes before trying again.",
+        );
+      }
       return t("อีเมลหรือรหัสผ่านไม่ถูกต้อง", "Incorrect email or password.");
+    case "UserNotConfirmedException":
+      return t(
+        "บัญชีนี้ยังไม่ได้รับการยืนยัน โปรดติดต่อทีมงาน",
+        "This account hasn't been confirmed. Please contact the organisers.",
+      );
     case "UserNotFoundException":
       return t("ไม่พบบัญชีสำหรับอีเมลนี้", "No account found for this email.");
-    case "CodeMismatchException":
-      return t("รหัสยืนยันไม่ถูกต้อง", "That confirmation code is incorrect.");
-    case "ExpiredCodeException":
-      return t("รหัสยืนยันหมดอายุแล้ว โปรดขอรหัสใหม่", "That confirmation code has expired. Please request a new one.");
     case "LimitExceededException":
       return t("พยายามหลายครั้งเกินไป โปรดลองอีกครั้งในภายหลัง", "Too many attempts. Please try again later.");
     default:
@@ -56,7 +65,6 @@ export default function RegisterPage() {
   const [authMode, setAuthMode] = useState<"signup" | "signin">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmationCode, setConfirmationCode] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -97,8 +105,15 @@ export default function RegisterPage() {
       setEmail(normalizedEmail);
       if (authMode === "signup") {
         const result = await signUp({ username: normalizedEmail, password, options: { userAttributes: { email: normalizedEmail } } });
+        // PreSignUp auto-confirms, so DONE is the only expected outcome. If the
+        // pool ever stops auto-confirming, no confirmation email is sent either
+        // (CustomEmailSender only templates password resets) — so a code screen
+        // would be a dead end. Surface it as an operator problem instead.
         if (result.nextStep.signUpStep !== "DONE") {
-          setStep("confirm");
+          setAuthError(t(
+            "ไม่สามารถเปิดใช้งานบัญชีได้โดยอัตโนมัติ โปรดติดต่อทีมงาน",
+            "Your account could not be activated automatically. Please contact the organisers.",
+          ));
           return;
         }
       }
@@ -108,24 +123,6 @@ export default function RegisterPage() {
         options: { authFlowType: "USER_PASSWORD_AUTH" },
       });
       setContactEmail(normalizedEmail);
-      setStep("form");
-    } catch (err) {
-      setAuthError(describeAuthError(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleConfirmation(event: FormEvent): Promise<void> {
-    event.preventDefault();
-    setAuthError(null);
-    setSubmitting(true);
-    try {
-      await confirmSignUp({ username: email, confirmationCode: confirmationCode.trim() });
-      await signIn({ username: email, password, options: { authFlowType: "USER_PASSWORD_AUTH" } });
-      setContactEmail(email);
-      setPassword("");
-      setConfirmationCode("");
       setStep("form");
     } catch (err) {
       setAuthError(describeAuthError(err));
@@ -202,21 +199,6 @@ export default function RegisterPage() {
           <div className="button-row"><button type="submit" disabled={submitting}>{authMode === "signup" ? t("สร้างบัญชี", "Create account") : t("เข้าสู่ระบบ", "Sign in")}</button></div>
         </form>
         <div className="button-row auth-switch"><button className="secondary" type="button" onClick={() => setAuthMode((mode) => mode === "signup" ? "signin" : "signup")}>{authMode === "signup" ? t("มีบัญชีแล้ว", "Sign in") : t("สร้างบัญชีใหม่", "Create account")}</button></div>
-      </div>
-    </div>;
-  }
-
-  if (step === "confirm") {
-    return <div className="page auth-page">
-      {submitting && <LoadingScreen overlay label="กำลังยืนยันบัญชี / Confirming account…" />}
-      <NavBar />
-      <BrandHeader title="Confirm account" description="ตรวจสอบอีเมลเพื่อรับรหัสยืนยัน / Check your email for the confirmation code" />
-      <div className="card auth-card">
-        {authError && <div className="error-banner" role="alert">{authError}</div>}
-        <form onSubmit={handleConfirmation}>
-          <div className="field"><label htmlFor={fid("confirmationCode")}>{t("รหัสยืนยัน", "Confirmation code")}</label><input id={fid("confirmationCode")} inputMode="numeric" autoComplete="one-time-code" required value={confirmationCode} onChange={(event) => setConfirmationCode(event.target.value)} /></div>
-          <div className="button-row"><button type="submit" disabled={submitting}>{t("ยืนยันและเข้าสู่ระบบ", "Confirm and sign in")}</button><button type="button" className="secondary" onClick={() => setStep("auth")}>{t("ย้อนกลับ", "Back")}</button></div>
-        </form>
       </div>
     </div>;
   }

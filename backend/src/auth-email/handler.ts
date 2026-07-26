@@ -36,26 +36,33 @@ interface CloudflareSendResponse {
   result?: { message_id?: string };
 }
 
-/** Only the password-recovery flows deliver a code a competitor types back into
- *  the portal. Sign-up is auto-confirmed, so no other source is expected — but
- *  once CustomEmailSender is enabled, every Cognito email routes here, so an
- *  unhandled source must fail loudly rather than silently drop the email. */
+/** Only forgot-password delivers a code a competitor types back into the portal
+ *  — a forgot-password resend arrives as another ForgotPassword event, while
+ *  ResendCode belongs to sign-up confirmation (a 24h code, different copy) and
+ *  is unreachable while PreSignUp auto-confirms. Once CustomEmailSender is
+ *  enabled every Cognito email routes here, and a throw fails the caller's
+ *  Cognito API call rather than just the email, so unhandled sources are logged
+ *  and skipped instead. */
 const CODE_TRIGGER_SOURCES = new Set([
   "CustomEmailSender_ForgotPassword",
-  "CustomEmailSender_ResendCode",
 ]);
+
+/** Cognito abandons a user-pool trigger after ~5s, so the outbound send gets a
+ *  budget short enough to leave room for the KMS decrypt and a cold start. */
+const SEND_TIMEOUT_MS = 3000;
 
 async function sendViaCloudflare(
   deps: AuthEmailDeps,
+  apiToken: string,
   to: string,
   content: EmailContent,
 ): Promise<void> {
   const fetchImpl = deps.fetchImpl ?? fetch;
-  const apiToken = await deps.token();
   const res = await fetchImpl(
     `https://api.cloudflare.com/client/v4/accounts/${deps.accountId}/email/sending/send`,
     {
       method: "POST",
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       headers: { authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
       body: JSON.stringify({
         to: [to],
@@ -77,7 +84,10 @@ async function sendViaCloudflare(
 export function createAuthEmailHandler(deps: AuthEmailDeps) {
   return async function handler(event: CustomEmailSenderTriggerEvent): Promise<CustomEmailSenderTriggerEvent> {
     if (!CODE_TRIGGER_SOURCES.has(event.triggerSource)) {
-      throw new Error(`Unsupported CustomEmailSender trigger source: ${event.triggerSource}`);
+      // Visible in CloudWatch (alarm on this string) without breaking the
+      // sign-up/attribute-update call that Cognito is waiting on.
+      console.error(`Unhandled CustomEmailSender trigger source: ${event.triggerSource}`);
+      return event;
     }
     // triggerSource is narrowed above, but the SDK types keep userAttributes as a
     // union across all sources — read email through a plain string map.
@@ -85,12 +95,14 @@ export function createAuthEmailHandler(deps: AuthEmailDeps) {
     if (!to) throw new Error("CustomEmailSender event has no email attribute to deliver to");
     if (!event.request.code) throw new Error("CustomEmailSender event has no code to deliver");
 
-    const code = await deps.decrypt(event.request.code);
+    // Both are slow on a cold start (KMS decrypt, Secrets Manager + KMS) and
+    // independent, so overlap them to stay inside Cognito's trigger budget.
+    const [code, apiToken] = await Promise.all([deps.decrypt(event.request.code), deps.token()]);
     const content = buildResetEmail(code, {
       portalUrl: deps.portalUrl,
       contactAddress: deps.contactAddress,
     });
-    await sendViaCloudflare(deps, to, content);
+    await sendViaCloudflare(deps, apiToken, to, content);
     return event;
   };
 }
@@ -109,8 +121,11 @@ export function createKmsDecryptor(keyArn: string): CodeDecryptor {
 function createTokenReader(secretId: string, secrets: SecretReader): () => Promise<string> {
   let tokenPromise: Promise<string> | undefined;
   return () => {
+    // Clear a rejection so a transient Secrets Manager failure doesn't poison
+    // this execution environment for as long as Lambda keeps it warm.
     tokenPromise ??= secrets.send(new GetSecretValueCommand({ SecretId: secretId }))
-      .then((response) => parseCloudflareApiToken(response.SecretString));
+      .then((response) => parseCloudflareApiToken(response.SecretString))
+      .catch((err: unknown) => { tokenPromise = undefined; throw err; });
     return tokenPromise;
   };
 }

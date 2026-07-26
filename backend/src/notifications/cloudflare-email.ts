@@ -22,18 +22,20 @@ interface CloudflareSendResponse {
   result?: { message_id?: string; delivered: string[]; permanent_bounces: string[]; queued: string[] };
 }
 
+/** The secret's JSON field is named "apiKey" — shared with other systems that
+ *  read the same Secrets Manager entry, so this parser must match that shape. */
 export function parseCloudflareApiToken(secretString: string | undefined): string {
   if (!secretString) throw new Error("Cloudflare email API token secret is empty");
   let parsed: unknown;
   try {
     parsed = JSON.parse(secretString);
   } catch {
-    throw new Error("Cloudflare email API token secret must be JSON with an apiToken property");
+    throw new Error("Cloudflare email API token secret must be JSON with an apiKey property");
   }
   const apiToken = typeof parsed === "object" && parsed !== null
-    ? (parsed as { apiToken?: unknown }).apiToken
+    ? (parsed as { apiKey?: unknown }).apiKey
     : undefined;
-  if (typeof apiToken !== "string" || !apiToken.trim()) throw new Error("Cloudflare email API token secret must contain a non-empty apiToken");
+  if (typeof apiToken !== "string" || !apiToken.trim()) throw new Error("Cloudflare email API token secret must contain a non-empty apiKey");
   return apiToken;
 }
 
@@ -45,8 +47,11 @@ export function createCloudflareEmailSender(
 ): EmailSender {
   let tokenPromise: Promise<string> | undefined;
   const token = (): Promise<string> => {
+    // Clear a rejection so a transient Secrets Manager failure doesn't poison
+    // this execution environment for as long as Lambda keeps it warm.
     tokenPromise ??= secrets.send(new GetSecretValueCommand({ SecretId: config.secretId }))
-      .then((response) => parseCloudflareApiToken(response.SecretString));
+      .then((response) => parseCloudflareApiToken(response.SecretString))
+      .catch((err: unknown) => { tokenPromise = undefined; throw err; });
     return tokenPromise;
   };
 

@@ -62,22 +62,26 @@ The Cloudflare API token must be stored in AWS Secrets Manager in the workload
 region (`ap-southeast-7`). Never put it in Git, `ops/.env`, Lambda environment
 variables, test fixtures, command output, or documentation.
 
-Staging secret name:
+Production secret name (this is the live one — the notifications worker and the
+CustomEmailSender Lambda both read it):
 
 ```text
-/robo-compet/staging/cloudflare-email-token
+/robo-compet/production/cloudflare_sendkey
 ```
 
-Production secret name:
+Staging secret name — **not yet created**. `robo-compet-staging-email-worker`
+runs with `EMAIL_ENABLED=true` but no `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID`, so
+staging sends nothing until this exists and the worker's env var points at it:
 
 ```text
-/robo-compet/production/cloudflare-email-token
+/robo-compet/staging/cloudflare_sendkey
 ```
 
-Store the value as JSON:
+Store the value as JSON. The field is named `apiKey` (not `apiToken`) because
+other systems share this same secret:
 
 ```json
-{"apiToken":"REPLACE_WITH_REAL_TOKEN"}
+{"apiKey":"REPLACE_WITH_REAL_TOKEN"}
 ```
 
 The Lambda environment contains `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` (the secret

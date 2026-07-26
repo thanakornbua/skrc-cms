@@ -12,7 +12,7 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `COGNITO_USER_POOL_ID` | `ap-southeast-7_xxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `COGNITO_CLIENT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `CORS_ORIGIN` | `https://competitive.skrc.suankularb.space` | Fixed frontend origin. |
-| `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` | required | Exact AWS Secrets Manager secret name containing JSON `{\"apiToken\":\"...\"}` — a Cloudflare API token scoped to Email Sending only. Keep its value out of configuration files and Lambda environment variables. |
+| `CLOUDFLARE_EMAIL_TOKEN_SECRET_ID` | required | Exact AWS Secrets Manager secret name containing JSON `{\"apiKey\":\"...\"}` — a Cloudflare API token scoped to Email Sending only. Field is named `apiKey` because other systems share this secret. Keep its value out of configuration files and Lambda environment variables. |
 | `CLOUDFLARE_ACCOUNT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` | Cloudflare account ID the Email Sending REST API call targets. Not secret. |
 | `EMAIL_FROM` | `no-reply@skrc.suankularb.space` | Transactional sender shown to competitors; `skrc.suankularb.space` must be onboarded onto Cloudflare Email Sending. |
 | `EMAIL_REPLY_TO` | `skrc@skrc.suankularb.space` | Address used when a recipient replies. |

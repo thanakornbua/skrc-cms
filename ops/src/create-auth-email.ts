@@ -155,7 +155,7 @@ async function ensureFunction(roleArn: string, keyArn: string): Promise<string> 
     await lambda.send(new UpdateFunctionCodeCommand({ FunctionName: FUNCTION_NAME, ZipFile: zip }));
     await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: FUNCTION_NAME });
     await lambda.send(new UpdateFunctionConfigurationCommand({
-      FunctionName: FUNCTION_NAME, Runtime: "nodejs22.x", Role: roleArn, Timeout: 15, MemorySize: 256, Environment: environment,
+      FunctionName: FUNCTION_NAME, Runtime: "nodejs22.x", Role: roleArn, Timeout: 5, MemorySize: 256, Environment: environment,
     }));
     await waitUntilFunctionUpdatedV2({ client: lambda, maxWaitTime: 120 }, { FunctionName: FUNCTION_NAME });
     return existing.Configuration!.FunctionArn!;
@@ -167,7 +167,7 @@ async function ensureFunction(roleArn: string, keyArn: string): Promise<string> 
     try {
       created = await lambda.send(new CreateFunctionCommand({
         FunctionName: FUNCTION_NAME, Runtime: "nodejs22.x", Handler: "index.handler", Role: roleArn,
-        Code: { ZipFile: zip }, Timeout: 15, MemorySize: 256, Environment: environment,
+        Code: { ZipFile: zip }, Timeout: 5, MemorySize: 256, Environment: environment,
         Description: "Sends Cognito password-reset codes as branded HTML through Cloudflare Email Sending",
         Tags: { Project: "robo-compet", Environment: RESOURCE_PREFIX.endsWith("-staging") ? "staging" : "production" },
       }));
@@ -213,6 +213,10 @@ async function wireCustomEmailSender(poolId: string, functionArn: string, keyArn
     // Keep the pool's feature tier (Essentials flags common/breached passwords);
     // omitting it on UpdateUserPool can silently revert the tier.
     UserPoolTier: pool.UserPoolTier,
+    // UpdateUserPool resets anything omitted: without these, staff software-token
+    // MFA (set OPTIONAL by create-auth) silently reverts to OFF on every deploy.
+    MfaConfiguration: pool.MfaConfiguration,
+    DeletionProtection: pool.DeletionProtection,
     AdminCreateUserConfig: pool.AdminCreateUserConfig,
     EmailConfiguration: pool.EmailConfiguration,
     VerificationMessageTemplate: pool.VerificationMessageTemplate,

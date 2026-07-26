@@ -9,8 +9,8 @@ purge, or replace production data.
 - Region/table: `ap-southeast-7` / `robo-compet`.
 - Cognito: pool `ap-southeast-7_ZWnRxXneN`, client `4jennh6lfhjddhd0uksueu9rm4`.
 - Browser CORS origin: `https://competitive.skrc.suankularb.space` exactly.
-- Cloudflare email token secret: `/robo-compet/production/cloudflare-email-token`,
-  holding only `{"apiToken":"..."}`. Never put its value in Git, Lambda environment,
+- Cloudflare email token secret: `/robo-compet/production/cloudflare_sendkey`,
+  holding only `{"apiKey":"..."}`. Never put its value in Git, Lambda environment,
   output, logs, or PRs.
 - `CLOUDFLARE_ACCOUNT_ID`: the Cloudflare account ID owning `skrc.suankularb.space`
   (not secret).

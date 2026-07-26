@@ -55,21 +55,17 @@ test("decrypts the code and sends the styled reset email via Cloudflare", async 
   assert.ok(body.text.includes("483920"));
 });
 
-test("also handles resend-code as a password-recovery source", async () => {
-  let sent = 0;
-  const handler = createAuthEmailHandler(deps((async () => { sent++; return ok(); }) as typeof fetch));
-  await handler(baseEvent({ triggerSource: "CustomEmailSender_ResendCode" }));
-  assert.equal(sent, 1);
-});
-
-test("rejects an unsupported trigger source instead of silently dropping it", async () => {
-  let sent = 0;
-  const handler = createAuthEmailHandler(deps((async () => { sent++; return ok(); }) as typeof fetch));
-  await assert.rejects(
-    () => handler(baseEvent({ triggerSource: "CustomEmailSender_SignUp" })),
-    /Unsupported CustomEmailSender trigger source/,
-  );
-  assert.equal(sent, 0);
+test("skips unhandled trigger sources without failing the Cognito call", async () => {
+  // ResendCode is sign-up confirmation (24h code), not a password reset, and
+  // SignUp must never break signUp() just because no email template fits.
+  const sources = ["CustomEmailSender_ResendCode", "CustomEmailSender_SignUp"] as const;
+  for (const triggerSource of sources) {
+    let sent = 0;
+    const handler = createAuthEmailHandler(deps((async () => { sent++; return ok(); }) as typeof fetch));
+    const event = baseEvent({ triggerSource });
+    assert.equal(await handler(event), event, `${triggerSource} returns the event unchanged`);
+    assert.equal(sent, 0, `${triggerSource} sends no email`);
+  }
 });
 
 test("surfaces a Cloudflare error as a thrown send failure", async () => {

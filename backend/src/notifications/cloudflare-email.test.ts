@@ -11,8 +11,8 @@ const event: NotificationEvent = {
 const content = { subject: "Subject", text: "Text", html: "<p>HTML</p>" };
 
 test("requires a JSON secret with a non-empty API token", () => {
-  assert.equal(parseCloudflareApiToken('{"apiToken":"cf_test"}'), "cf_test");
-  assert.throws(() => parseCloudflareApiToken('{"apiKey":"cf_test"}'), /non-empty apiToken/);
+  assert.equal(parseCloudflareApiToken('{"apiKey":"cf_test"}'), "cf_test");
+  assert.throws(() => parseCloudflareApiToken('{"apiToken":"cf_test"}'), /non-empty apiKey/);
   assert.throws(() => parseCloudflareApiToken(undefined), /empty/);
   assert.throws(() => parseCloudflareApiToken("cf_test"), /must be JSON/);
   assert.throws(() => parseCloudflareApiToken("{}"), /non-empty/);
@@ -22,7 +22,7 @@ test("sends with sender, reply-to, and a stable idempotency-derived id", async (
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const sender = createCloudflareEmailSender(
     { secretId: "test", accountId: "acct-1", from: "no-reply@skrc.suankularb.space", replyTo: "skrc@skrc.suankularb.space" },
-    { send: async () => ({ SecretString: '{"apiToken":"cf_test"}' }) },
+    { send: async () => ({ SecretString: '{"apiKey":"cf_test"}' }) },
     (async (url: string, init: RequestInit) => {
       requests.push({ url, init });
       return new Response(JSON.stringify({
@@ -47,7 +47,7 @@ test("sends with sender, reply-to, and a stable idempotency-derived id", async (
 test("falls back to the idempotency key when no message_id is returned", async () => {
   const sender = createCloudflareEmailSender(
     { secretId: "test", accountId: "acct-1", from: "no-reply@skrc.suankularb.space", replyTo: "skrc@skrc.suankularb.space" },
-    { send: async () => ({ SecretString: '{"apiToken":"cf_test"}' }) },
+    { send: async () => ({ SecretString: '{"apiKey":"cf_test"}' }) },
     (async () => new Response(JSON.stringify({
       success: true, errors: [], messages: [],
       result: { delivered: ["leader@example.com"], permanent_bounces: [], queued: [] },
@@ -59,7 +59,7 @@ test("falls back to the idempotency key when no message_id is returned", async (
 test("treats a Cloudflare returned error as a failed send", async () => {
   const sender = createCloudflareEmailSender(
     { secretId: "test", accountId: "acct-1", from: "no-reply@skrc.suankularb.space", replyTo: "skrc@skrc.suankularb.space" },
-    { send: async () => ({ SecretString: '{"apiToken":"cf_test"}' }) },
+    { send: async () => ({ SecretString: '{"apiKey":"cf_test"}' }) },
     (async () => new Response(JSON.stringify({
       success: false, errors: [{ code: 1000, message: "Sender domain not verified" }],
     }), { status: 400 })) as typeof fetch,
