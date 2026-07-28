@@ -28,6 +28,41 @@ pio run -e esp32dev_serial --target upload
 pio device monitor --baud 115200
 ```
 
+## Bench rig: M5Stack Fire buttons as stand-in sensors
+
+Before sensors are wired, an M5Stack Fire can run the identical firmware with its
+front-panel buttons acting as the START and STOP gates. Nothing in `src/` changes —
+the buttons are ordinary digital inputs, so only the board and `config.h` differ.
+
+```sh
+cp include/config.m5fire.example.h include/config.h   # then fill in placeholders
+pio run -e m5fire_serial --target upload              # or -e m5fire_http
+pio device monitor --baud 115200
+```
+
+Btn A (left, G39) fires START and Btn C (right, G37) fires STOP. Btn B is left
+unassigned on purpose so a stray press between them cannot be read as a gate.
+
+Two things to know:
+
+- **The elapsed times are meaningless.** They measure how fast you press two
+  buttons. This rig validates arming, state transitions, event IDs, the retry
+  queue, deduplication, and the laptop bridge — not timing accuracy. Every
+  accuracy check in the hardware-in-loop checklist below still has to be done
+  against real sensors.
+- **GPIO 37/38/39 are input-only with no internal pull-up**, which is why the
+  M5 config sets `GATE_INPUT_MODE` to `INPUT` rather than the `INPUT_PULLUP`
+  default. The Fire supplies external pull-ups on the buttons. `INPUT_PULLUP`
+  would compile and silently do nothing on these pins. The same trap applies to
+  any real sensor you later attach to G34–G39.
+
+The Fire's ten status LEDs are addressable SK6812 parts on G15 and cannot be driven
+by `digitalWrite`, so `STATUS_LED_PIN` is `-1` and there is no LED status on this
+rig. The serial monitor logs everything the LED would have signalled.
+
+`DEVICE_ID` stays `esp32-lane1` so the backend's existing `LANES` and `DEVICE_KEYS`
+entries work untouched. Give the rig its own ID only if you also add it to both.
+
 Both images share GPIO capture, debounce, NVS boot count, event IDs, and the 64-event
 FIFO. The serial image emits `EVT <json>` once per second until the laptop durably
 stores it and replies `ACK <eventId>`. It never needs WiFi, CA, API URL, or device-key
