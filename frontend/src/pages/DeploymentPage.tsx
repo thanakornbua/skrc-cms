@@ -83,10 +83,10 @@ function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: (message?: 
   }, [pendingDeployment, signOutAndReset]);
   const expected = `DEPLOY_${mode.toUpperCase()}`;
   async function deploy() {
-    if (!status?.commitId) return;
+    if (!status?.commitId || !status.activeJobId) return;
     setBusy(true); setError(null); setNotice(null);
     try {
-      const result = await controlJson<DeploymentStatus>("/deployment/mode", { method: "POST", body: JSON.stringify({ mode, expectedCommit: status.commitId, confirmation, resultsCommitted }) });
+      const result = await controlJson<DeploymentStatus>("/deployment/mode", { method: "POST", body: JSON.stringify({ mode, expectedCommit: status.commitId, expectedJobId: status.activeJobId, confirmation, resultsCommitted }) });
       setStatus(result); setPendingDeployment({ mode, jobId: result.jobId ?? null }); setNotice(`Amplify job ${result.jobId ?? "started"} requested for ${mode} mode.`); setConfirmation("");
     } catch (err) { setError(err instanceof ApiClientError ? err.message : err instanceof Error ? err.message : "Deployment request failed"); }
     finally { setBusy(false); }
@@ -107,7 +107,7 @@ function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: (message?: 
       <div className="field"><label htmlFor="deployment-mode">Target mode</label><select id="deployment-mode" value={mode} onChange={(event) => setMode(event.target.value as EventMode)} disabled={busy}><option value="registration">Registration</option><option value="competition">Competition</option><option value="concluded">Concluded</option></select></div>
       {mode === "concluded" && <label className="consent-check"><input type="checkbox" checked={resultsCommitted} onChange={(event) => setResultsCommitted(event.target.checked)} /> I verified `results.json` is committed for this exact branch.</label>}
       <div className="field"><label htmlFor="deployment-confirmation">Type {expected} to confirm</label><input id="deployment-confirmation" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></div>
-      <button type="button" disabled={busy || !!pendingDeployment || !status?.commitId || confirmation !== expected || (mode === "concluded" && !resultsCommitted)} onClick={() => void deploy()}>Deploy {mode}</button>
+      <button type="button" disabled={busy || !!pendingDeployment || !status?.commitId || !status?.activeJobId || confirmation !== expected || (mode === "concluded" && !resultsCommitted)} onClick={() => void deploy()}>Deploy {mode}</button>
       <p><small>Changing this setting starts a new Amplify build. It does not alter competition data.</small></p>
     </div>
   </div>;

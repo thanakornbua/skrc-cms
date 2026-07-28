@@ -6,9 +6,16 @@ import { ApiError } from "../errors.js";
 import { authenticate, AuthenticationError, requireAdminOnly } from "../regweek/auth.js";
 import { errorResponse, jsonResponse } from "../regweek/responses.js";
 
-const modeSchema = z.object({
+// Amplify reports commitId "HEAD" — not a SHA — for manually started RELEASE
+// jobs, which is exactly what deploy() below starts. Requiring a 40-hex SHA
+// here therefore rejected every request once any mode deployment had run.
+// commitId is kept for display and for detecting a genuine source change, but
+// activeJobId is the real optimistic-concurrency token: it is unique per
+// deployment and always advances, whereas "HEAD" never changes.
+export const modeSchema = z.object({
   mode: z.enum(["registration", "competition", "concluded"]),
-  expectedCommit: z.string().regex(/^[0-9a-f]{40}$/i),
+  expectedCommit: z.string().min(1),
+  expectedJobId: z.string().min(1),
   confirmation: z.string(),
   resultsCommitted: z.boolean().optional(),
 });
@@ -43,6 +50,7 @@ async function status() {
 
 async function deploy(input: z.infer<typeof modeSchema>) {
   const current = await status();
+  if (current.activeJobId !== input.expectedJobId) throw new ApiError(409, "CONFLICT", "A newer Amplify deployment has run; refresh before deploying mode");
   if (current.commitId !== input.expectedCommit) throw new ApiError(409, "CONFLICT", "Deployed commit changed; refresh before deploying mode");
   const expectedConfirmation = `DEPLOY_${input.mode.toUpperCase()}`;
   if (input.confirmation !== expectedConfirmation) throw new ApiError(400, "VALIDATION_ERROR", `confirmation must be ${expectedConfirmation}`);
@@ -71,7 +79,11 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     if (event.requestContext.http.method === "GET" && event.rawPath === "/deployment/status") return jsonResponse(200, await status());
     if (event.requestContext.http.method === "POST" && event.rawPath === "/deployment/mode") {
       const parsed = modeSchema.safeParse(body(event));
-      if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "Invalid deployment request");
+      if (!parsed.success) {
+        // Field paths only — never echo submitted values back to the client.
+        const fields = [...new Set(parsed.error.issues.map((issue) => issue.path.join(".") || "(body)"))];
+        throw new ApiError(400, "VALIDATION_ERROR", `Invalid deployment request: ${fields.join(", ")}`);
+      }
       return jsonResponse(202, await deploy(parsed.data));
     }
     throw new ApiError(404, "NOT_FOUND", "Route not found");
