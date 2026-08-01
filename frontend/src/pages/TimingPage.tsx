@@ -25,7 +25,7 @@ interface Competitor {
 }
 
 const seconds =(ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
-const stageLabel: Record<Stage, string> = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" };
+const stageLabel: Record<Stage, string> = { ROUND_1: "Qualifying round", BEST_OF_4: "Quarterfinals", BEST_OF_2: "Semifinals", THE_BEST: "Finals" };
 /** Semantic status-badge class per run outcome (see status-badge in CSS). */
 const RUN_BADGE: Record<Run["status"], string> = {
   RUNNING: "", COMPLETE: "success", TIMED_OUT: "warning", UNDER_REVIEW: "warning", INVALID: "error", VOID: "",
@@ -40,7 +40,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [category, setCategory] = useState("Line Tracing - Open");
   const [minSeconds, setMinSeconds] = useState("");
   const [stageMaxSeconds, setStageMaxSeconds] = useState<Record<Stage, string>>({ ROUND_1: "180", BEST_OF_4: "180", BEST_OF_2: "180", THE_BEST: "180" });
-  const [stageMaxAttempts, setStageMaxAttempts] = useState<Record<Stage, string>>({ ROUND_1: "2", BEST_OF_4: "2", BEST_OF_2: "2", THE_BEST: "2" });
+  const [stageMaxAttempts, setStageMaxAttempts] = useState<Record<Stage, string>>({ ROUND_1: "3", BEST_OF_4: "3", BEST_OF_2: "3", THE_BEST: "3" });
   const [competitionState, setCompetitionState] = useState<CompetitionState | null>(null);
   const [ruleLabel, setRuleLabel] = useState("");
   const [penaltySeconds, setPenaltySeconds] = useState("");
@@ -75,7 +75,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         setCategory(current.category);
         setMinSeconds(String(current.minTimeMs / 1000));
         setStageMaxSeconds(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, String((current.stageMaxTimeMs?.[stage] ?? current.maxTimeMs) / 1000)])) as Record<Stage, string>);
-        setStageMaxAttempts(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, String(current.stageMaxAttempts?.[stage] ?? 2)])) as Record<Stage, string>);
+        setStageMaxAttempts(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, "3"])) as Record<Stage, string>);
       }
     }
   }
@@ -253,7 +253,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
 
     {role === "admin" && <div className="timing-admin-grid">
       <div className="card timing-category-card"><span className="section-kicker">TIME LIMITS</span><h2>{t("ขอบเขตเวลา", "Category timing")}</h2>
-        {timings.map((item) => <section className="timing-category-summary" key={item.category}><strong>{item.category}</strong><div className="timing-stage-summary">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · {item.stageMaxAttempts?.[stage] ?? 2} {t("ครั้ง", "tries")}</span></div>)}</div></section>)}
+        {timings.map((item) => <section className="timing-category-summary" key={item.category}><strong>{item.category}</strong><div className="timing-stage-summary">{(["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as Stage[]).map((stage) => <div className="metric" key={stage}><span className="metric-label">{stageLabel[stage]}</span><span className="metric-value">{seconds(item.stageMaxTimeMs?.[stage] ?? item.maxTimeMs)} · 3 {t("ครั้ง", "tries")}</span></div>)}</div></section>)}
         <form onSubmit={saveTiming}>
           <div className="field"><label htmlFor={categoryId}>{t("ประเภท", "Category")}</label><input id={categoryId} required value={category} onChange={(e) => setCategory(e.target.value)} /></div>
           <div className="field"><label htmlFor={minId}>{t("เวลาต่ำสุด (วินาที)", "Minimum seconds")}</label><input id={minId} required type="number" min="0.001" step="0.001" value={minSeconds} onChange={(e) => setMinSeconds(e.target.value)} /></div>
@@ -263,7 +263,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
             <legend>{stageLabel[stage]}</legend>
             <div className="timing-stage-fields">
               <div className="field"><label htmlFor={id}>{t("เวลาสูงสุด (วินาที)", "Maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>
-              <div className="field"><label htmlFor={`${id}-attempts`}>{t("จำนวนครั้งสูงสุด", "Maximum tries")}</label><input id={`${id}-attempts`} required type="number" min="1" max="20" step="1" value={stageMaxAttempts[stage]} onChange={(event) => setStageMaxAttempts((current) => ({ ...current, [stage]: event.target.value }))} /></div>
+              <div className="field"><label htmlFor={`${id}-attempts`}>{t("จำนวนสิทธิ (กำหนดโดยกติกา)", "Attempts (fixed by rules)")}</label><input id={`${id}-attempts`} type="number" value={stageMaxAttempts[stage]} disabled /></div>
             </div>
           </fieldset>)}</div>
           <button type="submit">{t("บันทึก", "Save limits")}</button>

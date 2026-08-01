@@ -14,32 +14,32 @@ function entry(id: string, runs: Array<Record<string, unknown>>): StageScoringIn
   };
 }
 
-test("checkpoint stages rank completed laps before furthest checkpoints", () => {
+test("qualifying ranks two successful completions above one and none", () => {
   const results = rankStageCategory([
-    entry("C-1", [{ stage: "ROUND_1", status: "TIMED_OUT", splits: [{ gateId: "A" }, { gateId: "B" }, { gateId: "B" }] }]),
+    entry("C-1", [{ stage: "ROUND_1", status: "TIMED_OUT" }]),
     entry("C-2", [{ stage: "ROUND_1", status: "COMPLETE", elapsedMs: 90000 }]),
-    entry("C-3", [{ stage: "ROUND_1", status: "TIMED_OUT", splits: [{ gateId: "A" }, { gateId: "B" }, { gateId: "C" }] }]),
+    entry("C-3", [{ stage: "ROUND_1", status: "COMPLETE", elapsedMs: 100000 }, { stage: "ROUND_1", status: "COMPLETE", elapsedMs: 110000 }]),
   ], "ROUND_1", true)[0];
-  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-2", "C-3", "C-1"]);
-  assert.equal(results.ranked[2].furthestCheckpoint, 2);
+  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-3", "C-2", "C-1"]);
+  assert.deepEqual(results.ranked.map((item) => item.completedRunCount), [2, 1, 0]);
 });
-test("time-average stages average two fastest valid times and use one when alone", () => {
+test("every stage averages the best two of three attempts and adds max-time attempts", () => {
   const results = rankStageCategory([
-    entry("C-1", [{ stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 1000 }, { stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 3000 }]),
-    entry("C-2", [{ stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 1900 }]),
+    entry("C-1", [{ stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 1000 }, { stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 3000 }, { stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 9000 }]),
+    entry("C-2", [{ stage: "BEST_OF_2", status: "COMPLETE", elapsedMs: 1900 }, { stage: "BEST_OF_2", status: "TIMED_OUT" }]),
     entry("C-3", [{ stage: "BEST_OF_2", status: "TIMED_OUT" }]),
   ], "BEST_OF_2", true)[0];
-  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-2", "C-1"]);
-  assert.equal(results.ranked[1].aggregateTimeMs, 2000);
-  assert.deepEqual(results.unranked.map((item) => item.competitorId), ["C-3"]);
+  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-1", "C-2", "C-3"]);
+  assert.equal(results.ranked[0].aggregateTimeMs, 2000);
+  assert.equal(results.ranked[1].aggregateTimeMs, 90950);
 });
 
-test("void and invalid runs never contribute checkpoint progress or a time", () => {
+test("void runs do not consume a result while invalid runs receive maximum time", () => {
   const results = rankStageCategory([
     entry("C-1", [{ stage: "ROUND_1", status: "VOID", splits: [{ gateId: "A" }, { gateId: "B" }] }]),
     entry("C-2", [{ stage: "ROUND_1", status: "INVALID", splits: [{ gateId: "A" }] }]),
     entry("C-3", [{ stage: "ROUND_1", status: "TIMED_OUT", splits: [{ gateId: "A" }] }]),
   ], "ROUND_1", true)[0];
-  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-3"]);
-  assert.deepEqual(results.unranked.map((item) => item.competitorId), ["C-1", "C-2"]);
+  assert.deepEqual(results.ranked.map((item) => item.competitorId), ["C-2", "C-3"]);
+  assert.deepEqual(results.unranked.map((item) => item.competitorId), ["C-1"]);
 });

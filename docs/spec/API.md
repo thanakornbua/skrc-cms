@@ -208,7 +208,7 @@ Competition workflow routes remain on the EC2 service and are called only in com
 
 - `GET /admin/config/categories` (admin): `{categories:[{category,minTimeMs,maxTimeMs,stageMaxTimeMs,stageMaxAttempts}]}`.
 - `PUT /admin/config/categories` (admin): `{category,minTimeMs,stageMaxTimeMs,stageMaxAttempts}`; requires
-  positive integer milliseconds, `minTimeMs` below every stage maximum, and 1–20 attempts per stage.
+  positive integer milliseconds, `minTimeMs` below every stage maximum, and exactly three attempts per round/match as fixed by Rules 4.2, 4.5, and 6.2.
 - `GET /admin/config/penalties` (committee/admin): returns the penalty-rule catalog so committee can apply a configured rule.
 - `POST /admin/config/penalties` (admin): `{label,penaltyMs}`.
 - `PUT /admin/config/penalties/:ruleId` (admin): `{label,penaltyMs,active}`.
@@ -243,14 +243,14 @@ Competition workflow routes remain on the EC2 service and are called only in com
 
 #### `POST /admin/competition/advance`
 - **Role:** admin. Body `{ "confirm": "ADVANCE" }`.
-- Freezes the active result and advances `ROUND_1 → BEST_OF_4 → BEST_OF_2 → THE_BEST`.
-- Top 8, 4, and 2 advance per category. Active or under-review runs block advancement.
+- Freezes the active result and advances the internal stages `ROUND_1 → BEST_OF_4 → BEST_OF_2 → THE_BEST`, displayed publicly as Qualifying → Quarterfinals → Semifinals → Finals.
+- After qualifying, the top eight are selected and then randomly assigned to eight bracket positions once, without regard to qualifying rank. The draw timestamp and staff actor are retained internally; only the timestamp, team names, positions, matches, start order, adjusted times, and winners are public.
+- Quarterfinal winners populate the semifinals. Semifinal winners populate the final and semifinal losers populate the third-place match. Active, under-review, or fewer than three consumed attempts block advancement.
 
 #### `POST /admin/competition/conclude`
 - **Role:** admin only.
 - **Request:** `{ "confirm": "CONCLUDE" }` (exact string required — a safety check, not real security).
-- Allowed only during The Best. Computes 1st/2nd from The Best, 3rd/4th from
-  Best-of-4 ordering among Best-of-2 eliminations, and 5th–8th from Best of 4.
+- Allowed only during Finals. Settles the final and third-place matches, then computes 1st–4th from those match winners/losers and 5th–8th from the quarterfinal results.
 - **Errors:** `400 VALIDATION_ERROR` wrong confirm string. `409 CONFLICT` already concluded.
 
 #### `POST /admin/competition/reopen`
@@ -260,11 +260,10 @@ Competition workflow routes remain on the EC2 service and are called only in com
 #### `GET /admin/competition/export`
 - **Role:** admin only.
 - **Preconditions:** `409 CONFLICT` if not yet concluded.
-- **Response 200:** stage-aware category results with checkpoint/lap or time-average
-  fields plus `ranked`, `unranked`, and `disqualified`; no competitor ID/contact data.
+- **Response 200:** `{categories,brackets}` with best-two-of-three averages, round penalties, final times, and the public bracket; no competitor ID/contact/staff data.
 
 #### `GET /public/scoreboard?category=`
 - **Role:** none (unauthenticated).
-- **Response 200:** `{state:"PROVISIONAL"|"FINAL",activeStage,categories:[...]}` using the same stage-aware public shape as the export.
+- **Response 200:** `{state:"PROVISIONAL"|"FINAL",activeStage,categories:[...],brackets:[...]}`. Brackets contain only public team names, draw time, positions, matches, random start-order assignment, adjusted times, status, and winners.
 
 All mutation endpoints return `409 COMPETITION_CONCLUDED` after conclusion, except `reopen`.

@@ -5,10 +5,10 @@ import { ApiError } from "../errors.js";
 import { config } from "../config.js";
 import { getCompetitor } from "../competitors/repo.js";
 import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
-import { STAGE_SCORING } from "../competition/types.js";
+import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
 import type { LaneConfigEntry, LaneRecord } from "./types.js";
 import { voidActiveRunAndResetLane } from "../runs/repo.js";
-import { getAttemptState, getCategoryTiming, stageMaximum } from "../timing/repo.js";
+import { getAttemptState } from "../timing/repo.js";
 
 function keyLane(laneId: string) {
   return { PK: `LANE#${laneId}`, SK: "STATE" };
@@ -122,15 +122,8 @@ export async function assignLane(
   if (attempts.unresolved) {
     throw new ApiError(409, "RUN_UNDER_REVIEW", `Run ${attempts.unresolved.runId} requires admin review before reassignment`);
   }
-  if (STAGE_SCORING[competition.activeStage] === "TIME_AVERAGE" && attempts.consumed >= 2) {
-    throw new ApiError(409, "CONFLICT", `Competitor has used both attempts in ${competition.activeStage}`);
-  }
-  if (STAGE_SCORING[competition.activeStage] === "CHECKPOINT_LAP") {
-    const timing = await getCategoryTiming(competitor.category);
-    if (!timing) throw new ApiError(409, "CONFLICT", `Timing is not configured for ${competitor.category}`);
-    if (attempts.consumedTimeMs >= stageMaximum(timing, competition.activeStage)) {
-      throw new ApiError(409, "CONFLICT", `Competitor has exhausted the ${competition.activeStage} time budget`);
-    }
+  if (attempts.consumed >= ATTEMPTS_PER_ROUND) {
+    throw new ApiError(409, "CONFLICT", `Competitor has used all three attempts in ${competition.activeStage}`);
   }
 
   const activeElsewhere = await getActiveLaneForCompetitor(competitorId);

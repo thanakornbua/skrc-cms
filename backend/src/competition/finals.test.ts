@@ -4,12 +4,12 @@ import { assembleFinalResults, getFrozenStageResult } from "./repo.js";
 import type { CategoryStageResults, CompetitionStage, CompetitionState, StageRankedResult } from "./types.js";
 
 function stage(stage: CompetitionStage, ids: string[]): CategoryStageResults {
-  const mode = stage === "ROUND_1" || stage === "BEST_OF_4" ? "CHECKPOINT_LAP" : "TIME_AVERAGE";
+  const mode = "TIME_AVERAGE" as const;
   return {
     category: "Open", stage, scoringMode: mode, unranked: [], disqualified: [],
     ranked: ids.map((id, index): StageRankedResult => ({
       rank: index + 1, competitorId: id, teamName: id, stage, scoringMode: mode,
-      completedLap: true, lapTimeMs: 1000 + index, furthestCheckpoint: 3,
+      completedLap: true, completedRunCount: 3, lapTimeMs: 1000 + index, secondBestTimeMs: 1100 + index, furthestCheckpoint: 3,
       aggregateTimeMs: 1000 + index, penaltyTimeMs: 0, finalTimeMs: 1000 + index,
       tieTimestamp: `2026-01-01T00:00:0${index}.000Z`,
     })),
@@ -51,7 +51,7 @@ test("getFrozenStageResult returns null when the competitor never appears in any
 
 test("getFrozenStageResult returns a null result/rank when the competitor is only unranked", () => {
   const unrankedStage: CategoryStageResults = {
-    category: "Open", stage: "BEST_OF_4", scoringMode: "CHECKPOINT_LAP",
+    category: "Open", stage: "BEST_OF_4", scoringMode: "TIME_AVERAGE",
     ranked: stage("BEST_OF_4", ["A", "B"]).ranked,
     unranked: [{ teamName: "No Show", competitorId: "N" }],
     disqualified: [],

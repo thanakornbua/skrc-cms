@@ -77,8 +77,8 @@ deployment action remain server-side/operator-controlled.
 
 Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY_RUN.md).
 
-1. Admin saves the minimum safeguard plus separate maximum time and maximum tries for
-   Round 1, Best of 4, Best of 2, and The Best for every active category.
+1. Admin saves the minimum safeguard plus separate three-minute maximums for
+   Qualifying, Quarterfinals, Semifinals, and Finals. Attempts are fixed at three by the regulations.
 2. Admin creates the allowed time-penalty rules.
 3. Committee/admin uses signed-in competitor, lane, inspection, and timing pages.
 4. Resolve every under-minimum run before giving that team another attempt.

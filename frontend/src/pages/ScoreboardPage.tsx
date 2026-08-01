@@ -24,13 +24,35 @@ interface CategoryResults {
   disqualified: Array<{ teamName: string }>;
 }
 
+interface BracketDraw {
+  category: string;
+  drawnAt: string;
+  positions: Array<{ position: number; teamName: string }>;
+  matches?: Array<{
+    matchId: string;
+    round: "QUARTERFINAL" | "SEMIFINAL" | "FINAL" | "THIRD_PLACE";
+    order: number;
+    teamA: { teamName: string; finalTimeMs: number | null };
+    teamB: { teamName: string; finalTimeMs: number | null };
+    startsFirst: string;
+    winnerTeamName: string | null;
+    status: "PENDING" | "COMPLETE";
+  }>;
+}
+
 const seconds = (ms: number) => `${(ms / 1000).toFixed(3)} s`;
-const stageLabel = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" } as const;
+const stageLabel = { ROUND_1: "Qualifying round", BEST_OF_4: "Quarterfinals", BEST_OF_2: "Semifinals", THE_BEST: "Finals" } as const;
+
+function fullscreen(targetId: string): void {
+  const target = document.getElementById(targetId);
+  if (target?.requestFullscreen) void target.requestFullscreen();
+}
 
 export default function ScoreboardPage() {
   const [state, setState] = useState<"PROVISIONAL" | "FINAL">("PROVISIONAL");
   const [activeStage, setActiveStage] = useState<keyof typeof stageLabel>("ROUND_1");
   const [categories, setCategories] = useState<CategoryResults[]>([]);
+  const [brackets, setBrackets] = useState<BracketDraw[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,11 +60,11 @@ export default function ScoreboardPage() {
     const poll = async () => {
       try {
         if (import.meta.env.VITE_EVENT_MODE === "concluded") {
-          const result = await fetch("/results.json").then((response) => response.json()) as { categories: CategoryResults[] };
-          if (!cancelled) { setCategories(result.categories); setState("FINAL"); setError(null); }
+          const result = await fetch("/results.json").then((response) => response.json()) as { categories: CategoryResults[]; brackets?: BracketDraw[] };
+          if (!cancelled) { setCategories(result.categories); setBrackets(result.brackets ?? []); setState("FINAL"); setError(null); }
         } else {
-          const result = await publicEc2Json<{ state: "PROVISIONAL" | "FINAL"; activeStage: keyof typeof stageLabel; categories: CategoryResults[] }>("/public/scoreboard");
-          if (!cancelled) { setCategories(result.categories); setState(result.state); setActiveStage(result.activeStage); setError(null); }
+          const result = await publicEc2Json<{ state: "PROVISIONAL" | "FINAL"; activeStage: keyof typeof stageLabel; categories: CategoryResults[]; brackets?: BracketDraw[]; bracket?: BracketDraw | null }>("/public/scoreboard");
+          if (!cancelled) { setCategories(result.categories); setBrackets(result.brackets ?? (result.bracket ? [result.bracket] : [])); setState(result.state); setActiveStage(result.activeStage); setError(null); }
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Could not load results");
@@ -54,9 +76,10 @@ export default function ScoreboardPage() {
   }, []);
 
   return (
-    <div className="page page-wide">
+    <div className="page page-wide fullscreen-surface" id="scoreboard-display">
       <NavBar />
       <BrandHeader title="Competition results" description="ผลแต่ละรอบแยกจากกัน / Each stage is scored independently" />
+      <div className="display-actions"><button type="button" className="secondary" onClick={() => fullscreen("scoreboard-display")}>{t("แสดงผลเต็มจอ", "Fullscreen scoreboard")}</button></div>
       <div className={state === "FINAL" ? "notice-banner" : "warning-banner"} role="status" aria-live="polite">
         <strong>{state === "FINAL" ? t("ผลอย่างเป็นทางการ", "Final results") : t("ผลชั่วคราว", "Provisional results")}</strong>
         {state === "PROVISIONAL" && ` · ${stageLabel[activeStage]}`}
@@ -65,12 +88,55 @@ export default function ScoreboardPage() {
       {error && <div className="error-banner" role="alert">{error}</div>}
       {categories.length === 0 && !error && <div className="empty-state">{t("กำลังรอผลการแข่งขัน", "Waiting for results")}</div>}
 
+      {brackets.map((bracket, bracketIndex) => {
+        const bracketId = `bracket-display-${bracketIndex}`;
+        return (
+        <section className="card bracket-draw fullscreen-surface" id={bracketId} key={bracket.category || bracketId}>
+          <span className="section-kicker">{t("ผลการสุ่มสายอย่างเป็นทางการ", "Official random bracket draw")}</span>
+          <div className="bracket-title-row"><h2>{bracket.category || t("ตำแหน่งในสาย 8 ทีม", "Eight-team bracket positions")}</h2><button type="button" className="secondary" onClick={() => fullscreen(bracketId)}>{t("แสดงสายเต็มจอ", "Fullscreen bracket")}</button></div>
+          <p className="muted">{t("สุ่มหนึ่งครั้งโดยไม่อิงอันดับรอบคัดเลือก", "Drawn once without regard to qualifying rank")} · {new Date(bracket.drawnAt).toLocaleString()}</p>
+          <div className="elimination-bracket" aria-label={t("สายการแข่งขัน", "Elimination bracket")}>
+            {([
+              ["QUARTERFINAL", t("รอบก่อนรองชนะเลิศ", "Quarterfinals")],
+              ["SEMIFINAL", t("รอบรองชนะเลิศ", "Semifinals")],
+              ["FINAL", t("รอบชิงชนะเลิศ", "Final")],
+            ] as const).map(([round, label]) => (
+              <div className="bracket-round" key={round}>
+                <h3>{label}</h3>
+                {(bracket.matches ?? []).filter((match) => match.round === round).map((match) => (
+                  <article className="bracket-match" data-status={match.status} key={match.matchId}>
+                    <span className="bracket-match-id technical">{match.matchId}</span>
+                    {[match.teamA, match.teamB].map((entry) => (
+                      <div className={match.winnerTeamName === entry.teamName ? "winner" : ""} key={entry.teamName}>
+                        <span>{entry.teamName}</span>
+                        <strong className="technical">{entry.finalTimeMs === null ? "—" : seconds(entry.finalTimeMs)}</strong>
+                      </div>
+                    ))}
+                    <small>{t("เริ่มก่อน", "Starts first")}: {match.startsFirst}</small>
+                  </article>
+                ))}
+              </div>
+            ))}
+            <div className="bracket-round bracket-placement">
+              <h3>{t("ชิงอันดับสาม", "Third place")}</h3>
+              {(bracket.matches ?? []).filter((match) => match.round === "THIRD_PLACE").map((match) => (
+                <article className="bracket-match" data-status={match.status} key={match.matchId}>
+                  <span className="bracket-match-id technical">{match.matchId}</span>
+                  {[match.teamA, match.teamB].map((entry) => <div className={match.winnerTeamName === entry.teamName ? "winner" : ""} key={entry.teamName}><span>{entry.teamName}</span><strong className="technical">{entry.finalTimeMs === null ? "—" : seconds(entry.finalTimeMs)}</strong></div>)}
+                  <small>{t("เริ่มก่อน", "Starts first")}: {match.startsFirst}</small>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      );})}
+
       {categories.map((category) => (
         <section className="card" key={category.category}>
           <span className="section-kicker">
             {state === "FINAL"
               ? t("ผลอย่างเป็นทางการ", "Final standings")
-              : `${stageLabel[category.stage]} · ${category.scoringMode === "CHECKPOINT_LAP" ? "CHECKPOINT / LAP" : "TWO-ATTEMPT AVERAGE"}`}
+              : `${stageLabel[category.stage]} · ${category.scoringMode === "CHECKPOINT_LAP" ? "CHECKPOINT / LAP" : "BEST TWO OF THREE · AVERAGE"}`}
           </span>
           <h2>{category.category}</h2>
           <div className="table-wrap">

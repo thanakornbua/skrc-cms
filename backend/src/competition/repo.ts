@@ -7,9 +7,10 @@ import type { CompetitorRecord } from "../competitors/types.js";
 import { listRuns } from "../runs/repo.js";
 import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
 import { rankStageCategory, type StageScoringInput } from "./scoring.js";
+import { addFinals, addSemifinals, drawBrackets, settleRound } from "./bracket.js";
 import { COMPETITION_STATE_KEY, getCompetitionState } from "./state.js";
 import {
-  ADVANCEMENT_COUNT, COMPETITION_STAGES, NEXT_STAGE, type CategoryStageResults, type CompetitionStage,
+  COMPETITION_STAGES, NEXT_STAGE, type CategoryStageResults, type CompetitionBracket, type CompetitionStage,
   type CompetitionState, type StageRankedResult,
 } from "./types.js";
 
@@ -53,6 +54,20 @@ async function assertStageSettled(stage: CompetitionStage, eligible?: string[]):
     .map((run) => `${input.competitor.competitorId}/${run.runId}`);
   });
   if (unresolved.length) throw new ApiError(409, "CONFLICT", `Resolve active or under-review runs before advancing: ${unresolved.join(", ")}`);
+  const incomplete = inputs
+    .filter((input) => !allowed || allowed.has(input.competitor.competitorId))
+    .filter((input) => !input.competitor.disqualified.bool)
+    .map((input) => {
+      const corrected = new Set(input.corrections.filter((item) => (item.stage ?? "ROUND_1") === stage).map((item) => item.runId));
+      const consumed = input.runs.filter((run) => (run.stage ?? "ROUND_1") === stage).filter((run) =>
+        run.status === "COMPLETE" || run.status === "TIMED_OUT" || run.status === "INVALID" || corrected.has(run.runId)
+      ).length;
+      return { competitorId: input.competitor.competitorId, consumed };
+    })
+    .filter((item) => item.consumed < 3);
+  if (incomplete.length) {
+    throw new ApiError(409, "CONFLICT", `Every eligible team requires three attempts: ${incomplete.map((item) => `${item.competitorId} (${item.consumed}/3)`).join(", ")}`);
+  }
 }
 
 function publicize(results: CategoryStageResults[]): CategoryStageResults[] {
@@ -126,19 +141,66 @@ export async function advanceCompetitionStage(byUser: string): Promise<Competiti
   if (!nextStage) throw new ApiError(409, "CONFLICT", "The Best must be concluded, not advanced");
   await assertStageSettled(state.activeStage, state.activeStage === "ROUND_1" ? undefined : state.eligibleCompetitorIds);
   const current = await calculateStageRankings(state.activeStage, true);
-  const advanceCount = ADVANCEMENT_COUNT[state.activeStage]!;
-  const eligibleCompetitorIds = current.flatMap((category) =>
-    category.ranked.slice(0, advanceCount).map((item) => item.competitorId!).filter(Boolean)
-  );
-  if (eligibleCompetitorIds.length === 0) throw new ApiError(409, "CONFLICT", "No ranked competitors can advance");
   const now = new Date().toISOString();
+  let brackets: CompetitionBracket[];
+  let eligibleCompetitorIds: string[];
+  if (state.activeStage === "ROUND_1") {
+    brackets = drawBrackets(current, now, byUser);
+    eligibleCompetitorIds = brackets.flatMap((bracket) => bracket.positions.map((item) => item.competitorId));
+  } else if (state.activeStage === "BEST_OF_4") {
+    brackets = (state.brackets ?? []).map((bracket) => {
+      const result = current.find((item) => item.category === bracket.category);
+      if (!result) throw new ApiError(409, "CONFLICT", `${bracket.category} has no quarterfinal result`);
+      return addSemifinals(settleRound(bracket, "QUARTERFINAL", result, now));
+    });
+    eligibleCompetitorIds = brackets.flatMap((bracket) => bracket.matches.filter((item) => item.round === "SEMIFINAL").flatMap((item) => [item.teamAId, item.teamBId]));
+  } else {
+    brackets = (state.brackets ?? []).map((bracket) => {
+      const result = current.find((item) => item.category === bracket.category);
+      if (!result) throw new ApiError(409, "CONFLICT", `${bracket.category} has no semifinal result`);
+      return addFinals(settleRound(bracket, "SEMIFINAL", result, now));
+    });
+    eligibleCompetitorIds = brackets.flatMap((bracket) => bracket.matches.filter((item) => item.round === "FINAL" || item.round === "THIRD_PLACE").flatMap((item) => [item.teamAId, item.teamBId]));
+  }
+  if (eligibleCompetitorIds.length === 0) throw new ApiError(409, "CONFLICT", "No ranked competitors can advance");
   const next: CompetitionState = {
     ...state, phase: "OPEN", activeStage: nextStage, eligibleCompetitorIds,
+    brackets,
     stageResults: { ...(state.stageResults ?? {}), [state.activeStage]: current },
     updatedAt: now, updatedBy: byUser,
   };
   await putOpenState(state, next);
   return next;
+}
+
+function bracketFinalResults(
+  snapshots: Partial<Record<CompetitionStage, CategoryStageResults[]>>,
+  brackets: CompetitionBracket[],
+): CategoryStageResults[] {
+  return brackets.map((bracket) => {
+    const final = bracket.matches.find((item) => item.round === "FINAL");
+    const third = bracket.matches.find((item) => item.round === "THIRD_PLACE");
+    if (!final?.winnerId || !third?.winnerId) throw new ApiError(409, "CONFLICT", `${bracket.category} final matches are incomplete`);
+    const finalLoser = final.winnerId === final.teamAId ? final.teamBId : final.teamAId;
+    const thirdLoser = third.winnerId === third.teamAId ? third.teamBId : third.teamAId;
+    const quarterfinalLosers = bracket.matches
+      .filter((item) => item.round === "QUARTERFINAL")
+      .map((item) => item.winnerId === item.teamAId ? item.teamBId : item.teamAId);
+    const resultMap = new Map<string, StageRankedResult>();
+    for (const stage of COMPETITION_STAGES) for (const categoryResult of snapshots[stage] ?? []) {
+      if (categoryResult.category !== bracket.category) continue;
+      for (const item of categoryResult.ranked) if (item.competitorId) resultMap.set(item.competitorId, item);
+    }
+    const qfRank = new Map((snapshots.BEST_OF_4?.find((item) => item.category === bracket.category)?.ranked ?? []).map((item) => [item.competitorId, item.rank]));
+    quarterfinalLosers.sort((a, b) => (qfRank.get(a) ?? 999) - (qfRank.get(b) ?? 999));
+    const orderedIds = [final.winnerId, finalLoser, third.winnerId, thirdLoser, ...quarterfinalLosers];
+    const ranked = orderedIds.map((competitorId, index) => {
+      const result = resultMap.get(competitorId);
+      if (!result) throw new ApiError(409, "CONFLICT", `Missing result for ${competitorId}`);
+      return { ...result, rank: index + 1 };
+    });
+    return { category: bracket.category, stage: "THE_BEST", scoringMode: "TIME_AVERAGE", ranked, unranked: [], disqualified: [] };
+  });
 }
 
 export function assembleFinalResults(snapshots: Partial<Record<CompetitionStage, CategoryStageResults[]>>): CategoryStageResults[] {
@@ -208,11 +270,16 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
   await assertStageSettled("THE_BEST", state.eligibleCompetitorIds);
   const current = await calculateStageRankings("THE_BEST", true);
   const snapshots = { ...(state.stageResults ?? {}), THE_BEST: current };
-  const internalResults = assembleFinalResults(snapshots);
-  const publicResults = publicize(internalResults);
   const concludedAt = new Date().toISOString();
+  const brackets = (state.brackets ?? []).map((bracket) => {
+    const result = current.find((item) => item.category === bracket.category);
+    if (!result) throw new ApiError(409, "CONFLICT", `${bracket.category} has no final result`);
+    return settleRound(settleRound(bracket, "FINAL", result, concludedAt), "THIRD_PLACE", result, concludedAt);
+  });
+  const internalResults = bracketFinalResults(snapshots, brackets);
+  const publicResults = publicize(internalResults);
   await putOpenState(state, {
-    ...state, phase: "CONCLUDED", stageResults: snapshots, results: publicResults,
+    ...state, phase: "CONCLUDED", stageResults: snapshots, brackets, results: publicResults,
     concludedAt, concludedBy: byUser, updatedAt: concludedAt, updatedBy: byUser,
   });
   try {

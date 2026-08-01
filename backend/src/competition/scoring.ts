@@ -22,12 +22,15 @@ function stagePenalty(input: StageScoringInput, stage: CompetitionStage): number
 function scoredRuns(input: StageScoringInput, stage: CompetitionStage) {
   const corrections = new Map(input.corrections.filter((item) => correctionStage(item) === stage).map((item) => [item.runId, item]));
   return input.runs
-    .filter((run) => runStage(run) === stage && run.status !== "VOID" && run.status !== "INVALID")
+    .filter((run) => runStage(run) === stage && run.status !== "VOID")
     .map((run) => {
       const correction = corrections.get(run.runId);
-      const elapsedMs = correction?.elapsedMs ?? (run.status === "COMPLETE" ? run.elapsedMs : null);
+      const completed = Boolean(correction) || run.status === "COMPLETE";
+      const elapsedMs = correction?.elapsedMs
+        ?? (run.status === "COMPLETE" ? run.elapsedMs
+          : run.status === "TIMED_OUT" || run.status === "INVALID" ? run.maxTimeMs : null);
       const uniqueCheckpoints = new Set((run.splits ?? []).map((split) => split.gateId)).size;
-      return { run, elapsedMs, uniqueCheckpoints };
+      return { run, elapsedMs, uniqueCheckpoints, completed };
     });
 }
 
@@ -50,8 +53,8 @@ export function scoreCompetitorStage(input: StageScoringInput, stage: Competitio
     const finalTimeMs = bestLap ? bestLap.elapsedMs + penaltyTimeMs : null;
     return {
       teamName: input.competitor.teamName, competitorId: input.competitor.competitorId,
-      stage, scoringMode: mode, completedLap: Boolean(bestLap),
-      lapTimeMs: bestLap?.elapsedMs ?? null, furthestCheckpoint: furthest,
+      stage, scoringMode: mode, completedLap: Boolean(bestLap), completedRunCount: laps.length,
+      lapTimeMs: bestLap?.elapsedMs ?? null, secondBestTimeMs: laps[1]?.elapsedMs ?? null, furthestCheckpoint: furthest,
       aggregateTimeMs: bestLap?.elapsedMs ?? null, penaltyTimeMs, finalTimeMs,
       tieTimestamp: bestLap?.run.createdAt ?? furthestAt,
     };
@@ -62,13 +65,17 @@ export function scoreCompetitorStage(input: StageScoringInput, stage: Competitio
     .sort((a, b) => a.elapsedMs - b.elapsedMs || a.run.createdAt.localeCompare(b.run.createdAt));
   if (valid.length === 0) return null;
   const best = valid.slice(0, 2);
-  const aggregateTimeMs = best.reduce((sum, item) => sum + item.elapsedMs, 0) / best.length;
+  const aggregateTimeMs = Math.ceil(best.reduce((sum, item) => sum + item.elapsedMs, 0) / best.length);
+  const completedTimes = valid.filter((item) => item.completed).map((item) => item.elapsedMs).sort((a, b) => a - b);
   return {
     teamName: input.competitor.teamName, competitorId: input.competitor.competitorId,
-    stage, scoringMode: mode, completedLap: true,
-    lapTimeMs: best[0].elapsedMs, furthestCheckpoint: 0,
+    stage, scoringMode: mode, completedLap: completedTimes.length > 0,
+    completedRunCount: completedTimes.length,
+    lapTimeMs: completedTimes[0] ?? null,
+    secondBestTimeMs: completedTimes[1] ?? null,
+    furthestCheckpoint: 0,
     aggregateTimeMs, penaltyTimeMs, finalTimeMs: aggregateTimeMs + penaltyTimeMs,
-    tieTimestamp: best[0].run.createdAt,
+    tieTimestamp: input.competitor.createdAt ?? best[0].run.createdAt,
   };
 }
 
@@ -81,6 +88,11 @@ export function rankStageCategory(inputs: StageScoringInput[], stage: Competitio
       .map((item) => ({ input: item, result: scoreCompetitorStage(item, stage) }));
     const rankable = scored.filter((item): item is typeof item & { result: NonNullable<typeof item.result> } => item.result !== null);
     rankable.sort((a, b) => {
+      const aCompletionTier = Math.min(a.result.completedRunCount, 2);
+      const bCompletionTier = Math.min(b.result.completedRunCount, 2);
+      if (aCompletionTier !== bCompletionTier) {
+        return bCompletionTier - aCompletionTier;
+      }
       if (stage === "ROUND_1" || stage === "BEST_OF_4") {
         if (a.result.completedLap !== b.result.completedLap) return a.result.completedLap ? -1 : 1;
         if (!a.result.completedLap) {
@@ -90,6 +102,9 @@ export function rankStageCategory(inputs: StageScoringInput[], stage: Competitio
         }
       }
       return a.result.finalTimeMs! - b.result.finalTimeMs! ||
+        (a.result.lapTimeMs ?? Number.MAX_SAFE_INTEGER) - (b.result.lapTimeMs ?? Number.MAX_SAFE_INTEGER) ||
+        (a.result.secondBestTimeMs ?? Number.MAX_SAFE_INTEGER) - (b.result.secondBestTimeMs ?? Number.MAX_SAFE_INTEGER) ||
+        a.result.penaltyTimeMs - b.result.penaltyTimeMs ||
         (a.result.tieTimestamp ?? "").localeCompare(b.result.tieTimestamp ?? "") ||
         a.input.competitor.competitorId.localeCompare(b.input.competitor.competitorId);
     });

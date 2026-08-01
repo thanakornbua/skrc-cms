@@ -19,10 +19,10 @@ const timingSchema = z.object({
     THE_BEST: z.number().int().positive(),
   }),
   stageMaxAttempts: z.object({
-    ROUND_1: z.number().int().min(1).max(20),
-    BEST_OF_4: z.number().int().min(1).max(20),
-    BEST_OF_2: z.number().int().min(1).max(20),
-    THE_BEST: z.number().int().min(1).max(20),
+    ROUND_1: z.literal(3),
+    BEST_OF_4: z.literal(3),
+    BEST_OF_2: z.literal(3),
+    THE_BEST: z.literal(3),
   }),
 }).superRefine((data, context) => {
   for (const stage of ["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BEST"] as const) if (data.minTimeMs >= data.stageMaxTimeMs[stage]) {

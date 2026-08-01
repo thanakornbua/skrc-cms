@@ -2,17 +2,18 @@ export const COMPETITION_STAGES = ["ROUND_1", "BEST_OF_4", "BEST_OF_2", "THE_BES
 export type CompetitionStage = (typeof COMPETITION_STAGES)[number];
 export type CompetitionPhase = "OPEN" | "CONCLUDED";
 export type ScoringMode = "CHECKPOINT_LAP" | "TIME_AVERAGE";
+export const ATTEMPTS_PER_ROUND = 3;
 
 export const STAGE_LABELS: Record<CompetitionStage, string> = {
-  ROUND_1: "Round 1",
-  BEST_OF_4: "Best of 4",
-  BEST_OF_2: "Best of 2",
-  THE_BEST: "The Best",
+  ROUND_1: "Qualifying round",
+  BEST_OF_4: "Quarterfinals",
+  BEST_OF_2: "Semifinals",
+  THE_BEST: "Finals",
 };
 
 export const STAGE_SCORING: Record<CompetitionStage, ScoringMode> = {
-  ROUND_1: "CHECKPOINT_LAP",
-  BEST_OF_4: "CHECKPOINT_LAP",
+  ROUND_1: "TIME_AVERAGE",
+  BEST_OF_4: "TIME_AVERAGE",
   BEST_OF_2: "TIME_AVERAGE",
   THE_BEST: "TIME_AVERAGE",
 };
@@ -26,7 +27,8 @@ export const NEXT_STAGE: Partial<Record<CompetitionStage, CompetitionStage>> = {
 export const ADVANCEMENT_COUNT: Partial<Record<CompetitionStage, number>> = {
   ROUND_1: 8,
   BEST_OF_4: 4,
-  BEST_OF_2: 2,
+  // Both semifinal winners and losers continue: final + third-place match.
+  BEST_OF_2: 4,
 };
 
 export interface StageRankedResult {
@@ -36,12 +38,35 @@ export interface StageRankedResult {
   stage: CompetitionStage;
   scoringMode: ScoringMode;
   completedLap: boolean;
+  completedRunCount: number;
   lapTimeMs: number | null;
+  secondBestTimeMs: number | null;
   furthestCheckpoint: number;
   aggregateTimeMs: number | null;
   penaltyTimeMs: number;
   finalTimeMs: number | null;
   tieTimestamp: string | null;
+}
+
+export type BracketRound = "QUARTERFINAL" | "SEMIFINAL" | "FINAL" | "THIRD_PLACE";
+
+export interface BracketMatch {
+  matchId: string;
+  round: BracketRound;
+  order: number;
+  teamAId: string;
+  teamBId: string;
+  startsFirstId: string;
+  winnerId: string | null;
+  completedAt: string | null;
+}
+
+export interface CompetitionBracket {
+  category: string;
+  drawnAt: string;
+  drawnBy: string;
+  positions: Array<{ position: number; competitorId: string; teamName: string }>;
+  matches: BracketMatch[];
 }
 export interface CategoryStageResults {
   category: string;
@@ -57,6 +82,7 @@ export interface CompetitionState {
   activeStage: CompetitionStage;
   eligibleCompetitorIds?: string[];
   stageResults?: Partial<Record<CompetitionStage, CategoryStageResults[]>>;
+  brackets?: CompetitionBracket[];
   concludedAt?: string;
   concludedBy?: string;
   results?: CategoryStageResults[];

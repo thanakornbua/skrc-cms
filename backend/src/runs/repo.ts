@@ -5,10 +5,10 @@ import {
 import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { config } from "../config.js";
 import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
-import { STAGE_SCORING } from "../competition/types.js";
+import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { listCorrections } from "../timing/repo.js";
-import { consumedStageBudgetMs, stageAttemptState } from "../timing/budget.js";
+import { stageAttemptState } from "../timing/budget.js";
 import type { GateEventInput, RunRecord, RunSplit } from "./types.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -120,16 +120,10 @@ export async function processGateEvent(
     }
     const [stageRuns, corrections] = await Promise.all([listRuns(lane.competitorId), listCorrections(lane.competitorId)]);
     const attemptState = stageAttemptState(stageRuns, corrections, competition.activeStage);
-    const maxAttempts = timingResult.Item?.stageMaxAttempts?.[competition.activeStage] ?? 2;
-    if (attemptState.unresolved || attemptState.consumed >= maxAttempts) {
+    if (attemptState.unresolved || attemptState.consumed >= ATTEMPTS_PER_ROUND) {
       return { accepted: false, reason: "invalid_state" };
     }
-    let maxTimeMs = configuredMaxTimeMs;
-    if (STAGE_SCORING[competition.activeStage] === "CHECKPOINT_LAP") {
-      const used = consumedStageBudgetMs(stageRuns, corrections, competition.activeStage);
-      maxTimeMs = configuredMaxTimeMs - used;
-      if (maxTimeMs <= 0) return { accepted: false, reason: "invalid_state" };
-    }
+    const maxTimeMs = configuredMaxTimeMs;
     const now = new Date().toISOString();
     try {
       await ddbDoc.send(new TransactWriteCommand({ TransactItems: [

@@ -18,6 +18,7 @@
     "simulate-gates": "tsx src/simulate-gates.ts",
     "stress-gates": "tsx src/stress-gates.ts",
     "rehearse-local": "tsx src/local-rehearsal.ts",
+    "mock-competition": "tsx src/mock-competition.ts",
     "dynamodb-local:up": "docker compose -f docker-compose.local.yml up -d && tsx src/wait-dynamodb.ts",
     "dynamodb-local:down": "docker compose -f docker-compose.local.yml down",
     "purge-pii": "tsx src/purge-pii.ts",

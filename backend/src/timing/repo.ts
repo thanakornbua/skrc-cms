@@ -35,7 +35,7 @@ export function stageMaximum(timing: CategoryTiming, stage: CompetitionStage): n
 }
 
 export function stageAttemptMaximum(timing: CategoryTiming, stage: CompetitionStage): number {
-  return timing.stageMaxAttempts?.[stage] ?? 2;
+  return timing.stageMaxAttempts?.[stage] ?? 3;
 }
 
 export async function putCategoryTiming(

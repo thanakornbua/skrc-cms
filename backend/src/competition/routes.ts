@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { ApiError } from "../errors.js";
-import { advanceCompetitionStage, calculateRankings, concludeCompetition, getCompetitionState, reopenCompetition } from "./repo.js";
+import { advanceCompetitionStage, calculateRankings, calculateStageRankings, concludeCompetition, getCompetitionState, reopenCompetition } from "./repo.js";
+import { publicizeBrackets } from "./bracket.js";
 
 export const competitionRouter = Router();
 
@@ -10,11 +11,19 @@ competitionRouter.get("/public/scoreboard", async (req, res, next) => {
   try {
     const state = await getCompetitionState();
     const results = state.phase === "CONCLUDED" && state.results ? state.results : await calculateRankings(false);
+    const bracketResults = state.phase === "CONCLUDED"
+      ? state.stageResults ?? {}
+      : { ...(state.stageResults ?? {}), [state.activeStage]: await calculateStageRankings(state.activeStage, true) };
     const category = typeof req.query.category === "string" ? req.query.category : undefined;
     const selected = category ? results.filter((item) => item.category === category) : results;
     res.status(200).json({
       state: state.phase === "CONCLUDED" ? "FINAL" : "PROVISIONAL",
-      activeStage: state.activeStage, categories: selected,
+      activeStage: state.activeStage,
+      categories: selected,
+      brackets: publicizeBrackets(
+        category ? state.brackets?.filter((item) => item.category === category) : state.brackets,
+        bracketResults,
+      ),
     });
   } catch (error) { next(error); }
 });
@@ -53,6 +62,6 @@ competitionRouter.get("/admin/competition/export", requireAuth, requireRole("adm
   try {
     const state = await getCompetitionState();
     if (state.phase !== "CONCLUDED" || !state.results) throw new ApiError(409, "CONFLICT", "Competition has not concluded");
-    res.status(200).json({ categories: state.results });
+    res.status(200).json({ categories: state.results, brackets: publicizeBrackets(state.brackets, state.stageResults ?? {}) });
   } catch (error) { next(error); }
 });

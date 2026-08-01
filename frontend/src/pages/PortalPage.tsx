@@ -50,7 +50,7 @@ interface Competitor {
   }>;
 }
 
-const STAGE_LABEL = { ROUND_1: "Round 1", BEST_OF_4: "Best of 4", BEST_OF_2: "Best of 2", THE_BEST: "The Best" } as const;
+const STAGE_LABEL = { ROUND_1: "Qualifying round", BEST_OF_4: "Quarterfinals", BEST_OF_2: "Semifinals", THE_BEST: "Finals" } as const;
 
 interface MeResponse {
   registration: Registration;
