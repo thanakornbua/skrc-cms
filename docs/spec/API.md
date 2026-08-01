@@ -34,18 +34,18 @@ Never call the wrong service from the wrong era — the frontend switches which 
   ```json
   {
     "teamName": "string", "category": "string",
-    "school": "string", "certificateLanguage": "THAI"|"ENGLISH"|"BILINGUAL",
-    "advisorNameThai": "string", "advisorNameEnglish": "string",
-    "advisorEmail": "advisor@example.com", "advisorPhone": "string",
+    "school": "optional string", "certificateLanguage": "THAI"|"ENGLISH"|"BILINGUAL",
+    "advisorNameThai": "optional string", "advisorNameEnglish": "optional string",
+    "advisorEmail": "optional advisor@example.com", "advisorPhone": "optional string",
     "student1NameThai": "string", "student1NameEnglish": "string",
     "contactEmail": "leader@example.com", "contactPhone": "string",
-    "student2NameThai": "string", "student2NameEnglish": "string",
-    "student3NameThai": "string", "student3NameEnglish": "string",
-    "student1FoodAllergy": "NONE or details", "student2FoodAllergy": "NONE or details", "student3FoodAllergy": "NONE or details",
+    "student2NameThai": "optional string", "student2NameEnglish": "optional string",
+    "student3NameThai": "optional string", "student3NameEnglish": "optional string",
+    "student1FoodAllergy": "NONE or details", "student2FoodAllergy": "optional: NONE or details", "student3FoodAllergy": "optional: NONE or details",
     "pdpaConsent": true, "pdpaAuthorityConfirmed": true
   }
   ```
-  `teamName` is the public competition identity; category must be configured. The school is selected or completed from the official `school68.xlsx` catalogue, but free-text entry remains supported for a school not yet listed. Advisor and all three student names are required in Thai and English. Each student must explicitly declare `NONE` or their food-allergy details. Student 1 is the team leader and correspondence contact. The standalone bilingual notice is shown before authentication or registration fields. `pdpaConsent` and `pdpaAuthorityConfirmed` must explicitly be `true`; the server records the policy version, language, consent time, authority declaration, and six-calendar-month deletion deadline. Registration is free.
+  `teamName` is the public competition identity; category must be configured. A team has 1–3 members, in accordance with Rules 1.2(3) and 2.2. Member 1 is required and is the team leader/correspondence contact; Members 2–3 are optional, contiguous members. Every listed member must provide Thai and English names and explicitly declare `NONE` or their food-allergy details. School/affiliation and advisor are optional so unaffiliated entrants and adults remain eligible under Rule 2.1; when any advisor field is supplied, the complete bilingual name, email, and phone record is required. A supplied school can be selected from the official `school68.xlsx` catalogue or entered as free text. The standalone bilingual notice is shown before authentication or registration fields. `pdpaConsent` and `pdpaAuthorityConfirmed` must explicitly be `true`; the server records the policy version, language, consent time, authority declaration, and six-calendar-month deletion deadline. Registration is free.
 - **Response 201:** `{ "competitorId": null, "status": "PENDING_APPROVAL" }` (no `competitorId` yet — minted at approval).
 - **Browser preflight:** `OPTIONS /register` returns an empty `204`; the browser then sends the authenticated `POST`, which returns the `201` above.
 - **Email side effect:** after the Registration item is committed, a DynamoDB Stream worker asynchronously sends a bilingual receipt to `contactEmail`. Delivery failure never rolls back registration and is retried independently.
@@ -67,7 +67,7 @@ Never call the wrong service from the wrong era — the frontend switches which 
 ### `GET /pending`
 - **Role:** committee (admin passes).
 - **Query:** optional `?category=`.
-- **Response 200:** `{ "items": [ { "sub": "...", "teamName": "...", "category": "...", "contactPhone": "...", "contactEmail": "...", "createdAt": "..." } ] }`.
+- **Response 200:** `{ "items": [registration review records] }`. Each protected staff record includes every applicant-supplied team, school, advisor, contact, student name, food-allergy and certificate field; derived `memberCount`; the complete recorded PDPA consent metadata; status, account `sub`, and `createdAt`. Empty Student 2/3 fields mean those optional members are not part of the team. This PII response is never public.
 
 ### `POST /registrations/:sub/approve`
 - **Role:** committee (admin passes).

@@ -551,6 +551,50 @@ textarea:focus-visible,
 .card h2, .card h3 { margin-bottom: var(--space-3); }
 .card > :last-child { margin-bottom: 0; }
 
+/* Complete registration dossier used by committee/admin before approval. */
+.approval-card { padding: 0; overflow: hidden; }
+.approval-card-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr);
+  gap: var(--space-5);
+  align-items: end;
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--ink);
+  background: var(--surface);
+}
+.approval-card-header h2 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-3xl); }
+.approval-card-header p { margin: 0; color: var(--color-text-2); }
+.approval-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.approval-summary .approval-datum { border-left: 1px solid var(--hairline); }
+.approval-section { padding: var(--space-6); border-bottom: 1px solid var(--hairline); }
+.approval-section > h3 { margin-bottom: var(--space-5); }
+.approval-data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--hairline); }
+.approval-datum { min-width: 0; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--hairline); }
+.approval-data-grid .approval-datum:nth-child(odd) { border-right: 1px solid var(--hairline); }
+.approval-data-grid .approval-datum:nth-last-child(-n + 2) { border-bottom: 0; }
+.approval-datum dt {
+  margin-bottom: var(--space-1);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.approval-datum dd { margin: 0; overflow-wrap: anywhere; color: var(--ink); }
+.approval-members { display: grid; gap: var(--space-3); }
+.approval-member { border: 1px solid var(--hairline-2); background: var(--sunk); }
+.approval-member-heading { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--hairline-2); }
+.approval-member-heading h4 { font-size: var(--text-base); }
+.approval-member-number { color: var(--accent); font-family: var(--font-mono); font-size: var(--text-lg); font-weight: var(--weight-bold); }
+.approval-member .approval-data-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); border: 0; }
+.approval-member .approval-datum { border-bottom: 0; border-right: 1px solid var(--hairline-2); }
+.approval-member .approval-datum:last-child { border-right: 0; }
+.approval-contact-grid { margin-top: var(--space-4); }
+.approval-consent { background: color-mix(in srgb, var(--color-success-soft) 45%, var(--surface)); }
+.approval-decision { padding: var(--space-6); margin: 0; }
+.approval-card > .button-row { padding: 0 var(--space-6) var(--space-6); }
+
 .auth-page { max-width: var(--content-narrow); }
 .auth-card { padding: clamp(var(--space-6), 5vw, var(--space-8)); }
 .auth-switch { margin-top: var(--space-4); }
@@ -976,6 +1020,14 @@ tbody tr:hover { background: var(--sunk); }
   .consent-summary { align-items: stretch; flex-direction: column; }
   .nav-main { align-items: flex-start; flex-direction: column; gap: var(--space-2); }
   .nav-links { width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .approval-card-header, .approval-data-grid, .approval-member .approval-data-grid { grid-template-columns: 1fr; }
+  .approval-summary { grid-template-columns: 1fr 1fr; }
+  .approval-data-grid .approval-datum,
+  .approval-data-grid .approval-datum:nth-child(odd),
+  .approval-data-grid .approval-datum:nth-last-child(-n + 2),
+  .approval-member .approval-datum { border-right: 0; border-bottom: 1px solid var(--hairline); }
+  .approval-data-grid .approval-datum:last-child,
+  .approval-member .approval-datum:last-child { border-bottom: 0; }
 }
 
 @media (max-width: 900px) {

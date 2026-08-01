@@ -24,8 +24,8 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
 
     <div className="privacy-meta">
       <span className="status-badge">PDPA NOTICE</span>
-      <span>{t("ฉบับ", "Version")} <strong className="technical">2026-07-20-v2</strong></span>
-      <span>{t("มีผลใช้บังคับ", "Effective")} <strong>20 July 2026</strong></span>
+      <span>{t("ฉบับ", "Version")} <strong className="technical">2026-08-01-v3</strong></span>
+      <span>{t("มีผลใช้บังคับ", "Effective")} <strong>1 August 2026</strong></span>
     </div>
 
     <article className="card privacy-document">
@@ -40,20 +40,21 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
       <section>
         <h2>{t("2. ผู้ที่เอกสารนี้ใช้บังคับ", "2. Who this notice covers")}</h2>
         <p>{t(
-          "เอกสารนี้ใช้กับนักเรียนทั้งสามคนในทีม ผู้สมัคร ผู้ใช้อำนาจปกครอง ผู้แทนโดยชอบธรรม และบุคคลติดต่อที่ให้ข้อมูลผ่านระบบนี้ ผู้กรอกแบบฟอร์มต้องแจ้งเนื้อหาในเอกสารนี้ให้สมาชิกทุกคนและผู้ใช้อำนาจปกครองที่เกี่ยวข้องทราบก่อนส่งข้อมูล",
-          "This notice covers all three students, the submitter, parents or legal representatives, and the correspondence contact. The submitter must provide this notice to every team member and relevant parent or legal representative before submitting their information.")}</p>
+          "เอกสารนี้ใช้กับสมาชิกทีมจำนวนหนึ่งถึงสามคน ผู้สมัคร อาจารย์ที่ปรึกษา (ถ้ามี) ผู้ใช้อำนาจปกครอง ผู้แทนโดยชอบธรรม และบุคคลติดต่อที่ให้ข้อมูลผ่านระบบนี้ ผู้กรอกแบบฟอร์มต้องแจ้งเนื้อหาในเอกสารนี้ให้สมาชิกทุกคนและผู้ใช้อำนาจปกครองที่เกี่ยวข้องทราบก่อนส่งข้อมูล",
+          "This notice covers the team’s one to three members, the submitter, any advisor, parents or legal representatives, and the correspondence contact. The submitter must provide this notice to every team member and relevant parent or legal representative before submitting their information.")}</p>
       </section>
 
       <section>
         <h2>{t("3. ข้อมูลที่เก็บรวบรวม", "3. Personal data collected")}</h2>
         <ul>
           <li><strong>{t("ข้อมูลบัญชี", "Account data")}:</strong> {t("อีเมล รหัสผู้ใช้ Cognito และข้อมูลยืนยันตัวตนของเซสชัน", "email, Cognito user identifier, and session authentication data.")}</li>
-          <li><strong>{t("ข้อมูลทีมและนักเรียน", "Team and student data")}:</strong> {t("ชื่อทีม ชื่อ-นามสกุลภาษาไทยและอังกฤษของนักเรียนทั้งสามคน และสถานะหัวหน้าทีม", "team name, Thai and English names of all three students, and team-leader status.")}</li>
-          <li><strong>{t("ข้อมูลติดต่อ", "Contact data")}:</strong> {t("อีเมลและหมายเลขโทรศัพท์ของนักเรียนคนที่ 1 ซึ่งเป็นหัวหน้าทีมและผู้ประสานงาน", "email and phone number of Student 1 as team leader and correspondent.")}</li>
+          <li><strong>{t("ข้อมูลทีมและสมาชิก", "Team and member data")}:</strong> {t("ชื่อทีม ชื่อ-นามสกุลภาษาไทยและอังกฤษของสมาชิกที่ลงทะเบียนจำนวนหนึ่งถึงสามคน และสถานะหัวหน้าทีม", "team name, Thai and English names of the one to three registered members, and team-leader status.")}</li>
+          <li><strong>{t("ข้อมูลติดต่อ", "Contact data")}:</strong> {t("อีเมลและหมายเลขโทรศัพท์ของสมาชิกคนที่ 1 ซึ่งเป็นหัวหน้าทีมและผู้ประสานงาน รวมถึงข้อมูลอาจารย์ที่ปรึกษาหากระบุ", "email and phone number of Member 1 as team leader and correspondent, plus advisor contact details when provided.")}</li>
+          <li><strong>{t("ข้อมูลการแพ้อาหาร", "Food-allergy data")}:</strong> {t("คำยืนยันว่าไม่มีการแพ้อาหารหรือรายละเอียดการแพ้อาหารของสมาชิกแต่ละคน เพื่อความปลอดภัยและการจัดอาหาร", "each listed member’s declaration of no food allergies or their allergy details, for safety and catering.")}</li>
           <li><strong>{t("ข้อมูลการแข่งขัน", "Competition data")}:</strong> {t("หมายเลขผู้เข้าแข่งขัน ประเภทการแข่งขัน สถานะการอนุมัติ เช็คอิน ตรวจสภาพ สนาม รอบแข่งขัน เวลาดิบ เวลาปรับ การแก้ไขเวลา การตัดสิทธิ์ อันดับ และบันทึกการดำเนินงาน", "competitor number, category, approval, check-in, inspection, lane, attempts, raw time, penalties, corrections, disqualification, rank, and operational audit records.")}</li>
           <li><strong>{t("หลักฐานความยินยอม", "Consent evidence")}:</strong> {t("รุ่นเอกสาร วันเวลาให้ความยินยอม การยืนยันอำนาจ และกำหนดวันลบ", "notice version, consent timestamp, authority confirmation, and deletion deadline.")}</li>
         </ul>
-        <p><strong>{t("ไม่ประสงค์เก็บข้อมูลอ่อนไหว", "No sensitive data requested")}:</strong> {t("กรุณาอย่ากรอกข้อมูลสุขภาพ ศาสนา เชื้อชาติ ความคิดเห็นทางการเมือง ข้อมูลชีวมิติ หรือข้อมูลอ่อนไหวอื่นในช่องข้อความ", "Do not submit health, religion, race, political opinion, biometric, or other sensitive data.")}</p>
+        <p><strong>{t("ข้อมูลอ่อนไหวที่จำกัด", "Limited sensitive data")}:</strong> {t("ระบบขอเฉพาะข้อมูลการแพ้อาหารที่จำเป็นต่อความปลอดภัยและการจัดอาหาร โปรดอย่ากรอกข้อมูลสุขภาพอื่น ศาสนา เชื้อชาติ ความคิดเห็นทางการเมือง ข้อมูลชีวมิติ หรือข้อมูลอ่อนไหวที่ไม่เกี่ยวข้อง", "Only food-allergy information needed for safety and catering is requested. Do not submit unrelated health, religion, race, political-opinion, biometric, or other sensitive data.")}</p>
       </section>
 
       <section>
@@ -79,8 +80,8 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
       <section>
         <h2>{t("6. ความจำเป็นและผลหากไม่ให้ข้อมูล", "6. Required data and consequences")}</h2>
         <p>{t(
-          "ข้อมูลที่ระบุในแบบฟอร์มเป็นข้อมูลจำเป็นต่อการรับสมัคร การไม่ให้ข้อมูลหรือไม่ยอมรับข้อตกลงจะทำให้ไม่สามารถส่งใบสมัครหรือเข้าร่วมการแข่งขันผ่านระบบนี้ได้ โดยไม่มีการเรียกเก็บเงิน",
-          "The form data is required to process participation. If it is not provided, or this agreement is not accepted, registration through this system cannot proceed. No payment is required.")}</p>
+          "ข้อมูลทีม ข้อมูลสมาชิกและการแพ้อาหารของสมาชิกที่ระบุ ข้อมูลติดต่อ ภาษาเกียรติบัตร และหลักฐานความยินยอมเป็นข้อมูลจำเป็นต่อการรับสมัคร ส่วนสถานศึกษาหรือสังกัดและอาจารย์ที่ปรึกษาไม่บังคับ การไม่ให้ข้อมูลที่จำเป็นหรือไม่ยอมรับข้อตกลงจะทำให้ไม่สามารถส่งใบสมัครผ่านระบบนี้ได้ โดยไม่มีการเรียกเก็บเงิน",
+          "Team data, details and food-allergy declarations for each listed member, contact data, certificate language, and consent evidence are required to process participation. School or affiliation and advisor details are optional. If required data is not provided, or this agreement is not accepted, registration through this system cannot proceed. No payment is required.")}</p>
       </section>
 
       <section>
@@ -88,7 +89,7 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
         <ul>
           <li>{t("กรรมการและผู้ดูแลระบบที่ได้รับอนุญาตจะเข้าถึงข้อมูลเท่าที่จำเป็นตามหน้าที่", "authorized committee members and administrators on a need-to-know basis.")}</li>
           <li>{t("ผู้ให้บริการโครงสร้างพื้นฐานระบบคลาวด์ การยืนยันตัวตน ฐานข้อมูล และโฮสติ้งในฐานะผู้ประมวลผลข้อมูล", "cloud, authentication, database, and hosting providers acting as processors.")}</li>
-          <li>{t("สาธารณะจะเห็นเฉพาะชื่อทีม อันดับ เวลา และผลที่เกี่ยวข้อง ไม่เผยแพร่ชื่อนักเรียน อีเมล หรือโทรศัพท์ในกระดานผล", "the public sees team name, rank, time, and relevant result only; student names, email, and phone are not published on the scoreboard.")}</li>
+          <li>{t("สาธารณะจะเห็นเฉพาะชื่อทีม อันดับ เวลา และผลที่เกี่ยวข้อง ไม่เผยแพร่ชื่อสมาชิก ข้อมูลการแพ้อาหาร อีเมล หรือโทรศัพท์ในกระดานผล", "the public sees team name, rank, time, and relevant result only; member names, food-allergy data, email, and phone are not published on the scoreboard.")}</li>
           <li>{t("หน่วยงานรัฐหรือบุคคลอื่นเมื่อกฎหมาย คำสั่ง หรือการคุ้มครองสิทธิเรียกร้องกำหนด", "authorities or other parties when required by law, order, or legal-claim protection.")}</li>
         </ul>
       </section>
@@ -103,8 +104,8 @@ export default function PdpaAgreement({ onAccept }: PdpaAgreementProps) {
       <section>
         <h2>{t("9. ระยะเวลาเก็บรักษาและการลบ", "9. Retention and deletion")}</h2>
         <p>{t(
-          "ข้อมูลส่วนบุคคลโดยตรง บัญชีผู้ใช้ ข้อมูลติดต่อ และชื่อนักเรียนจะถูกลบหรือทำให้ไม่สามารถระบุตัวบุคคลได้ภายในหกเดือนนับจากวันที่ให้ความยินยอม ระบบจะบันทึกกำหนดวันลบเฉพาะรายการ ชื่อทีมและผลการแข่งขันที่ไม่รวมข้อมูลติดต่ออาจคงไว้เป็นบันทึกผลการแข่งขัน เว้นแต่กฎหมายหรือข้อพิพาทที่ยังไม่สิ้นสุดกำหนดให้เก็บข้อมูลเฉพาะส่วนไว้นานกว่า",
-          "Direct identifiers, user accounts, contact details, and student names will be deleted or anonymized within six months of consent, with an item-specific deletion deadline recorded. Team names and results without contact details may remain as competition records unless applicable law or an unresolved dispute requires limited data to be retained longer.")}</p>
+          "ข้อมูลส่วนบุคคลโดยตรง บัญชีผู้ใช้ ข้อมูลติดต่อ ข้อมูลการแพ้อาหาร และชื่อสมาชิกจะถูกลบหรือทำให้ไม่สามารถระบุตัวบุคคลได้ภายในหกเดือนนับจากวันที่ให้ความยินยอม ระบบจะบันทึกกำหนดวันลบเฉพาะรายการ ชื่อทีมและผลการแข่งขันที่ไม่รวมข้อมูลติดต่ออาจคงไว้เป็นบันทึกผลการแข่งขัน เว้นแต่กฎหมายหรือข้อพิพาทที่ยังไม่สิ้นสุดกำหนดให้เก็บข้อมูลเฉพาะส่วนไว้นานกว่า",
+          "Direct identifiers, user accounts, contact details, food-allergy data, and member names will be deleted or anonymized within six months of consent, with an item-specific deletion deadline recorded. Team names and results without contact details may remain as competition records unless applicable law or an unresolved dispute requires limited data to be retained longer.")}</p>
       </section>
 
       <section>

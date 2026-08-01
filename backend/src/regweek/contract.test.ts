@@ -30,20 +30,57 @@ test("registration accepts every applicant-supplied field in ltrc_application.do
   assert.equal(registerSchema.safeParse(validRegistration).success, true);
 });
 
-test("registration requires every template identity and advisor field", () => {
+test("registration accepts teams of one, two, or three members", () => {
+  const oneMember = { ...validRegistration } as Record<string, unknown>;
   for (const field of [
     "student2NameThai", "student2NameEnglish", "student3NameThai", "student3NameEnglish",
-    "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy",
-  ] as const) {
+    "student2FoodAllergy", "student3FoodAllergy",
+  ]) delete oneMember[field];
+  assert.equal(registerSchema.safeParse(oneMember).success, true);
+
+  const twoMembers = { ...validRegistration } as Record<string, unknown>;
+  for (const field of ["student3NameThai", "student3NameEnglish", "student3FoodAllergy"]) delete twoMembers[field];
+  assert.equal(registerSchema.safeParse(twoMembers).success, true);
+  assert.equal(registerSchema.safeParse(validRegistration).success, true);
+});
+
+test("registration accepts unaffiliated entrants without a school or advisor", () => {
+  const unaffiliated = { ...validRegistration } as Record<string, unknown>;
+  for (const field of ["school", "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone"]) {
+    delete unaffiliated[field];
+  }
+  assert.equal(registerSchema.safeParse(unaffiliated).success, true);
+});
+
+test("registration requires complete details for every listed member", () => {
+  for (const field of ["student1FoodAllergy"] as const) {
     const invalid = { ...validRegistration } as Record<string, unknown>;
     delete invalid[field];
     assert.equal(registerSchema.safeParse(invalid).success, false, field);
   }
-  for (const field of [
-    "school", "certificateLanguage", "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone",
-  ] as const) {
+  for (const field of ["certificateLanguage"] as const) {
     const invalid = { ...validRegistration } as Record<string, unknown>;
     delete invalid[field];
     assert.equal(registerSchema.safeParse(invalid).success, false, field);
   }
+
+  for (const field of ["student2NameThai", "student2NameEnglish", "student2FoodAllergy"] as const) {
+    const invalid = { ...validRegistration } as Record<string, unknown>;
+    delete invalid[field];
+    assert.equal(registerSchema.safeParse(invalid).success, false, field);
+  }
+
+  for (const field of ["advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone"] as const) {
+    const invalid = { ...validRegistration } as Record<string, unknown>;
+    delete invalid[field];
+    assert.equal(registerSchema.safeParse(invalid).success, false, field);
+  }
+});
+
+test("registration does not allow a third member without a second member", () => {
+  const invalid = { ...validRegistration } as Record<string, unknown>;
+  delete invalid.student2NameThai;
+  delete invalid.student2NameEnglish;
+  delete invalid.student2FoodAllergy;
+  assert.equal(registerSchema.safeParse(invalid).success, false);
 });

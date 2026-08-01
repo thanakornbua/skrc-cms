@@ -71,12 +71,14 @@ export default function RegisterPage() {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [school, setSchool] = useState("");
   const [certificateLanguage, setCertificateLanguage] = useState("BILINGUAL");
+  const [hasAdvisor, setHasAdvisor] = useState(true);
   const [advisorNameThai, setAdvisorNameThai] = useState("");
   const [advisorNameEnglish, setAdvisorNameEnglish] = useState("");
   const [advisorEmail, setAdvisorEmail] = useState("");
   const [advisorPhone, setAdvisorPhone] = useState("");
   const [student1NameThai, setStudent1NameThai] = useState("");
   const [student1NameEnglish, setStudent1NameEnglish] = useState("");
+  const [memberCount, setMemberCount] = useState<1 | 2 | 3>(1);
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [student2NameThai, setStudent2NameThai] = useState("");
@@ -141,9 +143,19 @@ export default function RegisterPage() {
         method: "POST",
         body: JSON.stringify({
           teamName, category, student1NameThai, student1NameEnglish,
-          school, certificateLanguage, advisorNameThai, advisorNameEnglish, advisorEmail, advisorPhone,
-          contactEmail, contactPhone, student2NameThai, student2NameEnglish,
-          student3NameThai, student3NameEnglish, student1FoodAllergy, student2FoodAllergy, student3FoodAllergy,
+          school, certificateLanguage,
+          advisorNameThai: hasAdvisor ? advisorNameThai : "",
+          advisorNameEnglish: hasAdvisor ? advisorNameEnglish : "",
+          advisorEmail: hasAdvisor ? advisorEmail : "",
+          advisorPhone: hasAdvisor ? advisorPhone : "",
+          contactEmail, contactPhone,
+          student2NameThai: memberCount >= 2 ? student2NameThai : "",
+          student2NameEnglish: memberCount >= 2 ? student2NameEnglish : "",
+          student3NameThai: memberCount >= 3 ? student3NameThai : "",
+          student3NameEnglish: memberCount >= 3 ? student3NameEnglish : "",
+          student1FoodAllergy,
+          student2FoodAllergy: memberCount >= 2 ? student2FoodAllergy : "",
+          student3FoodAllergy: memberCount >= 3 ? student3FoodAllergy : "",
           pdpaConsent: true,
           pdpaAuthorityConfirmed: true,
         }),
@@ -212,29 +224,31 @@ export default function RegisterPage() {
   return <div className="page registration-page">
     {submitting && <LoadingScreen overlay label="กำลังส่งใบสมัคร / Submitting registration…" />}
     <NavBar />
-    <BrandHeader title="Register" description="กรอกข้อมูลทีมและสมาชิกทั้งภาษาไทยและอังกฤษ / Enter team and student details in Thai and English" />
+    <BrandHeader title="Register" description="กรอกข้อมูลทีมและสมาชิกทั้งภาษาไทยและอังกฤษ / Enter team and member details in Thai and English" />
     {formError && <div className="error-banner" role="alert">{formError}</div>}
     <form className="card" onSubmit={handleSubmitRegistration}>
       <section className="form-section">
         <span className="section-kicker">TEAM INFORMATION</span><h2>{t("ข้อมูลทีม", "Team information")}</h2>
         <div className="field"><label htmlFor={fid("teamName")}>{t("ชื่อทีม", "Team name")}</label><input id={fid("teamName")} required value={teamName} onChange={(e) => setTeamName(e.target.value)} aria-invalid={fieldErrors.teamName ? true : undefined} aria-describedby={fieldErrors.teamName ? errId("teamName") : undefined} />{fieldErrors.teamName && <small id={errId("teamName")}>{fieldErrors.teamName}</small>}</div>
         <div className="field"><label htmlFor={fid("category")}>{t("ประเภทการแข่งขัน", "Category")}</label><select id={fid("category")} value={category} onChange={(e) => setCategory(e.target.value)}>{CATEGORIES.map((item) => <option key={item} value={item}>{item}</option>)}</select></div>
+        <div className="field"><label htmlFor={fid("memberCount")}>{t("จำนวนสมาชิกในทีม", "Number of team members")}</label><select id={fid("memberCount")} value={memberCount} onChange={(e) => setMemberCount(Number(e.target.value) as 1 | 2 | 3)}><option value={1}>{t("1 คน", "1 member")}</option><option value={2}>{t("2 คน", "2 members")}</option><option value={3}>{t("3 คน", "3 members")}</option></select><small className="field-hint">{t("ตามกติกา ทีมต้องมีสมาชิก 1–3 คน", "Under the rules, a team must have 1–3 members.")}</small></div>
       </section>
 
       <section className="form-section">
-        <span className="section-kicker">SCHOOL & ADVISOR</span><h2>{t("โรงเรียนและอาจารย์ที่ปรึกษา", "School & advisor")}</h2>
-        <div className="field"><label htmlFor={fid("school")}>{t("สถานศึกษาหลัก", "School")}</label><SchoolAutocomplete id={fid("school")} lang="th" required value={school} onChange={setSchool} aria-invalid={fieldErrors.school ? true : undefined} aria-describedby={fieldErrors.school ? errId("school") : undefined} />{fieldErrors.school && <small id={errId("school")}>{fieldErrors.school}</small>}</div>
+        <span className="section-kicker">SCHOOL & ADVISOR</span><h2>{t("สถานศึกษาและอาจารย์ที่ปรึกษา", "School and advisor")}</h2>
+        <div className="field"><label htmlFor={fid("school")}>{t("สถานศึกษาหรือสังกัด (ไม่บังคับ)", "School or affiliation (optional)")}</label><SchoolAutocomplete id={fid("school")} lang="th" value={school} onChange={setSchool} aria-invalid={fieldErrors.school ? true : undefined} aria-describedby={fieldErrors.school ? errId("school") : undefined} />{fieldErrors.school && <small id={errId("school")}>{fieldErrors.school}</small>}<small className="field-hint">{t("เว้นว่างได้หากสมัครในนามบุคคลทั่วไป", "Leave blank when entering as an unaffiliated individual.")}</small></div>
         <div className="field"><label htmlFor={fid("certificateLanguage")}>{t("ภาษาเกียรติบัตร", "Certificate language")}</label><select id={fid("certificateLanguage")} value={certificateLanguage} onChange={(e) => setCertificateLanguage(e.target.value)} aria-invalid={fieldErrors.certificateLanguage ? true : undefined} aria-describedby={fieldErrors.certificateLanguage ? errId("certificateLanguage") : undefined}><option value="BILINGUAL">{t("ไทยและอังกฤษ", "Thai and English")}</option><option value="THAI">{t("ภาษาไทย", "Thai")}</option><option value="ENGLISH">{t("ภาษาอังกฤษ", "English")}</option></select>{fieldErrors.certificateLanguage && <small id={errId("certificateLanguage")}>{fieldErrors.certificateLanguage}</small>}</div>
-        <div className="field-grid">
+        <div className="field"><label htmlFor={fid("hasAdvisor")}>{t("มีอาจารย์ที่ปรึกษาหรือไม่", "Do you have an advisor?")}</label><select id={fid("hasAdvisor")} value={hasAdvisor ? "yes" : "no"} onChange={(e) => setHasAdvisor(e.target.value === "yes")}><option value="yes">{t("มี", "Yes")}</option><option value="no">{t("ไม่มี — สมัครในนามบุคคลทั่วไป", "No — unaffiliated entry")}</option></select></div>
+        {hasAdvisor && <div className="field-grid">
           <div className="field"><label htmlFor={fid("advisorNameThai")}>{t("ชื่อ-นามสกุลอาจารย์ที่ปรึกษา ภาษาไทย", "Advisor full name in Thai")}</label><input id={fid("advisorNameThai")} lang="th" required value={advisorNameThai} onChange={(e) => setAdvisorNameThai(e.target.value)} aria-invalid={fieldErrors.advisorNameThai ? true : undefined} aria-describedby={fieldErrors.advisorNameThai ? errId("advisorNameThai") : undefined} />{fieldErrors.advisorNameThai && <small id={errId("advisorNameThai")}>{fieldErrors.advisorNameThai}</small>}</div>
           <div className="field"><label htmlFor={fid("advisorNameEnglish")}>{t("ชื่อ-นามสกุลอาจารย์ที่ปรึกษา ภาษาอังกฤษ", "Advisor full name in English")}</label><input id={fid("advisorNameEnglish")} required value={advisorNameEnglish} onChange={(e) => setAdvisorNameEnglish(e.target.value)} aria-invalid={fieldErrors.advisorNameEnglish ? true : undefined} aria-describedby={fieldErrors.advisorNameEnglish ? errId("advisorNameEnglish") : undefined} />{fieldErrors.advisorNameEnglish && <small id={errId("advisorNameEnglish")}>{fieldErrors.advisorNameEnglish}</small>}</div>
           <div className="field"><label htmlFor={fid("advisorEmail")}>{t("อีเมลอาจารย์ที่ปรึกษา", "Advisor email")}</label><input id={fid("advisorEmail")} type="email" autoComplete="email" required value={advisorEmail} onChange={(e) => setAdvisorEmail(e.target.value)} aria-invalid={fieldErrors.advisorEmail ? true : undefined} aria-describedby={fieldErrors.advisorEmail ? errId("advisorEmail") : undefined} />{fieldErrors.advisorEmail && <small id={errId("advisorEmail")}>{fieldErrors.advisorEmail}</small>}</div>
           <div className="field"><label htmlFor={fid("advisorPhone")}>{t("หมายเลขโทรศัพท์อาจารย์ที่ปรึกษา", "Advisor phone number")}</label><input id={fid("advisorPhone")} type="tel" inputMode="tel" autoComplete="tel" required value={advisorPhone} onChange={(e) => setAdvisorPhone(e.target.value)} aria-invalid={fieldErrors.advisorPhone ? true : undefined} aria-describedby={fieldErrors.advisorPhone ? errId("advisorPhone") : undefined} />{fieldErrors.advisorPhone && <small id={errId("advisorPhone")}>{fieldErrors.advisorPhone}</small>}</div>
-        </div>
+        </div>}
       </section>
 
       <section className="form-section">
-        <span className="section-kicker">STUDENT 01 · TEAM LEADER</span><h2>{t("นักเรียนคนที่ 1 — หัวหน้าทีมและผู้ประสานงาน", "Student 1 — Team leader and correspondent")}</h2>
+        <span className="section-kicker">MEMBER 01 · TEAM LEADER</span><h2>{t("สมาชิกคนที่ 1 — หัวหน้าทีมและผู้ประสานงาน", "Member 1 — Team leader and correspondent")}</h2>
         <div className="field"><label htmlFor={fid("student1NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student1NameThai")} lang="th" required value={student1NameThai} onChange={(e) => setStudent1NameThai(e.target.value)} aria-invalid={fieldErrors.student1NameThai ? true : undefined} aria-describedby={fieldErrors.student1NameThai ? errId("student1NameThai") : undefined} />{fieldErrors.student1NameThai && <small id={errId("student1NameThai")}>{fieldErrors.student1NameThai}</small>}</div>
         <div className="field"><label htmlFor={fid("student1NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student1NameEnglish")} required value={student1NameEnglish} onChange={(e) => setStudent1NameEnglish(e.target.value)} aria-invalid={fieldErrors.student1NameEnglish ? true : undefined} aria-describedby={fieldErrors.student1NameEnglish ? errId("student1NameEnglish") : undefined} />{fieldErrors.student1NameEnglish && <small id={errId("student1NameEnglish")}>{fieldErrors.student1NameEnglish}</small>}</div>
         <div className="field-grid">
@@ -244,23 +258,23 @@ export default function RegisterPage() {
         <div className="field"><label htmlFor={fid("student1FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student1FoodAllergy")} required maxLength={500} value={student1FoodAllergy} onChange={(e) => setStudent1FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student1FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student1FoodAllergy ? errId("student1FoodAllergy") : undefined} />{fieldErrors.student1FoodAllergy && <small id={errId("student1FoodAllergy")}>{fieldErrors.student1FoodAllergy}</small>}</div>
       </section>
 
-      <section className="form-section">
-        <span className="section-kicker">STUDENT 02</span><h2>{t("นักเรียนคนที่ 2", "Student 2")}</h2>
+      {memberCount >= 2 && <section className="form-section">
+        <span className="section-kicker">MEMBER 02</span><h2>{t("สมาชิกคนที่ 2", "Member 2")}</h2>
         <div className="field-grid">
           <div className="field"><label htmlFor={fid("student2NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student2NameThai")} lang="th" required value={student2NameThai} onChange={(e) => setStudent2NameThai(e.target.value)} aria-invalid={fieldErrors.student2NameThai ? true : undefined} aria-describedby={fieldErrors.student2NameThai ? errId("student2NameThai") : undefined} />{fieldErrors.student2NameThai && <small id={errId("student2NameThai")}>{fieldErrors.student2NameThai}</small>}</div>
           <div className="field"><label htmlFor={fid("student2NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student2NameEnglish")} required value={student2NameEnglish} onChange={(e) => setStudent2NameEnglish(e.target.value)} aria-invalid={fieldErrors.student2NameEnglish ? true : undefined} aria-describedby={fieldErrors.student2NameEnglish ? errId("student2NameEnglish") : undefined} />{fieldErrors.student2NameEnglish && <small id={errId("student2NameEnglish")}>{fieldErrors.student2NameEnglish}</small>}</div>
         </div>
         <div className="field"><label htmlFor={fid("student2FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student2FoodAllergy")} required maxLength={500} value={student2FoodAllergy} onChange={(e) => setStudent2FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student2FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student2FoodAllergy ? errId("student2FoodAllergy") : undefined} />{fieldErrors.student2FoodAllergy && <small id={errId("student2FoodAllergy")}>{fieldErrors.student2FoodAllergy}</small>}</div>
-      </section>
+      </section>}
 
-      <section className="form-section">
-        <span className="section-kicker">STUDENT 03</span><h2>{t("นักเรียนคนที่ 3", "Student 3")}</h2>
+      {memberCount >= 3 && <section className="form-section">
+        <span className="section-kicker">MEMBER 03</span><h2>{t("สมาชิกคนที่ 3", "Member 3")}</h2>
         <div className="field-grid">
           <div className="field"><label htmlFor={fid("student3NameThai")}>{t("ชื่อ-นามสกุล ภาษาไทย", "Full name in Thai")}</label><input id={fid("student3NameThai")} lang="th" required value={student3NameThai} onChange={(e) => setStudent3NameThai(e.target.value)} aria-invalid={fieldErrors.student3NameThai ? true : undefined} aria-describedby={fieldErrors.student3NameThai ? errId("student3NameThai") : undefined} />{fieldErrors.student3NameThai && <small id={errId("student3NameThai")}>{fieldErrors.student3NameThai}</small>}</div>
           <div className="field"><label htmlFor={fid("student3NameEnglish")}>{t("ชื่อ-นามสกุล ภาษาอังกฤษ", "Full name in English")}</label><input id={fid("student3NameEnglish")} required value={student3NameEnglish} onChange={(e) => setStudent3NameEnglish(e.target.value)} aria-invalid={fieldErrors.student3NameEnglish ? true : undefined} aria-describedby={fieldErrors.student3NameEnglish ? errId("student3NameEnglish") : undefined} />{fieldErrors.student3NameEnglish && <small id={errId("student3NameEnglish")}>{fieldErrors.student3NameEnglish}</small>}</div>
         </div>
         <div className="field"><label htmlFor={fid("student3FoodAllergy")}>{t("การแพ้อาหาร (ระบุว่า ไม่มี หากไม่มี)", "Food allergy (enter NONE if there is none)")}</label><input id={fid("student3FoodAllergy")} required maxLength={500} value={student3FoodAllergy} onChange={(e) => setStudent3FoodAllergy(e.target.value)} aria-invalid={fieldErrors.student3FoodAllergy ? true : undefined} aria-describedby={fieldErrors.student3FoodAllergy ? errId("student3FoodAllergy") : undefined} />{fieldErrors.student3FoodAllergy && <small id={errId("student3FoodAllergy")}>{fieldErrors.student3FoodAllergy}</small>}</div>
-      </section>
+      </section>}
 
       <div className="notice-banner consent-summary"><strong>{t("ยอมรับข้อตกลง PDPA แล้ว", "PDPA agreement accepted")}</strong><button className="secondary" type="button" onClick={() => setAgreementAccepted(false)}>{t("อ่านอีกครั้ง", "Review")}</button></div>
 

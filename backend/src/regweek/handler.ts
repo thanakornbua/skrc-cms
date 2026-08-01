@@ -19,7 +19,7 @@ import {
 import { errorResponse, jsonResponse } from "./responses.js";
 import { CATEGORIES } from "./types.js";
 
-export const PDPA_CONSENT_VERSION = "2026-07-20-v2";
+export const PDPA_CONSENT_VERSION = "2026-08-01-v3";
 
 const thaiName = z.string().trim().min(2).max(120).refine(
   (value) => /[\u0E00-\u0E7F]/.test(value),
@@ -31,33 +31,80 @@ const englishName = z.string().trim().min(2).max(120).refine(
 );
 const phoneNumber = z.string().trim().regex(/^[0-9+() -]{8,20}$/, "กรุณากรอกหมายเลขโทรศัพท์ที่ถูกต้อง / Invalid phone number");
 const foodAllergy = z.string().trim().min(1).max(500);
+const optionalThaiName = z.union([z.literal(""), thaiName]).optional().default("");
+const optionalEnglishName = z.union([z.literal(""), englishName]).optional().default("");
+const optionalFoodAllergy = z.union([z.literal(""), foodAllergy]).optional().default("");
+const optionalSchool = z.union([z.literal(""), z.string().trim().min(2).max(200)]).optional().default("");
+const optionalEmail = z.union([z.literal(""), z.string().trim().email().max(254)]).optional().default("");
+const optionalPhoneNumber = z.union([z.literal(""), phoneNumber]).optional().default("");
 
 export const registerSchema = z.object({
   teamName: z.string().trim().min(2).max(100),
   category: z.enum(CATEGORIES),
-  school: z.string().trim().min(2).max(200),
+  school: optionalSchool,
   certificateLanguage: z.enum(["THAI", "ENGLISH", "BILINGUAL"]),
-  advisorNameThai: thaiName,
-  advisorNameEnglish: englishName,
-  advisorEmail: z.string().trim().email().max(254),
-  advisorPhone: phoneNumber,
+  advisorNameThai: optionalThaiName,
+  advisorNameEnglish: optionalEnglishName,
+  advisorEmail: optionalEmail,
+  advisorPhone: optionalPhoneNumber,
   student1NameThai: thaiName,
   student1NameEnglish: englishName,
   contactEmail: z.string().trim().email().max(254),
   contactPhone: phoneNumber,
-  student2NameThai: thaiName,
-  student2NameEnglish: englishName,
-  student3NameThai: thaiName,
-  student3NameEnglish: englishName,
+  student2NameThai: optionalThaiName,
+  student2NameEnglish: optionalEnglishName,
+  student3NameThai: optionalThaiName,
+  student3NameEnglish: optionalEnglishName,
   student1FoodAllergy: foodAllergy,
-  student2FoodAllergy: foodAllergy,
-  student3FoodAllergy: foodAllergy,
+  student2FoodAllergy: optionalFoodAllergy,
+  student3FoodAllergy: optionalFoodAllergy,
   pdpaConsent: z.literal(true, {
     errorMap: () => ({ message: "ต้องยอมรับความยินยอม PDPA / PDPA consent is required" }),
   }),
   pdpaAuthorityConfirmed: z.literal(true, {
     errorMap: () => ({ message: "ต้องยืนยันอำนาจในการให้ข้อมูล / Authority confirmation is required" }),
   }),
+}).superRefine((value, ctx) => {
+  const advisorPresent = Boolean(value.advisorNameThai || value.advisorNameEnglish || value.advisorEmail || value.advisorPhone);
+  if (advisorPresent) {
+    const advisorFields = [
+      ["advisorNameThai", value.advisorNameThai, "กรุณากรอกชื่ออาจารย์ที่ปรึกษาภาษาไทย / Enter the advisor's Thai name"],
+      ["advisorNameEnglish", value.advisorNameEnglish, "กรุณากรอกชื่ออาจารย์ที่ปรึกษาภาษาอังกฤษ / Enter the advisor's English name"],
+      ["advisorEmail", value.advisorEmail, "กรุณากรอกอีเมลอาจารย์ที่ปรึกษา / Enter the advisor's email"],
+      ["advisorPhone", value.advisorPhone, "กรุณากรอกโทรศัพท์อาจารย์ที่ปรึกษา / Enter the advisor's phone number"],
+    ] as const;
+    for (const [field, fieldValue, message] of advisorFields) {
+      if (!fieldValue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message });
+    }
+  }
+
+  const validateOptionalMember = (member: 2 | 3): boolean => {
+    const thai = value[`student${member}NameThai`];
+    const english = value[`student${member}NameEnglish`];
+    const allergy = value[`student${member}FoodAllergy`];
+    const present = Boolean(thai || english || allergy);
+    if (!present) return false;
+    if (!thai) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameThai`], message: "กรุณากรอกชื่อภาษาไทย / Please enter a Thai name" });
+    }
+    if (!english) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameEnglish`], message: "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name" });
+    }
+    if (!allergy) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}FoodAllergy`], message: "กรุณาระบุการแพ้อาหารหรือ NONE / Enter food allergies or NONE" });
+    }
+    return true;
+  };
+
+  const hasStudent2 = validateOptionalMember(2);
+  const hasStudent3 = validateOptionalMember(3);
+  if (hasStudent3 && !hasStudent2) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["student3NameThai"],
+      message: "ต้องกรอกสมาชิกคนที่ 2 ก่อนสมาชิกคนที่ 3 / Add Member 2 before Member 3",
+    });
+  }
 });
 
 const rejectSchema = z.object({
@@ -171,6 +218,7 @@ async function handlePending(
 
   const items = filtered.map((r) => ({
       sub: r.sub,
+      status: r.status,
       teamName: r.teamName,
       category: r.category,
       school: r.school,
@@ -179,11 +227,19 @@ async function handlePending(
       advisorNameEnglish: r.advisorNameEnglish,
       advisorEmail: r.advisorEmail,
       advisorPhone: r.advisorPhone,
+      student1NameThai: r.student1NameThai,
+      student1NameEnglish: r.student1NameEnglish,
+      student2NameThai: r.student2NameThai,
+      student2NameEnglish: r.student2NameEnglish,
+      student3NameThai: r.student3NameThai,
+      student3NameEnglish: r.student3NameEnglish,
       student1FoodAllergy: r.student1FoodAllergy,
       student2FoodAllergy: r.student2FoodAllergy,
       student3FoodAllergy: r.student3FoodAllergy,
       contactPhone: r.contactPhone,
       contactEmail: r.contactEmail,
+      memberCount: 1 + Number(Boolean(r.student2NameThai)) + Number(Boolean(r.student3NameThai)),
+      pdpaConsent: r.pdpaConsent,
       createdAt: r.createdAt,
     }));
 
