@@ -27,7 +27,7 @@ const COMPETITOR_NAV: NavItem[] = [
 
 const STAFF_NAV: NavItem[] = [
   { to: "/committee/approvals", label: "ใบสมัคร / Approvals" },
-  { to: "/admin", label: "ผู้เข้าแข่งขัน / Competitors" },
+  { to: "/admin", label: "ค้นหาผู้เข้าแข่งขัน / Competitor lookup" },
   { to: "/committee/scan", label: "ตรวจสภาพ / Inspection" },
   { to: "/admin/lanes", label: "สนาม / Lanes" },
   { to: "/staff/timing", label: "เวลาและโทษ / Timing" },
@@ -44,9 +44,15 @@ const NAV_BY_ROLE: Record<NavigationRole, NavItem[]> = {
 
 function itemsForEra(role: NavigationRole): NavItem[] {
   const mode = import.meta.env.VITE_EVENT_MODE;
-  if (mode === "concluded") return [{ to: "/scoreboard", label: "ผลการแข่งขัน / Results" }];
+  if (mode === "concluded") {
+    return NAV_BY_ROLE[role].filter((item) =>
+      role === "committee" || role === "admin"
+        ? ["/admin", "/scoreboard"].includes(item.to)
+        : item.to === "/scoreboard"
+    );
+  }
   if (mode === "registration") {
-    return NAV_BY_ROLE[role].filter((item) => ["/register", "/portal", "/committee/approvals", "/admin/deployment"].includes(item.to));
+    return NAV_BY_ROLE[role].filter((item) => ["/register", "/portal", "/committee/approvals", "/admin", "/admin/deployment"].includes(item.to));
   }
   return NAV_BY_ROLE[role].filter((item) => item.to !== "/register" && item.to !== "/committee/approvals");
 }

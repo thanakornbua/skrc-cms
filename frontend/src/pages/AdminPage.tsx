@@ -21,6 +21,7 @@ interface CompetitorDetail extends CompetitorListItem {
 }
 
 function AdminDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
+  const competitionMode = import.meta.env.VITE_EVENT_MODE === "competition";
   const [role, setRole] = useState<"admin" | "committee" | "competitor">("competitor");
   const [items, setItems] = useState<CompetitorListItem[]>([]);
   const [category, setCategory] = useState("");
@@ -155,7 +156,7 @@ function AdminDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<vo
     <div className="page page-wide" id="admin-app-shell">
       {(busy || searching) && <LoadingScreen overlay label={searching ? "กำลังค้นหา / Searching…" : "กำลังดำเนินการ / Working…"} />}
       <NavBar onSignOut={signOutAndReset} />
-      <BrandHeader title="Admin — Competitors" home="/admin" description="เช็คอิน ค้นหา และพิมพ์บัตร / Check in, search, and print credentials" />
+      <BrandHeader title="Competitor Lookup" home="/admin" description="ค้นหาทีมและตรวจสอบสถานะได้ตลอดเวลา / Search teams and review status at any time" />
 
       {loadError && <div className="error-banner" role="alert">{loadError}</div>}
       {actionError && <div className="error-banner" role="alert">{actionError}</div>}
@@ -205,10 +206,10 @@ function AdminDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<vo
             <p>{t("เช็คอิน", "Checked in")}: <span className="technical">{selected.checkedInAt ?? "—"}</span></p>
             <p>{t("ตรวจสภาพ", "Inspected")}: <span className="technical">{selected.inspectedAt ?? "—"}</span></p>
 
-            {selected.status === "REGISTERED" && (
+            {competitionMode && role === "admin" && selected.status === "REGISTERED" && (
               <button type="button" disabled={busy} onClick={handleCheckIn}>{t("เช็คอิน", "Check in")}</button>
             )}
-            {selected.checkedInAt && (
+            {competitionMode && selected.checkedInAt && (
               <button className="secondary" type="button" onClick={handlePrintBadge}>
                 {t("พิมพ์บัตร", "Print badge")}
               </button>

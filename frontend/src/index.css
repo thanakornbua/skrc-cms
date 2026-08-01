@@ -555,7 +555,7 @@ textarea:focus-visible,
 .approval-card { padding: 0; overflow: hidden; }
 .approval-card-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr) auto;
   gap: var(--space-5);
   align-items: end;
   padding: var(--space-6);
@@ -566,6 +566,7 @@ textarea:focus-visible,
 .approval-card-header p { margin: 0; color: var(--color-text-2); }
 .approval-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
 .approval-summary .approval-datum { border-left: 1px solid var(--hairline); }
+.approval-toggle { align-self: center; white-space: nowrap; }
 .approval-section { padding: var(--space-6); border-bottom: 1px solid var(--hairline); }
 .approval-section > h3 { margin-bottom: var(--space-5); }
 .approval-data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--hairline); }
@@ -593,7 +594,7 @@ textarea:focus-visible,
 .approval-contact-grid { margin-top: var(--space-4); }
 .approval-consent { background: color-mix(in srgb, var(--color-success-soft) 45%, var(--surface)); }
 .approval-decision { padding: var(--space-6); margin: 0; }
-.approval-card > .button-row { padding: 0 var(--space-6) var(--space-6); }
+.approval-review-body > .button-row { padding: 0 var(--space-6) var(--space-6); }
 
 .auth-page { max-width: var(--content-narrow); }
 .auth-card { padding: clamp(var(--space-6), 5vw, var(--space-8)); }

@@ -90,6 +90,7 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
   const [rejectingSub, setRejectingSub] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [busySub, setBusySub] = useState<string | null>(null);
+  const [expandedSub, setExpandedSub] = useState<string | null>(null);
 
   async function loadPending(): Promise<void> {
     try {
@@ -165,8 +166,18 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
               <ReviewDatum label={t("สมาชิก", "Members")}>{t(`${item.memberCount} คน`, `${item.memberCount} member${item.memberCount === 1 ? "" : "s"}`)}</ReviewDatum>
               <ReviewDatum label={t("ส่งเมื่อ", "Submitted")}>{formatDate(item.createdAt)}</ReviewDatum>
             </dl>
+            <button
+              type="button"
+              className="secondary approval-toggle"
+              aria-expanded={expandedSub === item.sub}
+              aria-controls={`approval-review-${item.sub}`}
+              onClick={() => setExpandedSub((current) => current === item.sub ? null : item.sub)}
+            >
+              {expandedSub === item.sub ? t("ย่อรายละเอียด", "Collapse review") : t("ดูรายละเอียดทั้งหมด", "View full review")}
+            </button>
           </header>
 
+          {expandedSub === item.sub && <div id={`approval-review-${item.sub}`} className="approval-review-body">
           <section className="approval-section">
             <span className="section-kicker">TEAM & SCHOOL</span>
             <h3>{t("ข้อมูลทีมและสถานศึกษา", "Team and school")}</h3>
@@ -257,12 +268,16 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
                 className="danger"
                 type="button"
                 disabled={busySub === item.sub}
-                onClick={() => setRejectingSub(item.sub)}
+                onClick={() => {
+                  setExpandedSub(item.sub);
+                  setRejectingSub(item.sub);
+                }}
               >
                 {t("ไม่อนุมัติ", "Reject")}
               </button>
             </div>
           )}
+          </div>}
         </article>
       ))}
     </div>

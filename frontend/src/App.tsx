@@ -27,7 +27,7 @@ export default function App() {
         {mode !== "concluded" && <Route path="/portal/:competitorId" element={<PortalPage />} />}
         {mode === "registration" && <Route path="/committee/approvals" element={<CommitteeApprovalsPage />} />}
         {mode === "competition" && <Route path="/committee/scan" element={<CommitteeScanPage />} />}
-        {mode === "competition" && <Route path="/admin" element={<AdminPage />} />}
+        <Route path="/admin" element={<AdminPage />} />
         {mode === "competition" && <Route path="/admin/lanes" element={<AdminLanesPage />} />}
         {mode === "competition" && <Route path="/staff/timing" element={<TimingPage />} />}
         {mode !== "concluded" && <Route path="/admin/deployment" element={<DeploymentPage />} />}
