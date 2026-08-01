@@ -112,7 +112,7 @@ async function findOrCreateRegweekRole(accountId: string): Promise<string> {
           {
             Sid: "DynamoDBAccess",
             Effect: "Allow",
-            Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"],
+            Action: ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:TransactWriteItems"],
             Resource: [
               `arn:aws:dynamodb:${REGION}:${accountId}:table/${TABLE_NAME}`,
               `arn:aws:dynamodb:${REGION}:${accountId}:table/${TABLE_NAME}/index/*`,
@@ -121,7 +121,7 @@ async function findOrCreateRegweekRole(accountId: string): Promise<string> {
           {
             Sid: "CognitoAdminAttributeStamp",
             Effect: "Allow",
-            Action: ["cognito-idp:AdminUpdateUserAttributes"],
+            Action: ["cognito-idp:AdminUpdateUserAttributes", "cognito-idp:AdminResetUserPassword"],
             Resource: `arn:aws:cognito-idp:${REGION}:${accountId}:userpool/${USER_POOL_ID}`,
           },
         ],
@@ -228,7 +228,7 @@ async function findOrCreateHttpApi(
 ): Promise<{ apiId: string; apiEndpoint: string }> {
   const corsConfiguration = {
     AllowOrigins: [CORS_ORIGIN],
-    AllowMethods: ["GET", "POST"],
+    AllowMethods: ["GET", "POST", "PATCH"],
     AllowHeaders: ["authorization", "content-type"],
     MaxAge: 300,
   };

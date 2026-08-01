@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { AmplifyClient, GetAppCommand, GetBranchCommand, GetJobCommand, StartJobCommand, UpdateBranchCommand } from "@aws-sdk/client-amplify";
+import { AmplifyClient, GetAppCommand, GetBranchCommand, GetJobCommand, ListJobsCommand, StartJobCommand, UpdateBranchCommand } from "@aws-sdk/client-amplify";
 import { z } from "zod";
 import { config } from "../config.js";
 import { ApiError } from "../errors.js";
@@ -28,6 +28,16 @@ function body(event: APIGatewayProxyEventV2): unknown {
 
 function client(): AmplifyClient { return new AmplifyClient({ region: config.amplifyControl.region }); }
 
+const GIT_SHA = /^[0-9a-f]{40}$/i;
+
+export function resolveSourceCommitId(
+  activeCommitId: string | undefined,
+  jobs: Array<{ commitId?: string; status?: string }>
+): string | null {
+  if (activeCommitId && GIT_SHA.test(activeCommitId)) return activeCommitId;
+  return jobs.find((job) => job.status === "SUCCEED" && job.commitId && GIT_SHA.test(job.commitId))?.commitId ?? null;
+}
+
 export function authorizationHeader(headers: APIGatewayProxyEventV2["headers"]): string | undefined {
   return headers.authorization ?? headers.Authorization;
 }
@@ -43,9 +53,21 @@ async function status() {
   const branch = (await client().send(new GetBranchCommand({ appId, branchName }))).branch;
   if (!branch?.activeJobId) throw new ApiError(409, "CONFLICT", "Amplify branch has no active deployment");
   const job = (await client().send(new GetJobCommand({ appId, branchName, jobId: branch.activeJobId }))).job?.summary;
+  const recentJobs = job?.commitId && GIT_SHA.test(job.commitId)
+    ? []
+    : (await client().send(new ListJobsCommand({ appId, branchName, maxResults: 50 }))).jobSummaries ?? [];
+  const sourceCommitId = resolveSourceCommitId(job?.commitId, recentJobs);
   const app = (await client().send(new GetAppCommand({ appId }))).app;
   const variables = { ...(app?.environmentVariables ?? {}), ...(branch.environmentVariables ?? {}) };
-  return { appId, branchName, activeJobId: branch.activeJobId, commitId: job?.commitId ?? null, jobStatus: job?.status ?? null, mode: variables.VITE_EVENT_MODE ?? null };
+  return {
+    appId,
+    branchName,
+    activeJobId: branch.activeJobId,
+    commitId: sourceCommitId ?? job?.commitId ?? null,
+    jobCommitId: job?.commitId ?? null,
+    jobStatus: job?.status ?? null,
+    mode: variables.VITE_EVENT_MODE ?? null,
+  };
 }
 
 async function deploy(input: z.infer<typeof modeSchema>) {

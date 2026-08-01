@@ -6,10 +6,10 @@
 
 Two separate HTTP services, both against the same DynamoDB table (`robo-compet`, see SCHEMA.md), both verifying the same Cognito ID tokens with the same shared auth module (built in Phase 2, imported by both).
 
-- **Registration-week Lambda** — base URL is the frontend's `VITE_REGWEEK_API_URL` env var (see ENV.md). Built in Phase 3. Live only during the `registration` era.
+- **Always-on registration and staff Lambda** — base URL is the frontend's `VITE_REGWEEK_API_URL` env var (see ENV.md). It serves registration during the registration era and staff competitor management in every event mode.
 - **EC2 API** — base URL `VITE_API_BASE_URL`. Skeleton built in Phase 2, routes added Phases 4–11. Live only during the `competition` era.
 
-Never call the wrong service from the wrong era — the frontend switches which base URL it targets via `VITE_EVENT_MODE` (`registration` | `competition` | `concluded`). In `concluded` mode, the frontend calls neither service for results — it reads the static `results.json` bundled with the build (Phase 11).
+Competition workflow routes remain on the EC2 service and are called only in competition mode. Staff competitor-record management always calls the Lambda, so it remains available when the EC2 host is stopped. In `concluded` mode, public results are read from the static `results.json` bundled with the build (Phase 11).
 
 ## Conventions
 
@@ -88,6 +88,25 @@ Never call the wrong service from the wrong era — the frontend switches which 
 - **Response 200:** `text/csv` with a header row; one row per Registration or Competitor item (all profile/status columns, no password material — none exists in the table). Intended for committee record-keeping; contains PII, hence admin-only.
 - **Errors:** `400 VALIDATION_ERROR` unknown `entity` value. `403 FORBIDDEN` non-admin.
 - The same route is added to the EC2 API during Phase 11's export work.
+
+### `GET /staff/competitors?category=&status=&q=`
+- **Role:** committee (admin passes).
+- **Availability:** every event mode.
+- **Response 200:** `{ "canEdit": boolean, "items": [...] }`. Returns the complete competitor list by default; `q` matches competitor number, team, school, or any member name. Category and workflow status are optional filters.
+
+### `GET /staff/competitors/:id`
+- **Role:** committee (admin passes).
+- **Response 200:** `{ "competitor": {...}, "activity": [...] }`. The protected detail contains all team, 1–3 member, allergy, advisor, contact, certificate, PDPA, and workflow fields. Activity contains approval, edits, password-reset requests, check-in, inspection, and disqualification events. Staff actor identifiers are returned to admins only.
+
+### `PATCH /staff/competitors/:id`
+- **Role:** admin only.
+- **Request:** all editable registration-profile fields, plus `expectedUpdatedAt` and a required `reason`.
+- **Behavior:** a DynamoDB transaction updates both the Competitor profile and its source Registration, and writes an immutable field-level activity record. `expectedUpdatedAt` provides optimistic concurrency.
+- **Errors:** `409 CONFLICT` when another administrator changed the record first; `400 VALIDATION_ERROR` for an incomplete member/advisor group or other invalid profile field.
+
+### `POST /staff/competitors/:id/reset-password`
+- **Role:** admin only.
+- **Behavior:** asks Cognito to deliver its normal reset code and writes an audit event; the application never handles or stores password material.
 
 ---
 

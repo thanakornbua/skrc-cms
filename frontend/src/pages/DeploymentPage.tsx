@@ -6,7 +6,7 @@ import LoginGate from "../components/LoginGate";
 import NavBar from "../components/NavBar";
 
 type EventMode = "registration" | "competition" | "concluded";
-interface DeploymentStatus { appId: string; branchName: string; activeJobId: string; commitId: string | null; jobStatus: string | null; mode: EventMode | null; requestedMode?: EventMode; jobId?: string | null; }
+interface DeploymentStatus { appId: string; branchName: string; activeJobId: string; commitId: string | null; jobCommitId?: string | null; jobStatus: string | null; mode: EventMode | null; requestedMode?: EventMode; jobId?: string | null; }
 interface DeploymentManifest { eventMode?: unknown; }
 interface PendingDeployment { mode: EventMode; jobId: string | null; }
 
@@ -99,7 +99,7 @@ function DeploymentDashboard({ signOutAndReset }: { signOutAndReset: (message?: 
     {notice && <div className="notice-banner" role="status">{notice}</div>}
     <div className="card">
       <span className="section-kicker">CURRENT DEPLOYMENT</span>
-      <p><strong>Mode:</strong> {status?.mode ?? "loading"}</p><p><strong>Commit:</strong> <span className="technical">{status?.commitId ?? "—"}</span></p><p><strong>Job:</strong> {status?.activeJobId ?? "—"} · {status?.jobStatus ?? "—"}</p>
+      <p><strong>Mode:</strong> {status?.mode ?? "loading"}</p><p><strong>Source commit:</strong> <span className="technical">{status?.commitId ?? "—"}</span></p><p><strong>Job:</strong> {status?.activeJobId ?? "—"} · {status?.jobStatus ?? "—"}</p>
       <button type="button" className="secondary" onClick={() => void refresh()} disabled={busy || !!pendingDeployment}>Refresh status</button>
     </div>
     <div className="card">

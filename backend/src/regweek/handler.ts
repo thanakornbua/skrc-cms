@@ -1,5 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import { z } from "zod";
+import { requestPasswordReset } from "../auth/admin.js";
 import { ApiError, zodToFields } from "../errors.js";
 import {
   authenticate,
@@ -11,10 +12,14 @@ import {
   approveRegistration,
   createRegistration,
   getCompetitor,
+  getCompetitorActivity,
   getRegistrationBySub,
+  listCompetitors,
   listPendingRegistrations,
+  recordPasswordResetRequest,
   rejectRegistration,
   scanAllByEntityType,
+  updateCompetitorProfile,
 } from "./repo.js";
 import { errorResponse, jsonResponse } from "./responses.js";
 import { CATEGORIES } from "./types.js";
@@ -38,7 +43,7 @@ const optionalSchool = z.union([z.literal(""), z.string().trim().min(2).max(200)
 const optionalEmail = z.union([z.literal(""), z.string().trim().email().max(254)]).optional().default("");
 const optionalPhoneNumber = z.union([z.literal(""), phoneNumber]).optional().default("");
 
-export const registerSchema = z.object({
+const competitorProfileSchema = z.object({
   teamName: z.string().trim().min(2).max(100),
   category: z.enum(CATEGORIES),
   school: optionalSchool,
@@ -58,12 +63,6 @@ export const registerSchema = z.object({
   student1FoodAllergy: foodAllergy,
   student2FoodAllergy: optionalFoodAllergy,
   student3FoodAllergy: optionalFoodAllergy,
-  pdpaConsent: z.literal(true, {
-    errorMap: () => ({ message: "ต้องยอมรับความยินยอม PDPA / PDPA consent is required" }),
-  }),
-  pdpaAuthorityConfirmed: z.literal(true, {
-    errorMap: () => ({ message: "ต้องยืนยันอำนาจในการให้ข้อมูล / Authority confirmation is required" }),
-  }),
 }).superRefine((value, ctx) => {
   const advisorPresent = Boolean(value.advisorNameThai || value.advisorNameEnglish || value.advisorEmail || value.advisorPhone);
   if (advisorPresent) {
@@ -84,28 +83,33 @@ export const registerSchema = z.object({
     const allergy = value[`student${member}FoodAllergy`];
     const present = Boolean(thai || english || allergy);
     if (!present) return false;
-    if (!thai) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameThai`], message: "กรุณากรอกชื่อภาษาไทย / Please enter a Thai name" });
-    }
-    if (!english) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameEnglish`], message: "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name" });
-    }
-    if (!allergy) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}FoodAllergy`], message: "กรุณาระบุการแพ้อาหารหรือ NONE / Enter food allergies or NONE" });
-    }
+    if (!thai) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameThai`], message: "กรุณากรอกชื่อภาษาไทย / Please enter a Thai name" });
+    if (!english) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}NameEnglish`], message: "กรุณากรอกชื่อภาษาอังกฤษ / Please enter an English name" });
+    if (!allergy) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [`student${member}FoodAllergy`], message: "กรุณาระบุการแพ้อาหารหรือ NONE / Enter food allergies or NONE" });
     return true;
   };
-
   const hasStudent2 = validateOptionalMember(2);
   const hasStudent3 = validateOptionalMember(3);
-  if (hasStudent3 && !hasStudent2) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["student3NameThai"],
-      message: "ต้องกรอกสมาชิกคนที่ 2 ก่อนสมาชิกคนที่ 3 / Add Member 2 before Member 3",
-    });
-  }
+  if (hasStudent3 && !hasStudent2) ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ["student3NameThai"],
+    message: "ต้องกรอกสมาชิกคนที่ 2 ก่อนสมาชิกคนที่ 3 / Add Member 2 before Member 3",
+  });
 });
+
+export const registerSchema = z.intersection(competitorProfileSchema, z.object({
+  pdpaConsent: z.literal(true, {
+    errorMap: () => ({ message: "ต้องยอมรับความยินยอม PDPA / PDPA consent is required" }),
+  }),
+  pdpaAuthorityConfirmed: z.literal(true, {
+    errorMap: () => ({ message: "ต้องยืนยันอำนาจในการให้ข้อมูล / Authority confirmation is required" }),
+  }),
+}));
+
+export const competitorUpdateSchema = z.intersection(competitorProfileSchema, z.object({
+  expectedUpdatedAt: z.string().datetime(),
+  reason: z.string().trim().min(3).max(500),
+}));
 
 const rejectSchema = z.object({
   reason: z.string().trim().min(1),
@@ -246,6 +250,92 @@ async function handlePending(
   return jsonResponse(200, { items });
 }
 
+function staffCompetitor(competitor: NonNullable<Awaited<ReturnType<typeof getCompetitor>>>) {
+  return {
+    competitorId: competitor.competitorId,
+    name: competitor.name,
+    teamName: competitor.teamName,
+    category: competitor.category,
+    school: competitor.school,
+    certificateLanguage: competitor.certificateLanguage,
+    advisorNameThai: competitor.advisorNameThai,
+    advisorNameEnglish: competitor.advisorNameEnglish,
+    advisorEmail: competitor.advisorEmail,
+    advisorPhone: competitor.advisorPhone,
+    contactEmail: competitor.contactEmail,
+    contactPhone: competitor.contactPhone,
+    student1NameThai: competitor.student1NameThai,
+    student1NameEnglish: competitor.student1NameEnglish,
+    student2NameThai: competitor.student2NameThai,
+    student2NameEnglish: competitor.student2NameEnglish,
+    student3NameThai: competitor.student3NameThai,
+    student3NameEnglish: competitor.student3NameEnglish,
+    student1FoodAllergy: competitor.student1FoodAllergy,
+    student2FoodAllergy: competitor.student2FoodAllergy,
+    student3FoodAllergy: competitor.student3FoodAllergy,
+    pdpaConsent: competitor.pdpaConsent,
+    status: competitor.status,
+    disqualified: competitor.disqualified,
+    checkedInAt: competitor.checkedInAt,
+    checkedInBy: competitor.checkedInBy,
+    inspectedAt: competitor.inspectedAt,
+    createdAt: competitor.createdAt,
+    updatedAt: competitor.updatedAt,
+    memberCount: 1 + Number(Boolean(competitor.student2NameThai)) + Number(Boolean(competitor.student3NameThai)),
+    revision: competitor.updatedAt ?? competitor.createdAt,
+  };
+}
+
+async function handleCompetitorList(event: APIGatewayProxyEventV2, canEdit: boolean) {
+  const items = await listCompetitors({
+    q: event.queryStringParameters?.q,
+    category: event.queryStringParameters?.category,
+    status: event.queryStringParameters?.status,
+  });
+  return jsonResponse(200, {
+    canEdit,
+    items: items.map((item) => ({
+      competitorId: item.competitorId,
+      teamName: item.teamName,
+      category: item.category,
+      school: item.school,
+      status: item.status,
+      disqualified: item.disqualified,
+      memberCount: 1 + Number(Boolean(item.student2NameThai)) + Number(Boolean(item.student3NameThai)),
+      revision: item.updatedAt ?? item.createdAt,
+    })),
+  });
+}
+
+async function handleCompetitorDetail(competitorId: string, showActors: boolean) {
+  const competitor = await getCompetitor(competitorId);
+  if (!competitor) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+  const activity = await getCompetitorActivity(competitor);
+  return jsonResponse(200, {
+    competitor: staffCompetitor(competitor),
+    activity: activity.map((event) => showActors ? event : { ...event, byUser: null }),
+  });
+}
+
+async function handleCompetitorUpdate(event: APIGatewayProxyEventV2, competitorId: string, byUser: string) {
+  const parsed = competitorUpdateSchema.safeParse(parseBody(event));
+  if (!parsed.success) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Invalid competitor profile", zodToFields(parsed.error));
+  }
+  const { expectedUpdatedAt, reason, ...profile } = parsed.data;
+  const competitor = await updateCompetitorProfile(competitorId, profile, expectedUpdatedAt, reason, byUser);
+  const activity = await getCompetitorActivity(competitor);
+  return jsonResponse(200, { competitor: staffCompetitor(competitor), activity });
+}
+
+async function handleCompetitorPasswordReset(competitorId: string, byUser: string) {
+  const competitor = await getCompetitor(competitorId);
+  if (!competitor) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+  await requestPasswordReset(competitor.cognitoSub);
+  await recordPasswordResetRequest(competitor, byUser);
+  return jsonResponse(200, { status: "RESET_REQUESTED" });
+}
+
 async function handleApprove(
   sub: string,
   byUser: string
@@ -349,6 +439,26 @@ export async function handler(
     if (method === "GET" && path === "/export.csv") {
       requireAdminOnly(user);
       return await handleExportCsv(event);
+    }
+    if (method === "GET" && path === "/staff/competitors") {
+      requireRole(user, "committee");
+      return await handleCompetitorList(event, user.role === "admin");
+    }
+
+    const staffCompetitorMatch = path.match(/^\/staff\/competitors\/([^/]+)$/);
+    if (method === "GET" && staffCompetitorMatch) {
+      requireRole(user, "committee");
+      return await handleCompetitorDetail(decodeURIComponent(staffCompetitorMatch[1]), user.role === "admin");
+    }
+    if (method === "PATCH" && staffCompetitorMatch) {
+      requireAdminOnly(user);
+      return await handleCompetitorUpdate(event, decodeURIComponent(staffCompetitorMatch[1]), user.username);
+    }
+
+    const resetMatch = path.match(/^\/staff\/competitors\/([^/]+)\/reset-password$/);
+    if (method === "POST" && resetMatch) {
+      requireAdminOnly(user);
+      return await handleCompetitorPasswordReset(decodeURIComponent(resetMatch[1]), user.username);
     }
 
     const approveMatch = path.match(/^\/registrations\/([^/]+)\/approve$/);

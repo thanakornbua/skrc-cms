@@ -80,7 +80,7 @@ const amplifyAppArn = `arn:aws:amplify:${amplifyRegion}:${account}:apps/${amplif
 await iam.send(new PutRolePolicyCommand({ RoleName: roleName, PolicyName: `${prefix}-control-plane`, PolicyDocument: JSON.stringify({ Version: "2012-10-17", Statement: [
   // GetApp targets the parent app ARN; branch and job actions target children.
   { Effect: "Allow", Action: ["amplify:GetApp"], Resource: amplifyAppArn },
-  { Effect: "Allow", Action: ["amplify:GetBranch", "amplify:GetJob", "amplify:UpdateBranch", "amplify:StartJob"], Resource: `${amplifyAppArn}/*` },
+  { Effect: "Allow", Action: ["amplify:GetBranch", "amplify:GetJob", "amplify:ListJobs", "amplify:UpdateBranch", "amplify:StartJob"], Resource: `${amplifyAppArn}/*` },
   { Effect: "Allow", Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource: "arn:aws:logs:*:*:*" },
 ] }) }));
 const arn = await functionArn(roleArn); const createdApi = await httpApi(arn);

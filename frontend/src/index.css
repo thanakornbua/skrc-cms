@@ -756,6 +756,54 @@ textarea:focus-visible,
   align-items: start;
 }
 
+.competitor-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, .7fr) minmax(0, 1.6fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.competitor-list {
+  position: sticky;
+  top: 7rem;
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+  padding-right: var(--space-2);
+}
+.competitor-list .competitor-select {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.competitor-list .competitor-select small { color: var(--color-muted); }
+.competitor-editor details { border-top: 1px solid var(--hairline); padding: var(--space-4) 0; }
+.competitor-editor details:last-of-type { border-bottom: 1px solid var(--hairline); }
+.competitor-editor summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+.competitor-editor details[open] summary { margin-bottom: var(--space-4); }
+.competitor-editor .section-heading { display: flex; justify-content: space-between; gap: var(--space-4); align-items: start; }
+.competitor-editor .section-heading h2 { margin-top: var(--space-2); }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
+.member-edit-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.member-edit-grid fieldset { min-width: 0; margin: 0; padding: var(--space-4); border: 1px solid var(--hairline); }
+.member-edit-grid legend { padding: 0 var(--space-2); font-weight: var(--weight-semibold); }
+.detail-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: var(--space-4) 0 0; border: 1px solid var(--hairline); }
+.detail-list > div { padding: var(--space-3); border-bottom: 1px solid var(--hairline); }
+.detail-list dt { color: var(--color-muted); font-size: var(--text-sm); }
+.detail-list dd { margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
+.editor-actions { padding-top: var(--space-5); }
+.editor-actions .field { max-width: 60ch; }
+.editor-actions button { margin: 0 var(--space-2) var(--space-2) 0; }
+.activity-log { margin-top: var(--space-5); }
+.activity-item { position: relative; display: grid; grid-template-columns: 1rem 1fr; gap: var(--space-3); padding-bottom: var(--space-5); }
+.activity-item::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: 0; border-left: 1px solid var(--hairline-2); }
+.activity-item:last-of-type::before { display: none; }
+.activity-marker { position: relative; z-index: 1; width: 11px; height: 11px; margin-top: 5px; border-radius: 50%; background: var(--accent); }
+.activity-item p { margin: var(--space-1) 0; color: var(--color-muted); }
+.activity-item ul { overflow-wrap: anywhere; }
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1029,6 +1077,8 @@ tbody tr:hover { background: var(--sunk); }
   .approval-member .approval-datum { border-right: 0; border-bottom: 1px solid var(--hairline); }
   .approval-data-grid .approval-datum:last-child,
   .approval-member .approval-datum:last-child { border-bottom: 0; }
+  .competitor-manager-layout, .form-grid, .member-edit-grid, .detail-list { grid-template-columns: 1fr; }
+  .competitor-list { position: static; max-height: none; padding-right: 0; }
 }
 
 @media (max-width: 900px) {
@@ -1040,6 +1090,7 @@ tbody tr:hover { background: var(--sunk); }
   .timing-stage-summary .metric:last-child { border-bottom: 0; }
   .scan-input-row { grid-template-columns: 1fr; }
   .scan-camera-btn { width: 100%; }
+  .member-edit-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

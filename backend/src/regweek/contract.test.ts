@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { registerSchema } from "./handler.js";
+import { competitorUpdateSchema, registerSchema } from "./handler.js";
 
 const validRegistration = {
   teamName: "ทีมทดสอบ",
@@ -83,4 +83,33 @@ test("registration does not allow a third member without a second member", () =>
   delete invalid.student2NameEnglish;
   delete invalid.student2FoodAllergy;
   assert.equal(registerSchema.safeParse(invalid).success, false);
+});
+
+test("competitor updates require an audit reason and optimistic revision", () => {
+  const { pdpaConsent, pdpaAuthorityConfirmed, ...profile } = validRegistration;
+  void pdpaConsent;
+  void pdpaAuthorityConfirmed;
+  assert.equal(competitorUpdateSchema.safeParse({
+    ...profile,
+    expectedUpdatedAt: "2026-08-02T04:00:00.000Z",
+    reason: "Corrected spelling from registration form",
+  }).success, true);
+  assert.equal(competitorUpdateSchema.safeParse({ ...profile, expectedUpdatedAt: "2026-08-02T04:00:00.000Z" }).success, false);
+  assert.equal(competitorUpdateSchema.safeParse({ ...profile, reason: "Corrected spelling" }).success, false);
+});
+
+test("competitor updates preserve the one-to-three member rule", () => {
+  const { pdpaConsent, pdpaAuthorityConfirmed, ...profile } = validRegistration;
+  void pdpaConsent;
+  void pdpaAuthorityConfirmed;
+  const oneMember = { ...profile } as Record<string, unknown>;
+  for (const field of [
+    "student2NameThai", "student2NameEnglish", "student2FoodAllergy",
+    "student3NameThai", "student3NameEnglish", "student3FoodAllergy",
+  ]) delete oneMember[field];
+  assert.equal(competitorUpdateSchema.safeParse({
+    ...oneMember,
+    expectedUpdatedAt: "2026-08-02T04:00:00.000Z",
+    reason: "Removed blank optional members",
+  }).success, true);
 });

@@ -3,9 +3,10 @@ import {
   PutCommand,
   QueryCommand,
   ScanCommand,
+  TransactWriteCommand,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { stampCompetitorId } from "./cognito.js";
@@ -14,11 +15,21 @@ import type {
   Category,
   CertificateLanguage,
   CompetitorRecord,
+  CompetitorActivity,
   PdpaConsent,
   RegistrationRecord,
   StudentFoodAllergies,
   StudentNames,
 } from "./types.js";
+
+export type CompetitorProfileUpdate = Pick<CompetitorRecord,
+  "teamName" | "category" | "school" | "certificateLanguage" |
+  "advisorNameThai" | "advisorNameEnglish" | "advisorEmail" | "advisorPhone" |
+  "contactEmail" | "contactPhone" | "student1NameThai" | "student1NameEnglish" |
+  "student2NameThai" | "student2NameEnglish" | "student3NameThai" |
+  "student3NameEnglish" | "student1FoodAllergy" | "student2FoodAllergy" |
+  "student3FoodAllergy"
+>;
 
 const CLAIM_STALE_AFTER_MS = 30_000;
 
@@ -115,6 +126,161 @@ export async function getCompetitor(
     new GetCommand({ TableName: TABLE_NAME, Key: keyComp(competitorId) })
   );
   return (result.Item as CompetitorRecord | undefined) ?? null;
+}
+
+export async function listCompetitors(filters: {
+  q?: string;
+  category?: string;
+  status?: string;
+}): Promise<CompetitorRecord[]> {
+  const items: CompetitorRecord[] = [];
+  let lastKey: Record<string, unknown> | undefined;
+  do {
+    const result = await ddbDoc.send(new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: "GSI1",
+      KeyConditionExpression: "GSI1PK = :pk",
+      ExpressionAttributeValues: { ":pk": "COMPETITOR" },
+      ExclusiveStartKey: lastKey,
+    }));
+    items.push(...((result.Items as CompetitorRecord[]) ?? []));
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (lastKey);
+
+  const q = filters.q?.trim().toLocaleLowerCase();
+  return items
+    .filter((item) => !filters.category || item.category === filters.category)
+    .filter((item) => !filters.status || item.status === filters.status)
+    .filter((item) => !q || [
+      item.competitorId, item.teamName, item.school,
+      item.student1NameThai, item.student1NameEnglish,
+      item.student2NameThai, item.student2NameEnglish,
+      item.student3NameThai, item.student3NameEnglish,
+    ].some((value) => value?.toLocaleLowerCase().includes(q)))
+    .sort((a, b) => a.competitorId.localeCompare(b.competitorId));
+}
+
+export async function getCompetitorActivity(
+  competitor: CompetitorRecord
+): Promise<CompetitorActivity[]> {
+  const result = await ddbDoc.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk AND begins_with(SK, :audit)",
+    ExpressionAttributeValues: { ":pk": `COMP#${competitor.competitorId}`, ":audit": "AUDIT#" },
+  }));
+  const stored = (result.Items ?? []).map((item) => ({
+    type: item.type as CompetitorActivity["type"],
+    at: item.at as string,
+    byUser: (item.byUser as string | undefined) ?? null,
+    ...(item.reason ? { reason: item.reason as string } : {}),
+    ...(item.changes ? { changes: item.changes as CompetitorActivity["changes"] } : {}),
+  }));
+  const registration = await getRegistrationBySub(competitor.cognitoSub);
+  const derived: CompetitorActivity[] = [{
+    type: "APPROVED",
+    at: registration?.approval?.at ?? competitor.createdAt,
+    byUser: registration?.approval?.byUser ?? null,
+  }];
+  if (competitor.checkedInAt) derived.push({ type: "CHECKED_IN", at: competitor.checkedInAt, byUser: competitor.checkedInBy });
+  if (competitor.inspectedAt) derived.push({ type: "INSPECTED", at: competitor.inspectedAt, byUser: null });
+  if (competitor.disqualified?.bool && competitor.disqualified.at) derived.push({
+    type: "DISQUALIFIED", at: competitor.disqualified.at, byUser: competitor.disqualified.byUser,
+    reason: competitor.disqualified.reason ?? undefined,
+  });
+  return [...stored, ...derived].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+const EDITABLE_FIELDS: Array<keyof CompetitorProfileUpdate> = [
+  "teamName", "category", "school", "certificateLanguage",
+  "advisorNameThai", "advisorNameEnglish", "advisorEmail", "advisorPhone",
+  "contactEmail", "contactPhone", "student1NameThai", "student1NameEnglish",
+  "student2NameThai", "student2NameEnglish", "student3NameThai", "student3NameEnglish",
+  "student1FoodAllergy", "student2FoodAllergy", "student3FoodAllergy",
+];
+
+export async function updateCompetitorProfile(
+  competitorId: string,
+  input: CompetitorProfileUpdate,
+  expectedUpdatedAt: string,
+  reason: string,
+  byUser: string
+): Promise<CompetitorRecord> {
+  const current = await getCompetitor(competitorId);
+  if (!current) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+  const currentRevision = current.updatedAt ?? current.createdAt;
+  if (currentRevision !== expectedUpdatedAt) {
+    throw new ApiError(409, "CONFLICT", "This competitor was changed by someone else. Reload and try again.");
+  }
+  const changes: Record<string, { before: unknown; after: unknown }> = {};
+  for (const field of EDITABLE_FIELDS) {
+    if (current[field] !== input[field]) changes[field] = { before: current[field], after: input[field] };
+  }
+  if (Object.keys(changes).length === 0) return current;
+
+  const at = new Date().toISOString();
+  const values: Record<string, unknown> = { ":updatedAt": at, ":name": input.student1NameEnglish };
+  const names: Record<string, string> = { "#name": "name" };
+  const assignments = ["updatedAt = :updatedAt", "#name = :name"];
+  for (const [index, field] of EDITABLE_FIELDS.entries()) {
+    names[`#f${index}`] = field;
+    values[`:v${index}`] = input[field];
+    assignments.push(`#f${index} = :v${index}`);
+  }
+  try {
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: TABLE_NAME,
+        Key: keyComp(competitorId),
+        UpdateExpression: `SET ${assignments.join(", ")}`,
+        ConditionExpression: "(attribute_not_exists(updatedAt) AND createdAt = :expected) OR updatedAt = :expected",
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: { ...values, ":expected": expectedUpdatedAt },
+      } },
+      { Update: {
+        TableName: TABLE_NAME,
+        Key: keyReg(current.cognitoSub),
+        UpdateExpression: `SET ${assignments.join(", ")}`,
+        ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: values,
+      } },
+      { Put: {
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `COMP#${competitorId}`,
+          SK: `AUDIT#PROFILE_UPDATE#${at}`,
+          type: "PROFILE_UPDATED",
+          at,
+          byUser,
+          reason,
+          changes,
+          deleteBy: current.pdpaConsent.deleteBy,
+        },
+        ConditionExpression: "attribute_not_exists(PK)",
+      } },
+    ] }));
+  } catch (error) {
+    if (error instanceof TransactionCanceledException) {
+      throw new ApiError(409, "CONFLICT", "This competitor was changed by someone else. Reload and try again.");
+    }
+    throw error;
+  }
+  return { ...current, ...input, name: input.student1NameEnglish, updatedAt: at };
+}
+
+export async function recordPasswordResetRequest(competitor: CompetitorRecord, byUser: string): Promise<void> {
+  const at = new Date().toISOString();
+  await ddbDoc.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: {
+      PK: `COMP#${competitor.competitorId}`,
+      SK: `AUDIT#PASSWORD_RESET#${at}`,
+      type: "PASSWORD_RESET_REQUESTED",
+      at,
+      byUser,
+      deleteBy: competitor.pdpaConsent.deleteBy,
+    },
+  }));
 }
 
 export async function createRegistration(input: StudentNames & StudentFoodAllergies & {

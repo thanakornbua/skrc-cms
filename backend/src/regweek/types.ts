@@ -92,4 +92,13 @@ export interface CompetitorRecord extends StudentNames, StudentFoodAllergies {
   checkedInBy: string | null;
   inspectedAt: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CompetitorActivity {
+  type: "APPROVED" | "PROFILE_UPDATED" | "PASSWORD_RESET_REQUESTED" | "CHECKED_IN" | "INSPECTED" | "DISQUALIFIED";
+  at: string;
+  byUser: string | null;
+  reason?: string;
+  changes?: Record<string, { before: unknown; after: unknown }>;
 }

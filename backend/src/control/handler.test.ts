@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authorizationHeader, handler, modeSchema } from "./handler.js";
+import { authorizationHeader, handler, modeSchema, resolveSourceCommitId } from "./handler.js";
 
 const validRequest = {
   mode: "competition",
@@ -14,6 +14,19 @@ test("deployment schema accepts Amplify's non-SHA HEAD commitId", () => {
   // what the deploy path itself starts. A 40-hex-SHA rule rejected every
   // request once any mode deployment had run.
   assert.equal(modeSchema.safeParse(validRequest).success, true);
+});
+
+test("deployment status resolves manual HEAD to the latest successful source SHA", () => {
+  const source = "17a04eb3f110bee01bc967fb1f633af80ea911a8";
+  assert.equal(resolveSourceCommitId("HEAD", [
+    { commitId: "badbadbadbadbadbadbadbadbadbadbadbadbadb", status: "FAILED" },
+    { commitId: source, status: "SUCCEED" },
+  ]), source);
+});
+
+test("deployment status keeps an active source SHA", () => {
+  const source = "17a04eb3f110bee01bc967fb1f633af80ea911a8";
+  assert.equal(resolveSourceCommitId(source, []), source);
 });
 
 test("deployment schema requires the job-id concurrency token", () => {
