@@ -77,7 +77,7 @@ async function findOrCreateRegweekRole(accountId: string): Promise<string> {
       new CreateRoleCommand({
         RoleName: ROLE_NAME,
         Description:
-          "Execution role for the Robo Compet registration-week Lambda (DynamoDB and Cognito attribute stamp).",
+          "Execution role for the Robo Compet registration-week Lambda (DynamoDB and Cognito user administration).",
         AssumeRolePolicyDocument: JSON.stringify({
           Version: "2012-10-17",
           Statement: [
@@ -119,9 +119,21 @@ async function findOrCreateRegweekRole(accountId: string): Promise<string> {
             ],
           },
           {
-            Sid: "CognitoAdminAttributeStamp",
+            Sid: "CognitoUserAdministration",
             Effect: "Allow",
-            Action: ["cognito-idp:AdminUpdateUserAttributes", "cognito-idp:AdminResetUserPassword"],
+            Action: [
+              "cognito-idp:ListUsers",
+              "cognito-idp:ListUsersInGroup",
+              "cognito-idp:AdminCreateUser",
+              "cognito-idp:AdminDeleteUser",
+              "cognito-idp:AdminUpdateUserAttributes",
+              "cognito-idp:AdminDeleteUserAttributes",
+              "cognito-idp:AdminAddUserToGroup",
+              "cognito-idp:AdminRemoveUserFromGroup",
+              "cognito-idp:AdminEnableUser",
+              "cognito-idp:AdminDisableUser",
+              "cognito-idp:AdminResetUserPassword",
+            ],
             Resource: `arn:aws:cognito-idp:${REGION}:${accountId}:userpool/${USER_POOL_ID}`,
           },
         ],

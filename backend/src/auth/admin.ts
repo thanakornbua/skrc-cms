@@ -15,23 +15,26 @@ const cognito = new CognitoIdentityProviderClient({ region: config.awsRegion });
  * Starts Cognito's normal password-recovery flow. Cognito delivers the code;
  * staff never create, receive, or store a competitor password.
  */
-export async function requestPasswordReset(cognitoSub: string): Promise<void> {
+export async function requestPasswordReset(
+  cognitoUsername: string,
+  subject = "the competitor"
+): Promise<void> {
   try {
     await cognito.send(
       new AdminResetUserPasswordCommand({
         UserPoolId: config.cognitoUserPoolId,
-        Username: cognitoSub,
+        Username: cognitoUsername,
       })
     );
   } catch (error) {
     if (error instanceof UserNotFoundException) {
-      throw new ApiError(404, "AUTH_USER_NOT_FOUND", "The competitor's portal account no longer exists");
+      throw new ApiError(404, "AUTH_USER_NOT_FOUND", `${subject} account no longer exists`);
     }
     if (error instanceof InvalidParameterException) {
       throw new ApiError(
         409,
         "RESET_DELIVERY_UNAVAILABLE",
-        "Cognito cannot deliver a reset code. Verify the competitor's email in Cognito first."
+        `Cognito cannot deliver a reset code. Verify ${subject}'s email in Cognito first.`
       );
     }
     if (error instanceof LimitExceededException || error instanceof TooManyRequestsException) {

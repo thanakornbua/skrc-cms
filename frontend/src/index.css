@@ -1039,6 +1039,75 @@ tbody tr:hover { background: var(--sunk); }
 .attempt-row .button-row { margin-top: var(--space-3); }
 .attempt-row .button-row:empty { display: none; margin-top: 0; }
 
+/* ---- User and access management -------------------------------------- */
+
+.user-management-heading,
+.user-editor-heading,
+.created-password,
+.user-select-title,
+.user-select-meta,
+.inline-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.user-management-heading { justify-content: space-between; margin: var(--space-8) 0 var(--space-4); }
+.user-management-heading .section-kicker { margin-bottom: var(--space-2); }
+.user-management-heading > button { flex: 0 0 auto; }
+.user-filter { grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(150px, 1fr)); }
+.user-filter .field { margin-bottom: 0; }
+.user-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, .75fr) minmax(0, 1.5fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.user-list {
+  position: sticky;
+  top: 7rem;
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+  padding-right: var(--space-2);
+}
+.user-select {
+  display: grid;
+  width: 100%;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--weight-regular);
+  letter-spacing: normal;
+  line-height: var(--leading-body);
+  text-align: left;
+  text-transform: none;
+}
+.user-select:hover:not(:disabled),
+.user-select[aria-pressed="true"] { border-color: var(--accent); background: var(--surface); color: var(--ink); box-shadow: inset 3px 0 0 var(--accent); }
+.user-select-title { justify-content: space-between; }
+.user-select-title strong { overflow-wrap: anywhere; }
+.user-select small { overflow-wrap: anywhere; color: var(--color-muted); }
+.user-select-meta { flex-wrap: wrap; }
+.status-badge.role-admin { color: var(--accent); }
+.status-badge.role-committee { color: var(--color-brand-blue); }
+.status-badge.role-competitor { color: #047857; }
+.user-editor-heading { justify-content: space-between; align-items: flex-start; }
+.user-editor-heading h2 { margin-top: var(--space-2); }
+.user-editor-heading p { margin: 0; overflow-wrap: anywhere; }
+.user-editor-actions { margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--hairline); }
+.field-wide { grid-column: 1 / -1; }
+.inline-control { align-items: stretch; }
+.inline-control input { min-width: 0; flex: 1 1 auto; }
+.inline-control button { flex: 0 0 auto; }
+.created-password { justify-content: flex-start; flex-wrap: wrap; }
+.created-password > div { display: grid; min-width: min(100%, 320px); margin-right: auto; gap: var(--space-1); }
+.created-password code { overflow-wrap: anywhere; color: var(--ink); font-size: var(--text-lg); }
+.created-password button { flex: 0 0 auto; }
+
 /* ---- Timeline ---------------------------------------------------------- */
 
 .timeline {
@@ -1075,7 +1144,7 @@ tbody tr:hover { background: var(--sunk); }
   .page { padding-top: var(--space-8); padding-inline: var(--space-4); }
   .brand-emblem { width: 44px; height: 44px; }
   .brand-title-en { display: block; margin: var(--space-1) 0 0; }
-  .toolbar, .admin-search, .split-layout, .lookup-row, .field-grid, .student-review-grid, .scan-input-row { grid-template-columns: 1fr; }
+  .toolbar, .admin-search, .user-filter, .split-layout, .lookup-row, .field-grid, .student-review-grid, .scan-input-row { grid-template-columns: 1fr; }
   button { width: 100%; }
   .button-row > button { width: 100%; }
   .card { padding: var(--space-5); }
@@ -1093,8 +1162,10 @@ tbody tr:hover { background: var(--sunk); }
   .approval-member .approval-datum { border-right: 0; border-bottom: 1px solid var(--hairline); }
   .approval-data-grid .approval-datum:last-child,
   .approval-member .approval-datum:last-child { border-bottom: 0; }
-  .competitor-manager-layout, .form-grid, .member-edit-grid, .detail-list { grid-template-columns: 1fr; }
-  .competitor-list { position: static; max-height: none; padding-right: 0; }
+  .competitor-manager-layout, .user-manager-layout, .form-grid, .member-edit-grid, .detail-list { grid-template-columns: 1fr; }
+  .competitor-list, .user-list { position: static; max-height: none; padding-right: 0; }
+  .user-management-heading { align-items: stretch; flex-direction: column; }
+  .inline-control { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 900px) {

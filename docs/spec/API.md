@@ -108,6 +108,25 @@ Competition workflow routes remain on the EC2 service and are called only in com
 - **Role:** admin only.
 - **Behavior:** asks Cognito to deliver its normal reset code and writes an audit event; the application never handles or stores password material.
 
+### Admin user management
+
+These routes are admin-only and manage Cognito accounts for every role
+(`competitor`, `committee`, and `admin`). Path identifiers are URL-encoded
+Cognito `sub` values.
+
+- `GET /admin/users` returns `{users,currentUserSub}`. Users include identity
+  attributes, role, optional competitor ID, Cognito status, access state, and
+  creation/last-modified timestamps.
+- `POST /admin/users` accepts
+  `{email,name,role,competitorId?,temporaryPassword}`. Temporary passwords must
+  follow the 12-character Cognito password policy and change at first sign-in.
+- `PATCH /admin/users/:sub` accepts
+  `{email,name,role,competitorId?,enabled}`. An admin cannot disable or remove
+  the admin role from their own account, and the last enabled admin cannot be
+  disabled or demoted.
+- `POST /admin/users/:sub/reset-password` starts Cognito's verified-email reset
+  flow. No password or reset code is returned by the API.
+
 ---
 
 ## EC2 API

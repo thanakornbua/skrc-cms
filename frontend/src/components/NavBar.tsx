@@ -33,7 +33,11 @@ const STAFF_NAV: NavItem[] = [
   { to: "/staff/timing", label: "เวลาและโทษ / Timing" },
   { to: "/scoreboard", label: "ผลการแข่งขัน / Results" },
 ];
-const ADMIN_NAV: NavItem[] = [...STAFF_NAV, { to: "/admin/deployment", label: "ปรับใช้ระบบ / Deploy" }];
+const ADMIN_NAV: NavItem[] = [
+  ...STAFF_NAV,
+  { to: "/admin/users", label: "ผู้ใช้ / Users" },
+  { to: "/admin/deployment", label: "ปรับใช้ระบบ / Deploy" },
+];
 
 const NAV_BY_ROLE: Record<NavigationRole, NavItem[]> = {
   public: PUBLIC_NAV,
@@ -47,12 +51,12 @@ function itemsForEra(role: NavigationRole): NavItem[] {
   if (mode === "concluded") {
     return NAV_BY_ROLE[role].filter((item) =>
       role === "committee" || role === "admin"
-        ? ["/admin", "/scoreboard"].includes(item.to)
+        ? ["/admin", "/admin/users", "/scoreboard"].includes(item.to)
         : item.to === "/scoreboard"
     );
   }
   if (mode === "registration") {
-    return NAV_BY_ROLE[role].filter((item) => ["/register", "/portal", "/committee/approvals", "/admin", "/admin/deployment"].includes(item.to));
+    return NAV_BY_ROLE[role].filter((item) => ["/register", "/portal", "/committee/approvals", "/admin", "/admin/users", "/admin/deployment"].includes(item.to));
   }
   return NAV_BY_ROLE[role].filter((item) => item.to !== "/register" && item.to !== "/committee/approvals");
 }

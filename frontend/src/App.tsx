@@ -8,6 +8,7 @@ const PortalPage = lazy(() => import("./pages/PortalPage"));
 const CommitteeApprovalsPage = lazy(() => import("./pages/CommitteeApprovalsPage"));
 const CommitteeScanPage = lazy(() => import("./pages/CommitteeScanPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
+const AdminUsersPage = lazy(() => import("./pages/AdminUsersPage"));
 const AdminLanesPage = lazy(() => import("./pages/AdminLanesPage"));
 const TimingPage = lazy(() => import("./pages/TimingPage"));
 const ScoreboardPage = lazy(() => import("./pages/ScoreboardPage"));
@@ -28,6 +29,7 @@ export default function App() {
         {mode === "registration" && <Route path="/committee/approvals" element={<CommitteeApprovalsPage />} />}
         {mode === "competition" && <Route path="/committee/scan" element={<CommitteeScanPage />} />}
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/users" element={<AdminUsersPage />} />
         {mode === "competition" && <Route path="/admin/lanes" element={<AdminLanesPage />} />}
         {mode === "competition" && <Route path="/staff/timing" element={<TimingPage />} />}
         {mode !== "concluded" && <Route path="/admin/deployment" element={<DeploymentPage />} />}

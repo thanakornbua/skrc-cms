@@ -23,6 +23,12 @@ import {
 } from "./repo.js";
 import { errorResponse, jsonResponse } from "./responses.js";
 import { CATEGORIES } from "./types.js";
+import {
+  createManagedUser,
+  listManagedUsers,
+  resetManagedUserPassword,
+  updateManagedUser,
+} from "./cognito.js";
 
 export const PDPA_CONSENT_VERSION = "2026-08-01-v3";
 
@@ -115,6 +121,33 @@ const rejectSchema = z.object({
   reason: z.string().trim().min(1),
 });
 
+const managedUserRole = z.enum(["competitor", "committee", "admin"]);
+const managedCompetitorId = z.union([
+  z.literal(""),
+  z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9_-]+$/, "Invalid competitor ID"),
+]).optional().default("");
+
+export const createManagedUserSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  name: z.string().trim().min(2).max(120),
+  role: managedUserRole,
+  competitorId: managedCompetitorId,
+  temporaryPassword: z.string()
+    .min(12).max(99)
+    .regex(/[a-z]/, "Must contain a lowercase letter")
+    .regex(/[A-Z]/, "Must contain an uppercase letter")
+    .regex(/[0-9]/, "Must contain a number")
+    .regex(/[^A-Za-z0-9]/, "Must contain a symbol"),
+});
+
+export const updateManagedUserSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(254),
+  name: z.string().trim().min(2).max(120),
+  role: managedUserRole,
+  competitorId: managedCompetitorId,
+  enabled: z.boolean(),
+});
+
 function parseBody(event: APIGatewayProxyEventV2): unknown {
   if (!event.body) return {};
   const raw = event.isBase64Encoded
@@ -164,6 +197,34 @@ async function handleRegister(
   });
 
   return jsonResponse(201, { competitorId: null, status: "PENDING_APPROVAL" });
+}
+
+async function handleCreateManagedUser(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
+  const parsed = createManagedUserSchema.safeParse(parseBody(event));
+  if (!parsed.success) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Invalid user account", zodToFields(parsed.error));
+  }
+  const user = await createManagedUser({
+    ...parsed.data,
+    competitorId: parsed.data.competitorId || null,
+  });
+  return jsonResponse(201, { user });
+}
+
+async function handleUpdateManagedUser(
+  event: APIGatewayProxyEventV2,
+  sub: string,
+  actorSub: string
+): Promise<APIGatewayProxyResultV2> {
+  const parsed = updateManagedUserSchema.safeParse(parseBody(event));
+  if (!parsed.success) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Invalid user account", zodToFields(parsed.error));
+  }
+  const user = await updateManagedUser(sub, {
+    ...parsed.data,
+    competitorId: parsed.data.competitorId || null,
+  }, actorSub);
+  return jsonResponse(200, { user });
 }
 
 async function handleMe(sub: string): Promise<APIGatewayProxyResultV2> {
@@ -439,6 +500,25 @@ export async function handler(
     if (method === "GET" && path === "/export.csv") {
       requireAdminOnly(user);
       return await handleExportCsv(event);
+    }
+    if (method === "GET" && path === "/admin/users") {
+      requireAdminOnly(user);
+      return jsonResponse(200, { users: await listManagedUsers(), currentUserSub: user.sub });
+    }
+    if (method === "POST" && path === "/admin/users") {
+      requireAdminOnly(user);
+      return await handleCreateManagedUser(event);
+    }
+    const managedUserMatch = path.match(/^\/admin\/users\/([^/]+)$/);
+    if (method === "PATCH" && managedUserMatch) {
+      requireAdminOnly(user);
+      return await handleUpdateManagedUser(event, decodeURIComponent(managedUserMatch[1]), user.sub);
+    }
+    const managedUserResetMatch = path.match(/^\/admin\/users\/([^/]+)\/reset-password$/);
+    if (method === "POST" && managedUserResetMatch) {
+      requireAdminOnly(user);
+      const managedUser = await resetManagedUserPassword(decodeURIComponent(managedUserResetMatch[1]));
+      return jsonResponse(200, { user: managedUser });
     }
     if (method === "GET" && path === "/staff/competitors") {
       requireRole(user, "committee");

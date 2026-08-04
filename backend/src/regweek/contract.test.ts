@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { competitorUpdateSchema, registerSchema } from "./handler.js";
+import {
+  competitorUpdateSchema,
+  createManagedUserSchema,
+  registerSchema,
+  updateManagedUserSchema,
+} from "./handler.js";
 
 const validRegistration = {
   teamName: "ทีมทดสอบ",
@@ -112,4 +117,35 @@ test("competitor updates preserve the one-to-three member rule", () => {
     expectedUpdatedAt: "2026-08-02T04:00:00.000Z",
     reason: "Removed blank optional members",
   }).success, true);
+});
+
+test("managed users support every role and enforce the Cognito password policy", () => {
+  for (const role of ["competitor", "committee", "admin"] as const) {
+    assert.equal(createManagedUserSchema.safeParse({
+      email: `${role}@example.com`,
+      name: `${role} user`,
+      role,
+      competitorId: role === "competitor" ? "C-0042" : "",
+      temporaryPassword: "Temporary42!",
+    }).success, true, role);
+  }
+  assert.equal(createManagedUserSchema.safeParse({
+    email: "weak@example.com",
+    name: "Weak Password",
+    role: "committee",
+    temporaryPassword: "password",
+  }).success, false);
+});
+
+test("managed user updates require an explicit access state", () => {
+  const valid = {
+    email: "admin@example.com",
+    name: "Admin User",
+    role: "admin",
+    competitorId: "",
+    enabled: false,
+  };
+  assert.equal(updateManagedUserSchema.safeParse(valid).success, true);
+  const { enabled: _enabled, ...missingState } = valid;
+  assert.equal(updateManagedUserSchema.safeParse(missingState).success, false);
 });
