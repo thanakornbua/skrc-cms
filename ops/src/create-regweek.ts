@@ -33,7 +33,13 @@ const REGION = process.env.AWS_REGION ?? "ap-southeast-7";
 const TABLE_NAME = process.env.DYNAMO_TABLE ?? "robo-compet";
 const RESOURCE_PREFIX = process.env.RESOURCE_PREFIX ?? "robo-compet";
 if (!/^[a-z0-9-]{3,40}$/.test(RESOURCE_PREFIX)) throw new Error("RESOURCE_PREFIX must match ^[a-z0-9-]{3,40}$");
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
+/** Comma-separated to keep local development and production browser origins usable. */
+const CORS_ORIGINS = (process.env.CORS_ORIGIN ?? "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+if (CORS_ORIGINS.length === 0) throw new Error("CORS_ORIGIN must contain at least one origin");
+const CORS_ORIGIN = CORS_ORIGINS.join(",");
 const USER_POOL_ID = process.env.COGNITO_USER_POOL_ID;
 const CLIENT_ID = process.env.COGNITO_CLIENT_ID;
 
@@ -239,7 +245,7 @@ async function findOrCreateHttpApi(
   functionArn: string
 ): Promise<{ apiId: string; apiEndpoint: string }> {
   const corsConfiguration = {
-    AllowOrigins: [CORS_ORIGIN],
+    AllowOrigins: CORS_ORIGINS,
     AllowMethods: ["GET", "POST", "PATCH"],
     AllowHeaders: ["authorization", "content-type"],
     MaxAge: 300,
