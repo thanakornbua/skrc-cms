@@ -17,6 +17,13 @@ export interface PenaltyRule {
   label: string;
   penaltyMs: number;
   active: boolean;
+  /**
+   * "INTERVENTION" marks this rule as Rule 7.3's unauthorized-intervention
+   * penalty. Applying it a third time against the same run auto-ends that run
+   * (Rule 7.3(3)) instead of merely adding a fourth time charge. Unset for any
+   * other, organizer-defined penalty, which never has that side effect.
+   */
+  kind?: "INTERVENTION";
   updatedAt: string;
   updatedBy: string;
 }
@@ -29,6 +36,8 @@ export interface AppliedPenalty {
   byUser: string;
   at: string;
   stage?: CompetitionStage;
+  /** The run this occurrence happened during, when applied while a run was active. Required to count Rule 7.3(3)'s per-attempt intervention limit. */
+  runId?: string;
   revocation?: { reason: string; byUser: string; at: string };
 }
 

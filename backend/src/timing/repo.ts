@@ -6,7 +6,7 @@ import { ApiError } from "../errors.js";
 import { getCompetitionState } from "../competition/state.js";
 import type { CompetitionStage } from "../competition/types.js";
 import { getCompetitor } from "../competitors/repo.js";
-import { listRuns } from "../runs/repo.js";
+import { forceEndRunForIntervention, listRuns } from "../runs/repo.js";
 import type { RunRecord } from "../runs/types.js";
 import type { AppliedPenalty, CategoryTiming, PenaltyRule, TimeCorrection, TimeResult } from "./types.js";
 import { consumedStageBudgetMs } from "./budget.js";
@@ -64,22 +64,28 @@ export async function listPenaltyRules(): Promise<PenaltyRule[]> {
   return ((result.Items ?? []) as PenaltyRule[]).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export async function createPenaltyRule(label: string, penaltyMs: number, byUser: string): Promise<PenaltyRule> {
+export async function createPenaltyRule(label: string, penaltyMs: number, byUser: string, kind?: "INTERVENTION"): Promise<PenaltyRule> {
   const ruleId = randomUUID();
   const item: PenaltyRule & { PK: string; SK: string } = {
-    ...ruleKey(ruleId), ruleId, label, penaltyMs, active: true,
+    ...ruleKey(ruleId), ruleId, label, penaltyMs, active: true, ...(kind ? { kind } : {}),
     updatedAt: new Date().toISOString(), updatedBy: byUser,
   };
   await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item, ConditionExpression: "attribute_not_exists(PK)" }));
   return item;
 }
 
-export async function updatePenaltyRule(ruleId: string, input: { label: string; penaltyMs: number; active: boolean }, byUser: string): Promise<PenaltyRule> {
+export async function updatePenaltyRule(ruleId: string, input: { label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }, byUser: string): Promise<PenaltyRule> {
   const result = await ddbDoc.send(new UpdateCommand({
     TableName: TABLE_NAME, Key: ruleKey(ruleId),
-    UpdateExpression: "SET label = :label, penaltyMs = :penalty, active = :active, updatedAt = :at, updatedBy = :by",
+    UpdateExpression: input.kind
+      ? "SET label = :label, penaltyMs = :penalty, active = :active, kind = :kind, updatedAt = :at, updatedBy = :by"
+      : "SET label = :label, penaltyMs = :penalty, active = :active, updatedAt = :at, updatedBy = :by REMOVE kind",
     ConditionExpression: "attribute_exists(PK)",
-    ExpressionAttributeValues: { ":label": input.label, ":penalty": input.penaltyMs, ":active": input.active, ":at": new Date().toISOString(), ":by": byUser },
+    ExpressionAttributeValues: {
+      ":label": input.label, ":penalty": input.penaltyMs, ":active": input.active,
+      ...(input.kind ? { ":kind": input.kind } : {}),
+      ":at": new Date().toISOString(), ":by": byUser,
+    },
     ReturnValues: "ALL_NEW",
   }));
   if (!result.Attributes) throw new ApiError(404, "NOT_FOUND", "Penalty rule not found");
@@ -95,7 +101,7 @@ export async function listAppliedPenalties(competitorId: string): Promise<Applie
   return (result.Items ?? []) as AppliedPenalty[];
 }
 
-export async function applyPenalty(competitorId: string, ruleId: string, byUser: string): Promise<AppliedPenalty> {
+export async function applyPenalty(competitorId: string, ruleId: string, byUser: string, runId?: string): Promise<AppliedPenalty> {
   if (!(await getCompetitor(competitorId))) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   const result = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: ruleKey(ruleId), ConsistentRead: true }));
   const rule = result.Item as PenaltyRule | undefined;
@@ -105,7 +111,7 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
   const stage = (await getCompetitionState()).activeStage;
   const item: AppliedPenalty & { PK: string } = {
     PK: `COMP#${competitorId}`, SK: `PENALTY#${at}#${ruleId}`,
-    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at, stage,
+    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at, stage, ...(runId ? { runId } : {}),
   };
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
@@ -124,6 +130,15 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
       throw new ApiError(409, "CONFLICT", "Penalty rule changed or became inactive; reload and try again");
     }
     throw error;
+  }
+  // Rule 7.3(3): a third unauthorized intervention against the same attempt
+  // ends the run outright rather than only stacking a further time charge.
+  if (rule.kind === "INTERVENTION" && runId) {
+    const applied = await listAppliedPenalties(competitorId);
+    const occurrences = applied.filter((entry) => entry.ruleId === ruleId && entry.runId === runId && !entry.revocation).length;
+    if (occurrences >= 3) {
+      await forceEndRunForIntervention(competitorId, runId, `Ended by the third unauthorized intervention (${rule.label})`, byUser);
+    }
   }
   return item;
 }
@@ -247,6 +262,47 @@ export async function resolveUnderReview(competitorId: string, runId: string, de
     ] }));
   } catch (error) {
     if (error instanceof TransactionCanceledException) throw new ApiError(409, "CONFLICT", "Run is not awaiting review");
+    throw error;
+  }
+}
+
+/**
+ * Administrative void of an already-finished run (Rule 5.5 — only officials may
+ * declare a run VOID). Unlike `resolveUnderReview`, this covers any terminal run,
+ * not just ones flagged UNDER_REVIEW — e.g. a completed run later found to be
+ * unfair due to a field/sensor fault. A VOID run does not consume an attempt
+ * (STATES.md §4), so this is also the mechanism behind "redo": voiding reopens an
+ * attempt slot that lane assignment (`assignLane`) will accept again.
+ *
+ * Idempotent on an already-VOID run (returns without a further write) so that
+ * committee flagging a run and admin subsequently calling `/redo` never race
+ * each other into a spurious 409.
+ */
+export async function voidRun(competitorId: string, runId: string, reason: string, byUser: string): Promise<void> {
+  const runResult = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
+  const run = runResult.Item as RunRecord | undefined;
+  if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");
+  if (run.status === "VOID") return;
+  const activeStage = (await getCompetitionState()).activeStage;
+  if ((run.stage ?? "ROUND_1") !== activeStage) throw new ApiError(409, "CONFLICT", "A frozen earlier-stage run cannot be voided");
+  const existingCorrection = await getCorrection(competitorId, runId);
+  if (existingCorrection) throw new ApiError(409, "CONFLICT", "A corrected run cannot also be voided");
+  try {
+    await ddbDoc.send(new UpdateCommand({
+      TableName: TABLE_NAME, Key: runKey(competitorId, runId),
+      UpdateExpression: "SET #status = :void, reviewResolution = :resolution, reviewReason = :reason, reviewedAt = :at, reviewedBy = :by",
+      ConditionExpression:
+        "(#status = :complete OR #status = :timedOut OR #status = :invalid OR #status = :underReview) AND attribute_not_exists(reviewResolution)",
+      ExpressionAttributeNames: { "#status": "status" },
+      ExpressionAttributeValues: {
+        ":void": "VOID", ":resolution": "ADMIN_VOID", ":reason": reason, ":at": new Date().toISOString(), ":by": byUser,
+        ":complete": "COMPLETE", ":timedOut": "TIMED_OUT", ":invalid": "INVALID", ":underReview": "UNDER_REVIEW",
+      },
+    }));
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      throw new ApiError(409, "CONFLICT", "Run is still in progress, already void, or already resolved");
+    }
     throw error;
   }
 }

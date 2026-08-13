@@ -3,7 +3,7 @@ import { requireAuth, requireRole, requireSelfOrStaff } from "../auth/middleware
 import { requestPasswordReset } from "../auth/admin.js";
 import { z } from "zod";
 import { ApiError, zodToFields } from "../errors.js";
-import { checkIn, disqualifyCompetitor, getCompetitor, inspectCompetitor, listCompetitors, recordPasswordResetRequest, reinstateCompetitor, scanProfiles } from "./repo.js";
+import { checkIn, disqualifyCompetitor, getCompetitor, listCompetitors, recordPasswordResetRequest, reinstateCompetitor, scanProfiles } from "./repo.js";
 import { getActiveLaneForCompetitor } from "../lanes/repo.js";
 import { listRuns } from "../runs/repo.js";
 import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
@@ -11,6 +11,7 @@ import { getCompetitorRank, getFrozenStageResult } from "../competition/repo.js"
 import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
 import { scoreCompetitorStage } from "../competition/scoring.js";
 import type { StageRankedResult } from "../competition/types.js";
+import { listWeightInspections } from "../inspections/repo.js";
 
 export const competitorsRouter = Router();
 
@@ -25,9 +26,9 @@ competitorsRouter.get(
 
       const lane = await getActiveLaneForCompetitor(competitor.competitorId);
       const competition = await getCompetitionState();
-      const [runs, corrections, penalties] = await Promise.all([
+      const [runs, corrections, penalties, inspections] = await Promise.all([
         listRuns(competitor.competitorId), listCorrections(competitor.competitorId),
-        listAppliedPenalties(competitor.competitorId),
+        listAppliedPenalties(competitor.competitorId), listWeightInspections(competitor.competitorId),
       ]);
       const eligible = isEligibleForStage(competition, competitor.competitorId);
       const eliminated = !eligible && competition.activeStage !== "ROUND_1";
@@ -63,6 +64,7 @@ competitorsRouter.get(
         status: competitor.status,
         checkedInAt: competitor.checkedInAt,
         inspectedAt: competitor.inspectedAt,
+        weightInspections: inspections.map(({ PK: _pk, SK: _sk, byUser: _byUser, ...inspection }) => inspection),
         disqualified: competitor.disqualified,
         lane,
         penalties: penalties.map(({ byUser: _byUser, ...penalty }) => penalty),
@@ -81,6 +83,7 @@ competitorsRouter.get(
             ? (() => { const { byUser: _byUser, ...correction } = correctionByRun.get(run.runId)!; return correction; })()
             : null,
           reviewResolution: run.reviewResolution ?? null,
+          reviewReason: run.reviewReason ?? null,
           createdAt: run.createdAt,
         })),
         stageResult: stageResult
@@ -225,17 +228,3 @@ competitorsRouter.post("/admin/competitors/:id/reinstate", requireAuth, requireR
     res.status(200).json({ disqualified: { bool: false } });
   } catch (error) { next(error); }
 });
-
-competitorsRouter.post(
-  "/committee/competitors/:id/inspect",
-  requireAuth,
-  requireRole("committee"),
-  async (req, res, next) => {
-    try {
-      const result = await inspectCompetitor(req.params.id);
-      res.status(200).json(result);
-    } catch (err) {
-      next(err);
-    }
-  }
-);

@@ -203,34 +203,6 @@ function bracketFinalResults(
   });
 }
 
-export function assembleFinalResults(snapshots: Partial<Record<CompetitionStage, CategoryStageResults[]>>): CategoryStageResults[] {
-  const round1 = snapshots.ROUND_1 ?? [];
-  const best4 = snapshots.BEST_OF_4 ?? [];
-  const best2 = snapshots.BEST_OF_2 ?? [];
-  const finals = snapshots.THE_BEST ?? [];
-  const categories = [...new Set([...round1, ...best4, ...best2, ...finals].map((item) => item.category))].sort();
-  return categories.map((category) => {
-    const r1 = round1.find((item) => item.category === category);
-    const b4 = best4.find((item) => item.category === category);
-    const b2 = best2.find((item) => item.category === category);
-    const final = finals.find((item) => item.category === category);
-    const finalists = new Set((b2?.ranked ?? []).slice(0, 2).map((item) => item.competitorId));
-    const eliminatedAtBest2 = new Set((b2?.ranked ?? []).filter((item) => !finalists.has(item.competitorId)).map((item) => item.competitorId));
-    const podium34 = (b4?.ranked ?? []).filter((item) => eliminatedAtBest2.has(item.competitorId)).slice(0, 2);
-    const bottom = (b4?.ranked ?? []).slice(4, 8);
-    const ordered: StageRankedResult[] = [
-      ...(final?.ranked ?? []).slice(0, 2), podium34[0], podium34[1], ...bottom,
-    ].filter((item): item is StageRankedResult => Boolean(item));
-    return {
-      category, stage: "THE_BEST", scoringMode: "TIME_AVERAGE",
-      ranked: ordered.map((item, index) => ({ ...item, rank: index + 1 })),
-      unranked: [...(final?.unranked ?? []), ...(b2?.unranked ?? [])],
-      disqualified: [...(final?.disqualified ?? []), ...(b2?.disqualified ?? []), ...(b4?.disqualified ?? []), ...(r1?.disqualified ?? [])]
-        .filter((item, index, all) => all.findIndex((other) => other.competitorId === item.competitorId) === index),
-    };
-  });
-}
-
 async function deleteRankingSnapshots(categories: string[]): Promise<void> {
   for (const category of categories) {
     let ExclusiveStartKey: Record<string, unknown> | undefined;

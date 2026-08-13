@@ -1,0 +1,6 @@
+[
+  {"round": "รอบคัดเลือก · QUALIFYING", "lane": "สนาม 1 · LANE 1", "team": "ทีมตัวอย่าง 01"},
+  {"round": "รอบคัดเลือก · QUALIFYING", "lane": "สนาม 1 · LANE 1", "team": "ทีมตัวอย่าง 02"},
+  {"round": "รอบ 4 ทีม · SEMIFINAL", "lane": "สนาม 1 · LANE 1", "team": "ผู้ชนะคู่ที่ 1"},
+  {"round": "รอบชิงชนะเลิศ · FINAL", "lane": "สนาม 1 · LANE 1", "team": "ผู้ชนะรอบรอง"}
+]

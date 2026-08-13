@@ -67,6 +67,19 @@ No AWS credentials, access keys, or secret keys are ever set as frontend env var
 The bridge also reads the existing `DEVICE_KEYS` map. Keys remain on the laptop and
 are never transmitted to serial firmware.
 
+## Ubuntu competition-day host with normal Arduino UNO
+
+The EC2 replacement runs the unchanged competition API on the laptop and adds the
+single-sensor bridge. It uses the EC2 variables above plus:
+
+| Var | Example | Notes |
+|---|---|---|
+| `COMPETITION_API_URL` | `http://127.0.0.1:3000` | Loopback API used by the co-located UNO bridge. |
+| `UNO_SERIAL_PORT` | `/dev/ttyACM0` | Explicit port is preferred on competition day. |
+| `UNO_DEVICE_ID` | `uno-lane1` | Must appear in both `DEVICE_KEYS` and the selected `LANES` entry. |
+| `UNO_LANE_ID` | `1` | Lane controlled by this one-sensor device. |
+| `SERIAL_SPOOL_DIR` | `.uno-spool` | Durable pre-delivery event queue; preserve during the event. |
+
 ## Bootstrap-only (never long-lived env vars; used once by an operator running a script)
 
 - `ops/bootstrap-staff.ts` (Phase 2) takes the D7 staff list + temporary passwords as a script argument or a local JSON file **outside version control** — never as a committed env var.

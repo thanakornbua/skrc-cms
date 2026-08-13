@@ -11,8 +11,11 @@ import { runsRouter } from "./runs/routes.js";
 import { timingRouter } from "./timing/routes.js";
 import { competitionRouter } from "./competition/routes.js";
 import { requireCompetitionOpen } from "./competition/middleware.js";
+import { inspectionsRouter } from "./inspections/routes.js";
+import { hardwareRouter } from "./hardware/routes.js";
+import { resolve } from "node:path";
 
-export function createApp() {
+export function createApp(options: { staticFrontendDir?: string } = {}) {
   const app = express();
   app.use(cors({ origin: config.corsOrigin }));
   app.use(express.json());
@@ -20,11 +23,22 @@ export function createApp() {
   app.get("/health", healthHandler);
   app.get("/auth/me", requireAuth, meHandler);
   app.use(requireCompetitionOpen);
+  app.use(hardwareRouter);
   app.use(competitorsRouter);
+  app.use(inspectionsRouter);
   app.use(lanesRouter);
   app.use(runsRouter);
   app.use(timingRouter);
   app.use(competitionRouter);
+
+  if (options.staticFrontendDir) {
+    const frontendDir = resolve(options.staticFrontendDir);
+    app.use(express.static(frontendDir));
+    app.get("*", (req, res, next) => {
+      if (!req.accepts("html")) { next(); return; }
+      res.sendFile(resolve(frontendDir, "index.html"));
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);

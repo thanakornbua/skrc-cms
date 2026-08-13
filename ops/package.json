@@ -25,7 +25,9 @@
     "wipe-competitors": "tsx src/wipe-competitors.ts",
     "reset-staff": "tsx src/reset-staff.ts",
     "serial-bridge": "tsx src/serial-bridge.ts",
+    "uno-bridge": "tsx src/uno-bridge.ts",
     "test:serial": "tsx src/serial-bridge.test.ts",
+    "test:uno": "tsx --test src/uno-bridge.test.ts",
     "test:serial-e2e": "tsx src/serial-e2e.test.ts"
   },
   "dependencies": {

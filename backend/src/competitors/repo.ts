@@ -158,56 +158,6 @@ export async function checkIn(competitorId: string, byUser: string): Promise<Che
   return { status: "CHECKED_IN", checkedInAt, alreadyCheckedIn: false };
 }
 
-export interface InspectResult {
-  status: "INSPECTED";
-  inspectedAt: string;
-}
-
-export async function inspectCompetitor(competitorId: string): Promise<InspectResult> {
-  const existing = await getCompetitor(competitorId);
-  if (!existing) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
-
-  if (existing.status === "REGISTERED") {
-    throw new ApiError(409, "NOT_CHECKED_IN", "Competitor has not checked in yet");
-  }
-
-  // Already INSPECTED or beyond (RUN_COMPLETE) — idempotent, nothing to change.
-  if (existing.status !== "CHECKED_IN") {
-    return { status: "INSPECTED", inspectedAt: existing.inspectedAt ?? new Date().toISOString() };
-  }
-
-  const inspectedAt = new Date().toISOString();
-  try {
-    await ddbDoc.send(
-      new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: keyComp(competitorId),
-        UpdateExpression: "SET #status = :inspected, inspectedAt = :at, GSI1SK = :gsi1sk",
-        ConditionExpression: "#status = :checkedIn",
-        ExpressionAttributeNames: { "#status": "status" },
-        ExpressionAttributeValues: {
-          ":inspected": "INSPECTED",
-          ":at": inspectedAt,
-          ":checkedIn": "CHECKED_IN",
-          ":gsi1sk": `${existing.category}#INSPECTED#${competitorId}`,
-        },
-      })
-    );
-  } catch (err) {
-    if (err instanceof ConditionalCheckFailedException) {
-      const current = await getCompetitor(competitorId);
-      if (!current) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
-      if (current.status === "REGISTERED") {
-        throw new ApiError(409, "NOT_CHECKED_IN", "Competitor has not checked in yet");
-      }
-      return { status: "INSPECTED", inspectedAt: current.inspectedAt ?? inspectedAt };
-    }
-    throw err;
-  }
-
-  return { status: "INSPECTED", inspectedAt };
-}
-
 export async function disqualifyCompetitor(competitorId: string, reason: string, byUser: string): Promise<CompetitorRecord["disqualified"]> {
   const disqualified = { bool: true, reason, byUser, at: new Date().toISOString() };
   try {

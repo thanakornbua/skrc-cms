@@ -13,7 +13,7 @@ dry-run environment and reset its records before accepting production entries.
 - `roster.csv` passes `npm run bootstrap-staff -- ../roster.csv --validate-only`.
 - Admin and committee test accounts can sign in and have changed temporary passwords.
 - `competitive.skrc.suankularb.space` points to the built frontend.
-- `api.suankularb.space` responds to `GET /health` and allows the frontend origin.
+- The selected competition API responds to `GET /health`. For the compiled Windows application this is `http://127.0.0.1:3210/health`; for EC2 it remains `api.suankularb.space`.
 - Backend `LANES` maps lane `1` to `esp32-lane1`.
 - Backend `DEVICE_KEYS` contains the simulator's device key.
 - One disposable competitor email is available for the registration journey.
@@ -32,15 +32,15 @@ export SIM_API_URL=https://api.suankularb.space
 ## Happy-path rehearsal
 
 1. In `/staff/timing`, admin sets the minimum safeguard and all four stage maximum
-   times for the category, then creates the approved penalty rules. Round 1 and
-   Best of 4 maxima are cumulative team budgets; Best of 2 and The Best maxima
-   apply to each of the two attempts.
+   times for the category, then creates the approved penalty rules. Every stage's
+   maximum applies individually to each of a team's three attempts in that stage
+   (Rules 4.2, 4.5, 5.2) — there is no cumulative team time budget.
 2. In `/register`, create the disposable competitor account and submit the team.
    Confirm that no payment step appears.
 3. In `/committee/approvals`, approve the registration. Record the generated
    competitor number shown in the competitor portal.
-4. In `/admin`, search for that team, check it in, and print-preview the QR badge.
-5. In `/committee/scan`, scan or type the competitor number and mark it inspected.
+4. In `/competition-day`, scan the team, check it in as admin, and record a passing check-in weight in grams.
+5. Record the pre-competition weight. Confirm a failed result remains auditable and does not advance the team; record a new passing measurement and confirm the team becomes `INSPECTED`.
 6. In `/admin/lanes`, assign the competitor number to lane `1`, then arm it. Confirm
    the card changes `IDLE → ASSIGNED → ARMED` and the competitor portal follows.
 7. From `ops/`, act as the Arduino/ESP32:
@@ -52,18 +52,23 @@ export SIM_API_URL=https://api.suankularb.space
 8. While it runs, observe `/admin/lanes` change `ARMED → RUNNING → IDLE`. Confirm
    the portal shows the completed attempt and `/staff/timing` shows the same raw
    elapsed time. The expected simulator time is printed after STOP.
-9. Confirm Round 1 ranks completed laps by fastest time and incomplete attempts by
-   furthest unique checkpoint. Use the remaining stage budget for a re-attempt.
+9. Confirm Round 1 ranks teams by count of completed times (two beats one beats
+   zero, Rule 6.4), then by best-two-of-three average time (Rule 6.2), then by the
+   Rule 6.5(a)-(d) tiebreakers. Checkpoint data is recorded for display/restart
+   only and never affects ranking (Rule 6.7).
 10. As admin, advance through Best of 4 (top 8), Best of 2 (top 4), and The Best
     (top 2), creating disposable stage-specific runs at each step. Confirm earlier
     runs disappear from the active-stage calculation.
-11. In Best of 2 and The Best, confirm two valid attempts average, one valid time
-    stands alone, zero valid times are unranked, and a third attempt is rejected.
-12. Confirm Best-of-2 eliminations take 3rd/4th according to their Best-of-4 order,
-    while Best-of-4 positions 5th–8th remain final.
-13. Apply one penalty in `/staff/timing`; confirm it affects only the active stage
-    and therefore can move
-    the team down the ranking. Revoke it as admin and confirm the original result.
+11. In every stage, confirm each team gets exactly three attempts (Rule 4.5(1)):
+    two-of-three average when at least two are valid, one valid time stands
+    alone, zero valid times are unranked, and a fourth attempt is rejected.
+12. Confirm the two Best-of-2 losers play the third-place match to decide 3rd/4th
+    (Rule 4.4(4)) rather than being ordered by their Best-of-4 result, while
+    Best-of-4 positions 5th–8th remain final.
+13. Create the single official penalty rule (5,000ms "Unauthorized intervention",
+    Rule 7.3(2)) in `/staff/timing`, apply it once, and confirm it affects only the
+    active stage and therefore can move the team down the ranking. Revoke it as
+    admin and confirm the original result.
 
 ## Device and state-machine checks
 

@@ -1006,6 +1006,82 @@ tbody tr:hover { background: var(--sunk); }
 #committee-scan-camera-reader video,
 #committee-scan-camera-reader img { display: block; width: 100% !important; max-width: 100% !important; height: auto !important; }
 
+/* ---- Competition-day operator console -------------------------------- */
+
+.competition-console { --console-navy: #16213e; }
+
+.hardware-strip {
+  display: grid;
+  grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--console-navy);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+}
+.hardware-strip .section-kicker { color: #86c8ef; }
+.hardware-strip .section-kicker::before { background: #1682c2; }
+.hardware-strip > div > strong { display: block; font-family: var(--font-thai); font-size: var(--text-xl); }
+.hardware-devices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); }
+.hardware-device {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 210px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,.06);
+}
+.hardware-device span:last-child { display: grid; gap: 2px; }
+.hardware-device small { color: #b8cae0; }
+.hardware-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--color-error); box-shadow: 0 0 0 4px rgba(239,68,68,.15); }
+.hardware-device[data-online="true"] .hardware-dot { background: var(--color-success); box-shadow: 0 0 0 4px rgba(16,185,129,.16); }
+
+.inspection-workspace > h2 { margin-bottom: var(--space-1); }
+.inspection-gate { margin-top: var(--space-5); padding: var(--space-5); border-left: 3px solid var(--color-warning); background: var(--color-warning-soft); }
+.inspection-gate p { margin-top: 0; }
+.inspection-stage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-6); }
+.inspection-stage { min-width: 0; padding: var(--space-5); border: 1px solid var(--hairline-2); border-radius: var(--radius-lg); background: var(--surface); }
+.inspection-stage[data-complete="true"] { border-color: var(--color-success); box-shadow: inset 0 3px 0 var(--color-success); }
+.inspection-stage header { display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-4); }
+.inspection-stage h3 { margin: 0; font-size: var(--text-lg); }
+.inspection-stage header p { margin: var(--space-1) 0 0; color: var(--color-muted); font-size: var(--text-sm); }
+.inspection-step { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--color-surface-2); color: var(--accent); font-family: var(--font-mono); font-weight: var(--weight-bold); }
+.inspection-reading { display: grid; gap: var(--space-1); margin-bottom: var(--space-4); padding: var(--space-4); border-left: 3px solid var(--color-warning); background: var(--color-warning-soft); }
+.inspection-reading.success { border-color: var(--color-success); background: var(--color-success-soft); }
+.inspection-reading.error { border-color: var(--color-error); background: var(--color-error-soft); }
+.inspection-reading strong { font-family: var(--font-mono); font-size: var(--text-2xl); }
+.inspection-reading span, .inspection-reading small { color: var(--color-text-2); }
+.inspection-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.inspection-locked { margin: 0; padding: var(--space-4); border: 1px dashed var(--hairline-2); color: var(--color-muted); text-align: center; }
+
+.competition-lanes { margin-top: var(--space-8); }
+.competition-lane-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
+.competition-lane { margin: 0; border-top: 4px solid var(--hairline-2); }
+.competition-lane[data-state="ARMED"] { border-top-color: var(--color-warning); }
+.competition-lane[data-state="RUNNING"] { border-top-color: var(--color-success); }
+.competition-lane header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.competition-lane h3 { margin: var(--space-2) 0 0; font-size: var(--text-xl); }
+.competition-lane-device { color: var(--color-muted); }
+.lane-assign-controls .field { margin-bottom: var(--space-3); }
+.lane-button-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.lane-primary-action { width: 100%; padding: var(--space-4); }
+.lane-ready-message { display: grid; gap: var(--space-1); margin: var(--space-4) 0; padding: var(--space-4); border-left: 3px solid var(--color-warning); background: var(--color-warning-soft); }
+.lane-ready-message.running { border-left-color: var(--color-success); background: var(--color-success-soft); }
+.lane-ready-message span { color: var(--color-text-2); }
+.lane-reset { width: 100%; margin-top: var(--space-3); }
+
+@media (max-width: 780px) {
+  .hardware-strip, .inspection-stage-grid { grid-template-columns: 1fr; }
+  .hardware-devices { justify-content: stretch; }
+  .hardware-device { width: 100%; }
+  .lane-button-row { grid-template-columns: 1fr; }
+}
+
 /* ---- Timing station: run attempts & competition state ------------------ */
 
 .stage-hero {
@@ -1036,8 +1112,15 @@ tbody tr:hover { background: var(--sunk); }
   color: var(--color-text-2);
 }
 .attempt-times .corrected { color: var(--accent); font-weight: var(--weight-semibold); }
+.attempt-reason { margin-top: var(--space-2); color: var(--color-text-2); font-size: var(--text-sm); }
 .attempt-row .button-row { margin-top: var(--space-3); }
 .attempt-row .button-row:empty { display: none; margin-top: 0; }
+
+.field-checkbox { flex-direction: row; align-items: center; gap: var(--space-2); }
+.field-checkbox label {
+  display: flex; align-items: center; gap: var(--space-2);
+  text-transform: none; letter-spacing: normal; font-weight: var(--weight-regular); font-size: var(--text-sm);
+}
 
 /* ---- User and access management -------------------------------------- */
 

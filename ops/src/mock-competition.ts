@@ -48,19 +48,19 @@ const teams: Team[] = [
   ["C-0008", "Robot Garden", "Chanin R."],
 ].map(([competitorId, teamName, name], index) => ({
   competitorId, teamName, name, runs: [], status: "INSPECTED" as const,
+  // Rule 7.3(2): the first two unauthorized interventions in the same attempt each
+  // cost 5s; a third ends the run outright (an attempt-ending event, not a further
+  // penalty). No other act carries a fixed time penalty under the rules — restarts
+  // up to three per attempt (Rule 5.3) are unpenalized by design.
   penalties: index === 0 ? [{
-    SK: "PENALTY#seed#mock-touch", ruleId: "mock-touch", label: "Touching the robot",
+    SK: "PENALTY#seed#unauthorized-intervention", ruleId: "unauthorized-intervention",
+    label: "Unauthorized intervention (Rule 7.3)",
     penaltyMs: 5_000, stage: "ROUND_1", at: new Date().toISOString(), revocation: null,
-  }] : index === 3 ? [{
-    SK: "PENALTY#seed#mock-boundary", ruleId: "mock-boundary", label: "Leaving the course boundary",
-    penaltyMs: 3_000, stage: "ROUND_1", at: new Date().toISOString(), revocation: null,
   }] : [],
 }));
 
 const penaltyRules = [
-  { ruleId: "mock-touch", label: "Touching the robot", penaltyMs: 5_000, active: true },
-  { ruleId: "mock-boundary", label: "Leaving the course boundary", penaltyMs: 3_000, active: true },
-  { ruleId: "mock-restart", label: "Manual restart", penaltyMs: 2_000, active: true },
+  { ruleId: "unauthorized-intervention", label: "Unauthorized intervention (Rule 7.3)", penaltyMs: 5_000, active: true, kind: "INTERVENTION" as const },
 ];
 
 const queue = Array.from({ length: 3 }, () => teams.map((team) => team.competitorId)).flat();
@@ -92,8 +92,8 @@ function cycleLane(lane: Lane, timestamp: number): void {
       const elapsedMs = 8_700 + ((runNumber * 1_379 + Number(lane.laneId) * 613) % 7_800);
       competitor.runs.push({ runId: `mock-${runNumber}`, status: "COMPLETE", elapsedMs, minTimeMs: 1_000, maxTimeMs: 180_000, stage: activeStage });
       if (runNumber % 4 === 0) competitor.penalties.push({
-        SK: `PENALTY#${new Date().toISOString()}#mock-restart`,
-        ruleId: "mock-restart", label: "Manual restart", penaltyMs: 2_000,
+        SK: `PENALTY#${new Date().toISOString()}#unauthorized-intervention`,
+        ruleId: "unauthorized-intervention", label: "Unauthorized intervention (Rule 7.3)", penaltyMs: 5_000,
         stage: activeStage, at: new Date().toISOString(), revocation: null,
       });
       competitor.status = "RUN_COMPLETE";

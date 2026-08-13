@@ -112,7 +112,7 @@ function CommitteeApprovalsDashboard({ signOutAndReset }: { signOutAndReset: () 
     setActionError(null);
     setBusySub(sub);
     try {
-      await regweekJson(`/registrations/${encodeURIComponent(sub)}/approve`, { method: "POST" });
+      await regweekJson(`/registrations/${encodeURIComponent(sub)}/approve`, { method: "POST" }, { retryNetwork: true });
       await loadPending();
     } catch (err) {
       setActionError(err instanceof ApiClientError ? err.message : "Approve failed");

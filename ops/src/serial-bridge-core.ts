@@ -7,7 +7,7 @@ export interface GateEvent {
   eventId: string; deviceId: string; laneId: string; gateId: string;
   type: GateEventType; deviceTs: number;
 }
-interface StoredEvent { event: GateEvent; receivedAt: string }
+export interface StoredEvent { event: GateEvent; receivedAt: string }
 
 const idPattern = /^[A-Za-z0-9._:-]{1,160}$/;
 function nonEmpty(value: unknown, max = 160): value is string {

@@ -287,6 +287,45 @@ export async function voidActiveRunAndResetLane(
   ] }));
 }
 
+/**
+ * Rule 7.3(3): a third (or later) unauthorized intervention within the same
+ * attempt ends the run immediately — the attempt is consumed and the team
+ * receives the stage's maximum time, exactly like a missed STOP. It is
+ * deliberately NOT a void: void means the attempt is refunded, which would
+ * reward repeated interference instead of penalizing it.
+ */
+export async function forceEndRunForIntervention(competitorId: string, runId: string, reason: string, byUser: string): Promise<boolean> {
+  const run = (await listRuns(competitorId)).find((item) => item.runId === runId);
+  if (!run || run.status !== undefined) return false;
+  const at = new Date().toISOString();
+  try {
+    await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
+      { Update: {
+        TableName: TABLE_NAME, Key: runKey(competitorId, run.runId),
+        UpdateExpression: "SET #status = :timedOut, reviewResolution = :resolution, reviewReason = :reason, reviewedAt = :at, reviewedBy = :by",
+        ConditionExpression: "attribute_not_exists(#status)",
+        ExpressionAttributeNames: { "#status": "status" },
+        ExpressionAttributeValues: {
+          ":timedOut": "TIMED_OUT", ":resolution": "INTERVENTION_LIMIT", ":reason": reason, ":at": at, ":by": byUser,
+        },
+      } },
+      { Update: {
+        TableName: TABLE_NAME, Key: laneKey(run.laneId),
+        UpdateExpression: "SET #state = :idle, competitorId = :none, armedBy = :none, runStartedAt = :none, updatedAt = :at",
+        ConditionExpression: "#state = :running AND competitorId = :cid",
+        ExpressionAttributeNames: { "#state": "state" },
+        ExpressionAttributeValues: { ":idle": "IDLE", ":running": "RUNNING", ":cid": competitorId, ":none": null, ":at": at },
+      } },
+    ] }));
+    return true;
+  } catch (error) {
+    // The run already resolved (e.g. STOP arrived first) or the lane already
+    // moved on — either way there is nothing left to force-end.
+    if (error instanceof TransactionCanceledException) return false;
+    throw error;
+  }
+}
+
 /** Closes missed-STOP runs at the snapshotted maximum allowed time. */
 export async function sweepTimedOutRuns(nowMs = Date.now()): Promise<number> {
   // Lane IDs are configuration-owned, so avoid a table scan.

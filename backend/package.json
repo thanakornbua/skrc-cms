@@ -11,6 +11,7 @@
     "test:notifications": "npm run build && node --test dist/notifications/*.test.js",
     "test:competition": "npm run build && node --test dist/competition/*.test.js",
     "test:timing": "npm run build && node --test dist/timing/*.test.js",
+    "test:inspections": "npm run build && node --test dist/inspections/*.test.js",
     "test:regweek": "npm run build && node --test dist/regweek/*.test.js",
     "test:auth": "npm run build && node --test dist/auth/*.test.js",
     "test:auth-email": "npm run build && node --test dist/auth-email/*.test.js",

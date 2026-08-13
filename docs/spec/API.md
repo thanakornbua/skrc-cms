@@ -156,6 +156,7 @@ Cognito `sub` values.
     "rank": null
   }
   ```
+  During competition mode the response also includes `weightInspections`, with staff attribution removed from this self-or-staff summary. The dedicated committee inspection route retains the inspector audit field.
   Arrays/fields populated by later phases are present and empty/null until those phases exist — do not change this shape then; only start filling it in. `lane` (added in Phase 6) is `{ "laneId": "1", "state": "ASSIGNED"|"ARMED"|"RUNNING" }` while the competitor occupies a non-IDLE lane, else `null` — it is what drives portal steps 5–6 (Lane assigned / Timer armed).
 - **Errors:** `403 FORBIDDEN` competitor requesting another competitor's ID. `404 NOT_FOUND`.
 
@@ -182,11 +183,15 @@ Cognito `sub` values.
 
 ### Phase 5 — inspection
 
-#### `POST /committee/competitors/:id/inspect`
+#### `POST /committee/competitors/:id/weight-inspections`
 - **Role:** committee (admin passes).
-- **Request:** `{}`.
-- **Response 200:** `{ "status": "INSPECTED", "inspectedAt": "..." }`. Idempotent on repeat.
-- **Errors:** `409 CONFLICT` `{code: "NOT_CHECKED_IN"}` if status is still `REGISTERED`. `404 NOT_FOUND`.
+- **Request:** `{ "inspectionId":"uuid", "stage":"CHECK_IN"|"PRE_COMPETITION", "weightGrams":2500, "result":"PASS"|"FAIL", "notes":"optional" }`.
+- **Response 200:** `{ inspection, status, inspectedAt, duplicate }`. A passed pre-competition inspection advances to `INSPECTED` only when a passed check-in inspection exists.
+- **Errors:** `409 NOT_CHECKED_IN` before check-in; `409 CHECK_IN_INSPECTION_REQUIRED` when the pre-competition stage is attempted without a passed first weigh-in; `404 NOT_FOUND`.
+
+#### `GET /committee/competitors/:id/weight-inspections`
+- **Role:** committee (admin passes).
+- **Response 200:** `{ "inspections": [...] }`, in measurement-time order. Staff attribution is retained in this protected response.
 
 ### Phase 6 — lanes
 
@@ -223,23 +228,61 @@ Cognito `sub` values.
 - **Response:** always `200`, body `{ "accepted": true }` or `{ "accepted": false, "reason": "duplicate"|"invalid_state"|"clock_anomaly" }`. See IMPLEMENTATION_PLAN.md Phase 7 for the full processing algorithm (dedup → audit → state validation → debounce → elapsed/split computation).
 - **Errors (transport/auth only, firmware retries these):** `401 UNAUTHORIZED` bad/missing device key. `400 VALIDATION_ERROR` malformed body.
 
+#### `POST /device/lane-state`, `POST /device/heartbeat`
+- **Role:** configured device key. Used by the normal-UNO laptop bridge to map a single sensor edge to START or STOP and publish serial health.
+- Device timestamps still originate at the Arduino (`millis()`); the heartbeat never participates in elapsed-time calculation.
+
+#### `GET /admin/hardware`
+- **Role:** staff.
+- **Response 200:** configured device status with `online=true` only when a connected heartbeat is less than 30 seconds old.
+
 ### Phase 9 — timing, corrections, and penalties
 
 - `GET /admin/config/categories` (admin): `{categories:[{category,minTimeMs,maxTimeMs,stageMaxTimeMs,stageMaxAttempts}]}`.
 - `PUT /admin/config/categories` (admin): `{category,minTimeMs,stageMaxTimeMs,stageMaxAttempts}`; requires
   positive integer milliseconds, `minTimeMs` below every stage maximum, and exactly three attempts per round/match as fixed by Rules 4.2, 4.5, and 6.2.
 - `GET /admin/config/penalties` (committee/admin): returns the penalty-rule catalog so committee can apply a configured rule.
-- `POST /admin/config/penalties` (admin): `{label,penaltyMs}`.
-- `PUT /admin/config/penalties/:ruleId` (admin): `{label,penaltyMs,active}`.
-- `POST /committee/competitors/:id/penalties` (committee/admin): `{ruleId}`; snapshots
-  the current label/duration.
+- `POST /admin/config/penalties` (admin): `{label,penaltyMs,kind?:"INTERVENTION"}`. At
+  most a labeling convenience except for `kind:"INTERVENTION"`, which flags this rule
+  as Rule 7.3's unauthorized-intervention penalty — see `/committee/.../penalties`
+  below for what that flag does.
+- `PUT /admin/config/penalties/:ruleId` (admin): `{label,penaltyMs,active,kind?}`;
+  omitting `kind` clears it, so a caller preserving `INTERVENTION` must resend it.
+- `POST /committee/competitors/:id/penalties` (committee/admin): `{ruleId,runId?}`;
+  snapshots the current label/duration. `runId` should be the competitor's
+  currently in-flight run when the applied rule has `kind:"INTERVENTION"` — Rule
+  7.3(2)-(3) counts interventions per attempt: the first two against the same
+  `runId` are ordinary time penalties, and the third auto-ends that run (attempt
+  consumed, stage max time charged — never voided) via the same mechanism as a
+  missed STOP. `runId` is ignored for any rule without that `kind`.
 - `POST /admin/competitors/:id/penalties/:penaltySk/revoke` (admin): `{reason}`.
 - `POST /admin/competitors/:id/runs/:runId/resolve` (admin):
   `{decision:"consume"|"void",reason}` for an `UNDER_REVIEW` run.
 - `POST /admin/competitors/:id/runs/:runId/correct` (admin): `{elapsedMs,reason}` for
   an `UNDER_REVIEW` or `TIMED_OUT` run; time must be inside snapshotted limits.
+  Admin-only per Rule 8.5(1), which reserves official time correction to
+  ผู้ดูแลระบบ specifically — committee cannot call this even though it can void.
+- `POST /admin/competitors/:id/runs/:runId/void` (**committee/admin**): `{reason}`;
+  administrative void (Rule 5.5 — "เจ้าหน้าที่" broadly, not admin-only) of any
+  finished run in the active stage — `COMPLETE`, `TIMED_OUT`, `INVALID`, or
+  `UNDER_REVIEW` — not just ones already flagged for review. This is also the
+  "delete" action: official records are never hard-deleted (Rule 8.5(2)/10.2), so
+  deleting a run means voiding it, keeping the record in the audit trail. A voided
+  run never consumes an attempt (STATES.md §4). Idempotent on an already-`VOID`
+  run (returns success, no further write) so a committee void and a later admin
+  `/redo` never race into a spurious conflict. Rejects a corrected or in-flight
+  (still-`RUNNING`) run with `409 CONFLICT`.
+- `POST /admin/competitors/:id/runs/:runId/redo` (**admin only**): `{laneId,reason}`;
+  voids the run (a no-op if committee already voided it) then assigns and arms
+  `laneId` for the same competitor in one call. Deliberately admin-only — voiding
+  is a committee-level call, but only an admin may actually grant the team a new
+  attempt. Fails with the same errors as `/void`, or with `assign`/`arm`'s own
+  `409 CONFLICT` if the lane wasn't free (the run stays voided either way; retry
+  the lane step manually from `/admin/lanes`).
 - `GET /competitors/:id` includes `penalties`, `aggregateTimeMs`, `penaltyTimeMs`,
-  `finalTimeMs`, and run correction/review data. It contains no score fields.
+  `finalTimeMs`, and run correction/review data (including `reviewReason`, but not
+  staff attribution, consistent with this route's no-attribution rule). It contains
+  no score fields.
 
 ### Phase 10 — disqualification
 

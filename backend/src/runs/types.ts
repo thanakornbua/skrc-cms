@@ -21,7 +21,7 @@ export interface RunRecord {
   status?: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
   minTimeMs: number;
   maxTimeMs: number;
-  reviewResolution?: "CONSUME" | "VOID" | "CORRECTED";
+  reviewResolution?: "CONSUME" | "VOID" | "CORRECTED" | "ADMIN_VOID" | "INTERVENTION_LIMIT";
   reviewReason?: string;
   reviewedAt?: string;
   reviewedBy?: string;

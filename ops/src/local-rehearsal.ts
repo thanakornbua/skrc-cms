@@ -62,6 +62,32 @@ try {
   await timing.correctRun("C-C", "under", 2500, "local rehearsal correction", "admin-local");
   const rule = await timing.createPenaltyRule("Local penalty", 1500, "admin-local");
   await timing.applyPenalty("C-A", rule.ruleId, "committee-local");
+
+  // Rule 7.3(3): a third unauthorized intervention against the same run ends it
+  // outright (consumed, max time) instead of only adding a fourth time charge.
+  await ddb.send(new PutCommand({ TableName: table, Item: { PK: "LANE#3", SK: "STATE", laneId: "3", state: "RUNNING",
+    competitorId: "C-A", deviceId: "esp32-lane3", armedBy: "LOCAL_REHEARSAL", runStartedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } }));
+  await ddb.send(new PutCommand({ TableName: table, Item: { PK: "COMP#C-A", SK: "RUN#intervention-1", runId: "intervention-1",
+    laneId: "3", startDeviceTs: 0, stopDeviceTs: null, elapsedMs: null, splits: [], debounce: {},
+    minTimeMs: 0, maxTimeMs: 5000, createdAt: new Date().toISOString(), stage: "ROUND_1" } }));
+  const interventionRule = await timing.createPenaltyRule("Unauthorized intervention", 5000, "committee-local", "INTERVENTION");
+  await timing.applyPenalty("C-A", interventionRule.ruleId, "committee-local", "intervention-1");
+  await timing.applyPenalty("C-A", interventionRule.ruleId, "committee-local", "intervention-1");
+  await timing.applyPenalty("C-A", interventionRule.ruleId, "committee-local", "intervention-1");
+  const endedRun = await ddb.send(new GetCommand({ TableName: table, Key: { PK: "COMP#C-A", SK: "RUN#intervention-1" }, ConsistentRead: true }));
+  if (endedRun.Item?.status !== "TIMED_OUT" || endedRun.Item?.reviewResolution !== "INTERVENTION_LIMIT") {
+    throw new Error(`Third intervention did not force-end the run: ${JSON.stringify(endedRun.Item)}`);
+  }
+  const laneAfterIntervention = await ddb.send(new GetCommand({ TableName: table, Key: { PK: "LANE#3", SK: "STATE" }, ConsistentRead: true }));
+  if (laneAfterIntervention.Item?.state !== "IDLE") throw new Error("Lane did not reset after forced run end");
+
+  // Committee may void/"delete" a finished run; a later admin void of the same
+  // run must be a no-op, not a 409, so /redo never races a committee flag.
+  await timing.voidRun("C-D", "fast", "committee: run failed per field report", "committee-local");
+  await timing.voidRun("C-D", "fast", "admin re-void should be a no-op", "admin-local");
+  const voidedRun = await ddb.send(new GetCommand({ TableName: table, Key: { PK: "COMP#C-D", SK: "RUN#fast" }, ConsistentRead: true }));
+  if (voidedRun.Item?.status !== "VOID") throw new Error("Committee void did not persist");
+
   await competitors.disqualifyCompetitor("C-D", "local rehearsal DQ", "committee-local");
 
   await ddb.send(new PutCommand({ TableName: table, Item: { PK: "LANE#2", SK: "STATE", laneId: "2", state: "ARMED",
@@ -95,7 +121,7 @@ try {
   const snapshots = await ddb.send(new QueryCommand({ TableName: table, KeyConditionExpression: "PK = :pk", ExpressionAttributeValues: { ":pk": "RANKING#Open" } }));
   if (snapshots.Count !== 0) throw new Error("Reopen did not remove snapshots");
   console.log(stressOut.trim());
-  console.log("PASS timeout correction penalty dq staged-advancement final-placement privacy freeze-export reopen-cleanup");
+  console.log("PASS timeout correction penalty intervention-limit committee-void dq staged-advancement final-placement privacy freeze-export reopen-cleanup");
   console.log("Static export: /tmp/skrc-local-results.json");
 } finally {
   backend.kill("SIGTERM");

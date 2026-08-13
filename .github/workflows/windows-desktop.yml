@@ -1,0 +1,35 @@
+name: Windows desktop package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  make-windows:
+    runs-on: windows-latest
+    env:
+      VITE_REGWEEK_API_URL: ${{ vars.VITE_REGWEEK_API_URL }}
+      VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
+      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+      VITE_CONTROL_API_URL: ${{ vars.VITE_CONTROL_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            ops/package-lock.json
+            frontend/package-lock.json
+            desktop/package-lock.json
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix ops
+      - run: npm ci --prefix frontend
+      - run: npm ci --prefix desktop
+      - run: npm run make:win --prefix desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SKRC-Competition-Day-Windows
+          path: desktop/out/make/squirrel.windows/x64/*
+          if-no-files-found: error
+

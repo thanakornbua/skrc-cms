@@ -31,11 +31,12 @@ Valid actions per status (who / what is required before the action is accepted):
 | Action | Requires status | Sets |
 |---|---|---|
 | Check-in | `REGISTERED` | → `CHECKED_IN`, `checkedInAt` |
-| Inspect | `CHECKED_IN` (or later) | → `INSPECTED`, `inspectedAt` |
+| Check-in weight inspection | `CHECKED_IN` (or later) | records immutable PASS/FAIL measurement; no status change |
+| Pre-competition weight inspection | passed check-in weight inspection, `CHECKED_IN` (or later) | PASS sets → `INSPECTED`, `inspectedAt`; FAIL does not advance |
 | Lane assignment | `INSPECTED` (or later), not disqualified | (no status change; lane state changes) |
 | First completed run | any (already inspected/assigned to reach this point) | → `RUN_COMPLETE` |
 
-Check-in and inspect are each idempotent: repeating the call on a competitor already at or past that status returns the current state with a notice rather than erroring or reverting.
+Check-in is idempotent. Weight-inspection requests carry an `inspectionId`, making retries idempotent while allowing a failed measurement to be followed by a distinct reinspection.
 
 ## 3. Lane.state
 
@@ -58,8 +59,10 @@ IDLE ──assign (scan)──> ASSIGNED ──arm (admin)──> ARMED ──ST
 - `UNDER_REVIEW` blocks lane assignment until an admin resolves it to `INVALID` or
   `VOID`, or attaches a valid correction. A correction keeps the same attempt.
 - A corrected run qualifies using the correction time; raw device data remains unchanged.
-- Round 1 and Best of 4 consume the team's admin-configured stage time budget;
-  completed laps may use the remainder for another attempt.
-- Best of 2 and The Best allow at most two consumed attempts.
+- Every stage (Round 1, Best of 4, Best of 2, and The Best — including the
+  third-place match) grants exactly three consumed attempts per team, each
+  individually capped at that stage's configured max time, per Rules 4.2(2)-(3),
+  4.5(1), 5.2(1), and 6.2(1). `consumedStageBudgetMs` only reports total elapsed
+  time spent for display; it never grants or removes attempts.
 - After Round 1, lane assignment also requires the competitor to be in the active
   stage's eligibility snapshot.

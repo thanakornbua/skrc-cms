@@ -53,12 +53,11 @@ request audit item.
 
 ## Competition-day morning
 
-1. Launch the EC2 host with its least-privilege instance role and Elastic IP.
-2. Point `api.suankularb.space` at the host and start `docker compose --profile tls up -d`.
+1. Launch the compiled Windows application documented in [COMPETITION_DAY_WINDOWS.md](../docs/COMPETITION_DAY_WINDOWS.md), or the EC2 host if operating in the legacy network-hosted mode. The Windows operator account needs a least-privilege AWS profile for the existing table.
+2. The Windows application serves its bundled console and API on loopback and needs no inbound DNS/TLS. Only when using EC2 or the Ubuntu network-hosted fallback should `api.suankularb.space` point to that host.
 3. Deploy the frontend with `VITE_EVENT_MODE=competition` and verify `/health` and CORS.
 4. Configure every category limit, penalty rule, lane/device mapping, and device key.
-5. Flash either `esp32dev_http` or `esp32dev_serial`; for serial, follow
-   [SERIAL_BRIDGE.md](./SERIAL_BRIDGE.md). Never flash both variants to one board.
+5. Flash either an ESP32 build or the normal UNO sketch. For the compiled Windows path follow [COMPETITION_DAY_WINDOWS.md](../docs/COMPETITION_DAY_WINDOWS.md); never let Serial Monitor and the application contend for the same COM port.
 6. Complete [rehearsal.md](./rehearsal.md) before admitting real competitors.
 
 Use the guarded mode switch only after the target branch's deployed job is the exact
@@ -79,11 +78,24 @@ Before the event, complete the browser-to-device rehearsal in [DRY_RUN.md](./DRY
 
 1. Admin saves the minimum safeguard plus separate three-minute maximums for
    Qualifying, Quarterfinals, Semifinals, and Finals. Attempts are fixed at three by the regulations.
-2. Admin creates the allowed time-penalty rules.
-3. Committee/admin uses signed-in competitor, lane, inspection, and timing pages.
-4. Resolve every under-minimum run before giving that team another attempt.
-5. Conclude only after checking unresolved runs, manual corrections, penalties, and DQ.
-6. Export `results.json` and deploy the frontend in `concluded` mode.
+2. Admin creates the allowed time-penalty rules. The regulations fix exactly one
+   time penalty — a 5,000ms (5s) charge per unauthorized intervention, applied for
+   each of the first two occurrences in an attempt (Rule 7.3(2)); a third
+   occurrence ends the run outright rather than adding a further penalty. Do not
+   configure other offenses (e.g. restarts, which Rule 5.3 permits up to three per
+   attempt at no charge) as timed penalties. Check "This is the
+   unauthorized-intervention rule (Rule 7.3)" when creating it — that flag is what
+   makes the system count occurrences per attempt and auto-end the run on the
+   third, instead of only stacking time charges indefinitely.
+3. Committee (or admin) applies that rule from a competitor's Timing page while
+   their run is in progress — the system attaches it to that specific attempt
+   automatically. Committee/admin can also revoke ("delete") any finished run
+   (Rule 5.5); granting the team an actual new attempt via Redo stays admin-only.
+   Time correction (Rule 8.5(1)) remains admin-only in both cases.
+5. Committee/admin uses signed-in competitor, lane, inspection, and timing pages.
+6. Resolve every under-minimum run before giving that team another attempt.
+7. Conclude only after checking unresolved runs, manual corrections, penalties, and DQ.
+8. Export `results.json` and deploy the frontend in `concluded` mode.
 
 For the full evidence-driven rehearsal, follow [rehearsal.md](./rehearsal.md).
 

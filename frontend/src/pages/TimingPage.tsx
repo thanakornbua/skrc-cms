@@ -10,11 +10,12 @@ type Role = "admin" | "committee" | "competitor";
 type Stage = "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
 interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number>; stageMaxAttempts?: Record<Stage, number> }
 interface CompetitionState { phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[] }
-interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean }
+interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }
 interface Run {
   runId: string; status: "RUNNING" | "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
   elapsedMs: number | null; minTimeMs: number; maxTimeMs: number;
   correction?: { elapsedMs: number; reason: string } | null;
+  reviewReason?: string | null;
   stage?: Stage;
 }
 interface Competitor {
@@ -44,6 +45,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [competitionState, setCompetitionState] = useState<CompetitionState | null>(null);
   const [ruleLabel, setRuleLabel] = useState("");
   const [penaltySeconds, setPenaltySeconds] = useState("");
+  const [ruleIsIntervention, setRuleIsIntervention] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [disqualificationReason, setDisqualificationReason] = useState("");
@@ -114,9 +116,13 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     event.preventDefault(); setError(null); setBusy(true);
     try {
       await ec2Json("/admin/config/penalties", {
-        method: "POST", body: JSON.stringify({ label: ruleLabel, penaltyMs: Math.round(Number(penaltySeconds) * 1000) }),
+        method: "POST",
+        body: JSON.stringify({
+          label: ruleLabel, penaltyMs: Math.round(Number(penaltySeconds) * 1000),
+          ...(ruleIsIntervention ? { kind: "INTERVENTION" } : {}),
+        }),
       });
-      setRuleLabel(""); setPenaltySeconds(""); await loadConfig("admin");
+      setRuleLabel(""); setPenaltySeconds(""); setRuleIsIntervention(false); await loadConfig("admin");
     } catch (err) { setError(err instanceof Error ? err.message : "Rule creation failed"); }
     finally { setBusy(false); }
   }
@@ -125,7 +131,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     setBusy(true);
     try {
       await ec2Json(`/admin/config/penalties/${encodeURIComponent(rule.ruleId)}`, {
-        method: "PUT", body: JSON.stringify({ label: rule.label, penaltyMs: rule.penaltyMs, active: !rule.active }),
+        method: "PUT", body: JSON.stringify({ label: rule.label, penaltyMs: rule.penaltyMs, active: !rule.active, kind: rule.kind }),
       });
       await loadConfig("admin");
     } catch (err) { setError(err instanceof Error ? err.message : "Rule update failed"); }
@@ -158,14 +164,24 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     finally { setBusy(false); }
   }
 
-  async function applyRule(ruleId: string): Promise<void> {
+  async function applyRule(rule: Rule): Promise<void> {
     if (!competitor) return;
+    // Rule 7.3(3) counts interventions per attempt, so an INTERVENTION-kind
+    // rule must be tied to the run currently in progress, if any.
+    const activeRun = competitor.runs.find((run) => run.status === "RUNNING");
+    if (rule.kind === "INTERVENTION" && !activeRun) {
+      setError(t("ไม่มีการวิ่งที่กำลังดำเนินอยู่สำหรับทีมนี้ในขณะนี้", "No run is currently in progress for this competitor."));
+      return;
+    }
     setBusy(true);
     try {
       await ec2Json(`/committee/competitors/${encodeURIComponent(competitor.competitorId)}/penalties`, {
-        method: "POST", body: JSON.stringify({ ruleId }),
+        method: "POST", body: JSON.stringify({ ruleId: rule.ruleId, ...(rule.kind === "INTERVENTION" ? { runId: activeRun!.runId } : {}) }),
       });
-      await lookup(competitor.competitorId); setNotice("Penalty applied.");
+      await lookup(competitor.competitorId);
+      setNotice(rule.kind === "INTERVENTION"
+        ? "Intervention penalty applied. A third occurrence on this attempt ends the run automatically (Rule 7.3(3))."
+        : "Penalty applied.");
     } catch (err) { setError(err instanceof Error ? err.message : "Penalty failed"); }
     finally { setBusy(false); }
   }
@@ -181,6 +197,41 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       });
       await lookup(competitor.competitorId);
     } catch (err) { setError(err instanceof Error ? err.message : "Resolution failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function voidRun(run: Run): Promise<void> {
+    if (!competitor) return;
+    const reason = window.prompt(`Reason to revoke (void) this attempt?`)?.trim();
+    if (!reason) return;
+    setBusy(true);
+    try {
+      await ec2Json(`/admin/competitors/${encodeURIComponent(competitor.competitorId)}/runs/${encodeURIComponent(run.runId)}/void`, {
+        method: "POST", body: JSON.stringify({ reason }),
+      });
+      await lookup(competitor.competitorId); setNotice("Attempt revoked (voided) — it no longer counts as consumed.");
+    } catch (err) { setError(err instanceof ApiClientError ? err.message : "Revoke failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function redoRun(run: Run): Promise<void> {
+    if (!competitor) return;
+    const laneId = window.prompt("Redo on which lane?")?.trim();
+    if (!laneId) return;
+    // If committee already voided this run, carry their reason forward into the
+    // admin's grant instead of asking the operator to retype it from memory.
+    const suggested = run.status === "VOID" && run.reviewReason
+      ? `Run failed based on committee report: ${run.reviewReason}`
+      : "";
+    const reason = window.prompt("Reason to grant this redo?", suggested)?.trim();
+    if (!reason) return;
+    setBusy(true);
+    try {
+      await ec2Json(`/admin/competitors/${encodeURIComponent(competitor.competitorId)}/runs/${encodeURIComponent(run.runId)}/redo`, {
+        method: "POST", body: JSON.stringify({ laneId, reason }),
+      });
+      await lookup(competitor.competitorId); setNotice(`Attempt revoked and lane ${laneId} armed for a redo.`);
+    } catch (err) { setError(err instanceof ApiClientError ? err.message : "Redo failed"); }
     finally { setBusy(false); }
   }
 
@@ -230,7 +281,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     setNotice(null);
     setBusy(true);
     try {
-      await ec2Json(path, { method: "POST", body: JSON.stringify({ reason }) });
+      await ec2Json(path, { method: "POST", body: JSON.stringify({ reason }) }, { retryNetwork: action === "disqualify" });
       if (action === "disqualify") setDisqualificationReason("");
       else setReinstatementReason("");
       await lookup(competitor.competitorId);
@@ -273,9 +324,10 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
       <div className="card"><span className="section-kicker">PENALTY RULES</span><h2>{t("สร้างบทลงโทษ", "Create rule")}</h2><form onSubmit={createRule}>
         <div className="field"><label htmlFor={ruleLabelId}>{t("ชื่อบทลงโทษ", "Label")}</label><input id={ruleLabelId} required value={ruleLabel} onChange={(e) => setRuleLabel(e.target.value)} /></div>
         <div className="field"><label htmlFor={penaltyId}>{t("เวลาปรับ (วินาที)", "Penalty seconds")}</label><input id={penaltyId} required type="number" min="0.001" step="0.001" value={penaltySeconds} onChange={(e) => setPenaltySeconds(e.target.value)} /></div>
+        <div className="field field-checkbox"><label><input type="checkbox" checked={ruleIsIntervention} onChange={(e) => setRuleIsIntervention(e.target.checked)} /> {t("นี่คือกฎการแทรกแซงโดยมิได้รับอนุญาต (ข้อ 7.3)", "This is the unauthorized-intervention rule (Rule 7.3)")}</label></div>
         <button type="submit">{t("สร้างกฎ", "Create rule")}</button>
       </form>
-      <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.ruleId}><span><span className={`status-badge ${rule.active ? "success" : ""}`}>{rule.active ? "ACTIVE" : "INACTIVE"}</span> {rule.label} <span className="technical">+{seconds(rule.penaltyMs)}</span></span><button className="secondary" type="button" onClick={() => toggleRule(rule)}>{rule.active ? t("ปิด", "Deactivate") : t("เปิด", "Activate")}</button></div>)}</div>
+      <div className="rule-list">{rules.map((rule) => <div className="rule-row" key={rule.ruleId}><span><span className={`status-badge ${rule.active ? "success" : ""}`}>{rule.active ? "ACTIVE" : "INACTIVE"}</span> {rule.label} <span className="technical">+{seconds(rule.penaltyMs)}</span>{rule.kind === "INTERVENTION" && <span className="status-badge warning">7.3</span>}</span><button className="secondary" type="button" onClick={() => toggleRule(rule)}>{rule.active ? t("ปิด", "Deactivate") : t("เปิด", "Activate")}</button></div>)}</div>
       </div>
       <div className="card"><span className="section-kicker">COMPETITION STATE</span>
         <div className="stage-hero">
@@ -311,14 +363,23 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         </div>
       ) : null}
       <div className="metric-grid"><div className="metric"><span className="metric-label">{t("เฉลี่ย", "Average")}</span><span className="metric-value">{seconds(competitor.aggregateTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("เวลาปรับ", "Penalties")}</span><span className="metric-value">+{seconds(competitor.penaltyTimeMs)}</span></div><div className="metric"><span className="metric-label">{t("สุทธิ", "Final")}</span><span className="metric-value">{seconds(competitor.finalTimeMs)}</span></div></div>
-      <h3>{t("เพิ่มบทลงโทษ", "Apply penalty")}</h3><div className="button-row">{rules.filter((rule) => rule.active).map((rule) => <button type="button" key={rule.ruleId} className="secondary" onClick={() => applyRule(rule.ruleId)}>{rule.label} (+{seconds(rule.penaltyMs)})</button>)}</div>
+      <h3>{t("เพิ่มบทลงโทษ", "Apply penalty")}</h3><div className="button-row">{rules.filter((rule) => rule.active).map((rule) => <button type="button" key={rule.ruleId} className="secondary" onClick={() => applyRule(rule)}>{rule.label} (+{seconds(rule.penaltyMs)}){rule.kind === "INTERVENTION" && ` · ${t("นับต่อการวิ่ง", "counted per attempt")}`}</button>)}</div>
       <h3>{t("บทลงโทษที่ใช้งาน", "Active-stage penalties")}</h3>{competitor.penalties.filter((item) => !item.revocation && (item.stage ?? "ROUND_1") === competitor.activeStage).map((item) => <div className="rule-row" key={item.SK}><span>{item.label} <span className="technical">+{seconds(item.penaltyMs)}</span></span>{role === "admin" && <button type="button" className="danger" onClick={() => revoke(item.SK)}>{t("เพิกถอน", "Revoke")}</button>}</div>)}
       <h3>{t("การวิ่ง", "Attempts")}</h3>{competitor.runs.map((run) => <div key={run.runId} className="attempt-row">
         <div className="attempt-head"><span className={`status-badge ${RUN_BADGE[run.status]}`}>{run.status}</span><span className="technical attempt-id">{run.stage ? stageLabel[run.stage] : stageLabel.ROUND_1} · {run.runId}</span></div>
         <div className="attempt-times"><span>{t("ดิบ", "raw")} {seconds(run.elapsedMs)}</span>{run.correction && <span className="corrected">{t("แก้เป็น", "corrected")} {seconds(run.correction.elapsedMs)}</span>}</div>
+        {run.reviewReason && <div className="attempt-reason technical">{t("เหตุผล", "Reason")}: {run.reviewReason}</div>}
         <div className="button-row">
-        {role === "admin" && run.status === "UNDER_REVIEW" && !run.correction && <><button type="button" onClick={() => resolve(run, "consume")}>{t("ใช้ผล", "Consume invalid")}</button><button type="button" className="secondary" onClick={() => resolve(run, "void")}>{t("ยกเลิก", "Void")}</button></>}
+        {role === "admin" && run.status === "UNDER_REVIEW" && !run.correction && <button type="button" onClick={() => resolve(run, "consume")}>{t("ใช้ผล", "Consume invalid")}</button>}
+        {/* Time correction stays admin-only — Rule 8.5(1) reserves it for ผู้ดูแลระบบ specifically. */}
         {role === "admin" && (run.status === "UNDER_REVIEW" || run.status === "TIMED_OUT") && !run.correction && <button type="button" className="secondary" onClick={() => correct(run)}>{t("แก้เวลา", "Correct time")}</button>}
+        {/* Void/"delete": Rule 5.5 gives this to staff generally, not only admin — official
+            records are never hard-deleted (Rule 8.5(2)/10.2), so "delete" means void here. */}
+        {(role === "admin" || role === "committee") && run.status !== "VOID" && run.status !== "RUNNING" && !run.correction &&
+          <button type="button" className="danger" onClick={() => voidRun(run)}>{t("เพิกถอน/ลบการวิ่ง", "Revoke / delete run")}</button>}
+        {/* Redo — granting the team an actual extra attempt — stays admin-only. */}
+        {role === "admin" && run.status !== "RUNNING" && !run.correction &&
+          <button type="button" className="secondary" onClick={() => redoRun(run)}>{t("วิ่งใหม่", "Redo run")}</button>}
         </div>
       </div>)}
     </div>}

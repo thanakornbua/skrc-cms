@@ -28,7 +28,7 @@ const COMPETITOR_NAV: NavItem[] = [
 const STAFF_NAV: NavItem[] = [
   { to: "/committee/approvals", label: "ใบสมัคร / Approvals" },
   { to: "/admin", label: "ค้นหาผู้เข้าแข่งขัน / Competitor lookup" },
-  { to: "/committee/scan", label: "ตรวจสภาพ / Inspection" },
+  { to: "/competition-day", label: "ศูนย์แข่งขัน / Competition day" },
   { to: "/admin/lanes", label: "สนาม / Lanes" },
   { to: "/staff/timing", label: "เวลาและโทษ / Timing" },
   { to: "/scoreboard", label: "ผลการแข่งขัน / Results" },
@@ -79,9 +79,30 @@ interface NavBarProps {
   onSignOut?: () => void | Promise<void>;
 }
 
+/**
+ * Venue wifi/hotspots drop mid-event; every mutating action reads its own
+ * error, but operators also need an always-visible signal so a dead connection
+ * is obvious before they click "Apply penalty" into it.
+ */
+function useOnlineStatus(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+  return online;
+}
+
 /** One role-aware navigation component used on every page. */
 export default function NavBar({ onSignOut }: NavBarProps) {
   const [role, setRole] = useState<NavigationRole>("public");
+  const online = useOnlineStatus();
 
   useEffect(() => {
     let active = true;
@@ -111,6 +132,12 @@ export default function NavBar({ onSignOut }: NavBarProps) {
 
   const items = itemsForEra(role);
   return (
+    <>
+    {!online && (
+      <div className="error-banner" role="status" aria-live="polite">
+        {t("ออฟไลน์ — ตรวจสอบการเชื่อมต่อ การกระทำล่าสุดอาจไม่บันทึก", "Offline — check the connection. The last action may not have saved.")}
+      </div>
+    )}
     <nav className="nav-bar" aria-label={`Primary navigation — ${ROLE_LABEL[role]}`}>
       <div className="nav-main">
         <span className={`nav-role nav-role-${role}`}>{ROLE_LABEL[role]}</span>
@@ -136,5 +163,6 @@ export default function NavBar({ onSignOut }: NavBarProps) {
         )}
       </div>
     </nav>
+    </>
   );
 }
