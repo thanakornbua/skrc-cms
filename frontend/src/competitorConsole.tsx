@@ -64,8 +64,14 @@ export const STATUS_BADGE: Record<CompetitorStatus, string> = {
   REGISTERED: "warning", CHECKED_IN: "success", INSPECTED: "", RUN_COMPLETE: "",
 };
 
-export function latestInspection(items: WeightInspection[], stage: InspectionStage): WeightInspection | null {
-  return [...items].reverse().find((item) => item.stage === stage) ?? null;
+/**
+ * Tolerates a missing `weightInspections` array. An API older than the
+ * inspection workflow omits the field entirely, and spreading `undefined` here
+ * threw during render — which blanks the whole console rather than showing an
+ * error, the worst possible failure on competition day.
+ */
+export function latestInspection(items: WeightInspection[] | undefined, stage: InspectionStage): WeightInspection | null {
+  return [...(items ?? [])].reverse().find((item) => item.stage === stage) ?? null;
 }
 
 export function dateTime(value: string): string {
@@ -73,7 +79,7 @@ export function dateTime(value: string): string {
 }
 
 export function checkInPassedFor(card: CompetitorCard | null): boolean {
-  return card?.weightInspections.some((item) => item.stage === "CHECK_IN" && item.result === "PASS") ?? false;
+  return card?.weightInspections?.some((item) => item.stage === "CHECK_IN" && item.result === "PASS") ?? false;
 }
 
 /** Signed-in role, refreshed once per page. */

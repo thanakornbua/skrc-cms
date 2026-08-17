@@ -170,7 +170,7 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     finally { setBusy(false); }
   }
 
-  const checkInPassed = card?.weightInspections.some((item) => item.stage === "CHECK_IN" && item.result === "PASS") ?? false;
+  const checkInPassed = card?.weightInspections?.some((item) => item.stage === "CHECK_IN" && item.result === "PASS") ?? false;
 
   return <div className="page page-wide competition-console">
     {busy && <LoadingScreen overlay label="กำลังบันทึกข้อมูล / Saving…" />}
