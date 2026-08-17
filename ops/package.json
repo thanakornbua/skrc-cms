@@ -27,6 +27,8 @@
     "purge-pii": "tsx src/purge-pii.ts",
     "wipe-competitors": "tsx src/wipe-competitors.ts",
     "reset-staff": "tsx src/reset-staff.ts",
+    "obs-bridge": "tsx src/obs-bridge.ts",
+    "test:obs": "tsx --test src/obs-bridge.test.ts",
     "serial-bridge": "tsx src/serial-bridge.ts",
     "uno-bridge": "tsx src/uno-bridge.ts",
     "test:serial": "tsx src/serial-bridge.test.ts",

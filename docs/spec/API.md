@@ -385,6 +385,17 @@ Cognito `sub` values.
 - **Preconditions:** `409 CONFLICT` if not yet concluded.
 - **Response 200:** `{categories,brackets}` with best-two-of-three averages, round penalties, final times, and the public bracket; no competitor ID/contact/staff data.
 
+#### `GET /public/lanes`
+- **Role:** none (unauthenticated).
+- **Response 200:** `{activeStage,stageLabel,serverTime,lanes:[{laneId,state,teamName,runStartedAt}]}`.
+- Exists so a public display — the OBS overlay, a hall screen — can show what is
+  happening on the field without staff credentials. It resolves the competitor to a
+  **team name and never returns the competitor ID**, per Rule 10.1(3); that is the
+  whole reason it is separate from `/admin/lanes` rather than that route unguarded.
+- `serverTime` lets a display correct for clock skew against the machine that stamped
+  `runStartedAt`. Any elapsed time derived from these is a broadcast approximation —
+  the official time is the run record, from device timestamps (Rule 6.1(1)).
+
 #### `GET /public/scoreboard?category=`
 - **Role:** none (unauthenticated).
 - **Response 200:** `{state:"PROVISIONAL"|"FINAL",activeStage,categories:[...],brackets:[...]}`. Brackets contain only public team names, draw time, positions, matches, random start-order assignment, adjusted times, status, and winners.
