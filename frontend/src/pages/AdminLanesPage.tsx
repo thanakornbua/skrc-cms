@@ -117,7 +117,7 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
     <div className="page page-wide">
       {busyLane && <LoadingScreen overlay label="กำลังดำเนินการ / Working…" />}
       <NavBar onSignOut={signOutAndReset} />
-      <BrandHeader title="Admin — Lanes" home="/admin" description="กำหนดผู้เข้าแข่งขันและเตรียมตัวจับเวลา / Assign competitors and arm timing lanes" />
+      <BrandHeader title="Lanes" home="/admin" description="กำหนดผู้เข้าแข่งขันและเตรียมตัวจับเวลา / Assign competitors and arm timing lanes" />
 
       {loadError && <div className="error-banner" role="alert">{loadError}</div>}
       {actionError && <div className="error-banner" role="alert">{actionError}</div>}

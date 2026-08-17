@@ -25,12 +25,17 @@ const COMPETITOR_NAV: NavItem[] = [
   { to: "/scoreboard", label: "ผลการแข่งขัน / Results" },
 ];
 
+// The combined Competition Day console is intentionally absent: it ships with
+// the packaged desktop app. On the web the same work is split into focused
+// tabs so an operator on one station is not looking at every other station's
+// controls.
 const STAFF_NAV: NavItem[] = [
   { to: "/committee/approvals", label: "ใบสมัคร / Approvals" },
   { to: "/admin", label: "ค้นหาผู้เข้าแข่งขัน / Competitor lookup" },
-  { to: "/competition-day", label: "ศูนย์แข่งขัน / Competition day" },
+  { to: "/committee/checkin", label: "เช็คอิน / Check-in" },
+  { to: "/committee/inspection", label: "ตรวจสภาพ / Inspection" },
+  { to: "/staff/timing", label: "โทษและเวลา / Penalty" },
   { to: "/admin/lanes", label: "สนาม / Lanes" },
-  { to: "/staff/timing", label: "เวลาและโทษ / Timing" },
   { to: "/scoreboard", label: "ผลการแข่งขัน / Results" },
 ];
 const ADMIN_NAV: NavItem[] = [

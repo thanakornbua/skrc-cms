@@ -8,36 +8,14 @@ import NavBar from "../components/NavBar";
 import { t } from "../i18n";
 import CompetitorIdInput from "../components/CompetitorIdInput";
 import { normaliseCompetitorId } from "../competitorId";
+import {
+  EMPTY_BY_STAGE, MAX_ROBOT_WEIGHT_GRAMS, STAGES, STATUS_BADGE, dateTime, latestInspection,
+  type CompetitorCard, type CompetitorStatus, type InspectionStage, type Role, type WeightInspection,
+} from "../competitorConsole";
 
-type Role = "admin" | "committee" | "competitor";
-type CompetitorStatus = "REGISTERED" | "CHECKED_IN" | "INSPECTED" | "RUN_COMPLETE";
-type InspectionStage = "CHECK_IN" | "PRE_COMPETITION" | "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
 
-/** Rule 3.2 — shown so the inspector can see what the measurement is judged against. */
-const MAX_ROBOT_WEIGHT_GRAMS = 4000;
 
-interface WeightInspection {
-  inspectionId: string;
-  stage: InspectionStage;
-  weightGrams: number;
-  weightResult: "PASS" | "FAIL";
-  weightLimitGrams: number;
-  dimensionResult: "PASS" | "FAIL";
-  voltageResult: "PASS" | "FAIL";
-  result: "PASS" | "FAIL";
-  notes: string | null;
-  at: string;
-}
 
-interface CompetitorCard {
-  competitorId: string;
-  teamName: string;
-  category: string;
-  status: CompetitorStatus;
-  checkedInAt: string | null;
-  inspectedAt: string | null;
-  weightInspections: WeightInspection[];
-}
 
 interface HardwareDevice {
   deviceId: string;
@@ -59,32 +37,10 @@ interface Lane {
 }
 
 const CAMERA_READER_ID = "committee-scan-camera-reader";
-// Rule 3.7(1): inspection is a standing power, so the robot is re-checked
-// before each round rather than only once at the start of the day.
-const STAGES: Array<{ key: InspectionStage; title: string; description: string }> = [
-  { key: "CHECK_IN", title: "ตรวจสภาพเมื่อเช็คอิน · Check-in inspection", description: "ตรวจครั้งแรกเมื่อทีมมาถึง" },
-  { key: "PRE_COMPETITION", title: "ตรวจสภาพก่อนแข่งขัน · Pre-competition inspection", description: "ยืนยันอีกครั้งก่อนจัดทีมลงสนาม" },
-  { key: "ROUND_1", title: "ก่อนรอบคัดเลือก · Before qualifying", description: "ตรวจซ้ำก่อนเริ่มรอบคัดเลือก" },
-  { key: "BEST_OF_4", title: "ก่อนรอบ 8 ทีม · Before quarterfinals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
-  { key: "BEST_OF_2", title: "ก่อนรอบรองชนะเลิศ · Before semifinals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
-  { key: "THE_BEST", title: "ก่อนรอบชิงชนะเลิศ · Before finals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
-];
 
-const EMPTY_BY_STAGE: Record<InspectionStage, string> = {
-  CHECK_IN: "", PRE_COMPETITION: "", ROUND_1: "", BEST_OF_4: "", BEST_OF_2: "", THE_BEST: "",
-};
 
-const STATUS_BADGE: Record<CompetitorStatus, string> = {
-  REGISTERED: "warning", CHECKED_IN: "success", INSPECTED: "", RUN_COMPLETE: "",
-};
 
-function latestInspection(items: WeightInspection[], stage: InspectionStage): WeightInspection | null {
-  return [...items].reverse().find((item) => item.stage === stage) ?? null;
-}
 
-function dateTime(value: string): string {
-  return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
-}
 
 function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<void> }) {
   const [role, setRole] = useState<Role>("competitor");

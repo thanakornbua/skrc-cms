@@ -307,7 +307,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   return <div className="page page-wide">
     {busy && <LoadingScreen overlay label="กำลังดำเนินการ / Working…" />}
     <NavBar onSignOut={signOutAndReset} />
-    <BrandHeader title="Timing and penalties" home="/admin" description="ตั้งค่าขอบเขตเวลา ตรวจผล และจัดการบทลงโทษ / Configure limits, review runs, and manage penalties" />
+    <BrandHeader title="Penalties" home="/admin" description="ตั้งค่าขอบเขตเวลา ตรวจผล และจัดการบทลงโทษ / Configure limits, review runs, and manage penalties" />
     {error && <div className="error-banner" role="alert">{error}</div>}
     {notice && <div className="notice-banner" role="status" aria-live="polite">{notice}</div>}
 
