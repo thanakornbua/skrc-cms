@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import DeploymentFreshnessGuard from "./components/DeploymentFreshnessGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import LoadingScreen from "./components/LoadingScreen";
 
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -35,7 +36,7 @@ export default function App() {
   const fallback = mode === "registration" ? "/register" : "/scoreboard";
   return (
     <BrowserRouter>
-      <DeploymentFreshnessGuard><Suspense fallback={<LoadingScreen />}><Routes>
+      <DeploymentFreshnessGuard><ErrorBoundary><Suspense fallback={<LoadingScreen />}><Routes>
         {mode === "registration" && <Route path="/register" element={<RegisterPage />} />}
         {mode !== "concluded" && <Route path="/portal" element={<PortalPage />} />}
         {mode !== "concluded" && <Route path="/portal/:competitorId" element={<PortalPage />} />}
@@ -56,7 +57,7 @@ export default function App() {
         {mode !== "concluded" && <Route path="/admin/deployment" element={<DeploymentPage />} />}
         {mode !== "registration" && <Route path="/scoreboard" element={<ScoreboardPage />} />}
         <Route path="*" element={<Navigate to={fallback} replace />} />
-      </Routes></Suspense></DeploymentFreshnessGuard>
+      </Routes></Suspense></ErrorBoundary></DeploymentFreshnessGuard>
     </BrowserRouter>
   );
 }

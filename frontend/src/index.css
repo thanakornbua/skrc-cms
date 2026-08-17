@@ -1320,6 +1320,16 @@ tbody tr:hover { background: var(--sunk); }
 }
 .competitor-id-input input:focus { box-shadow: none; }
 
+/* Crash screen (ErrorBoundary). Deliberately plain: it has to render correctly
+   when whatever the page was doing has already failed. */
+.error-page { max-width: 40rem; }
+.error-detail {
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-error);
+  background: var(--sunk);
+  overflow-wrap: anywhere;
+}
+
 /* Rule 6.6 controls sit inside the competition-state card but decide a podium
    place, so they are set apart from the ordinary stage buttons above them. */
 .sudden-death-panel {
