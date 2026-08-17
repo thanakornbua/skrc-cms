@@ -78,7 +78,10 @@ timingRouter.put("/admin/config/penalties/:ruleId", requireAuth, requireRole("ad
 timingRouter.post("/committee/competitors/:id/penalties", requireAuth, requireRole("committee"), async (req, res, next) => {
   try {
     const input = parsed(applySchema, req.body);
-    res.status(201).json(await applyPenalty(req.params.id, input.ruleId, actorOf(req.user!), input.runId));
+    const applied = await applyPenalty(req.params.id, input.ruleId, actorOf(req.user!), input.runId);
+    // A third intervention creates no penalty record — it ends the run
+    // (Rule 7.3(3)) — so it answers 200 with the outcome rather than 201.
+    res.status(applied.outcome === "APPLIED" ? 201 : 200).json(applied);
   } catch (error) { next(error); }
 });
 timingRouter.post("/admin/competitors/:id/penalties/:penaltySk/revoke", requireAuth, requireRole("admin"), async (req, res, next) => {

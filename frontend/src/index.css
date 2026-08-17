@@ -1320,6 +1320,22 @@ tbody tr:hover { background: var(--sunk); }
 }
 .competitor-id-input input:focus { box-shadow: none; }
 
+/* Rule 6.6 controls sit inside the competition-state card but decide a podium
+   place, so they are set apart from the ordinary stage buttons above them. */
+.sudden-death-panel {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+}
+.sudden-death-panel h3 { margin: 0 0 var(--space-3); font-size: var(--text-base); }
+.sudden-death-match { align-items: flex-start; gap: var(--space-3); }
+.sudden-death-match small { color: var(--color-muted); }
+
+/* A phone's numeric keypad has no return key, so the scan fields need a
+   tappable equivalent of Enter. Full width on the touch breakpoint, where the
+   global rule already stretches buttons. */
+.competitor-id-submit { margin-top: var(--space-3); min-height: 44px; }
+
 /* Rule 3.2 is checked against the typed measurement, so warn before submit. */
 .inspection-overweight {
   color: var(--color-error);

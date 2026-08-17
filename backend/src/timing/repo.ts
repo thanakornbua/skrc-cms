@@ -97,17 +97,48 @@ export async function listAppliedPenalties(competitorId: string): Promise<Applie
   return (result.Items ?? []) as AppliedPenalty[];
 }
 
-export async function applyPenalty(competitorId: string, ruleId: string, byUser: Actor, runId?: string): Promise<AppliedPenalty> {
+/**
+ * Rule 7.3(3) counts unauthorized interventions per attempt, not per rule, so a
+ * second organizer-defined intervention rule must not hand a team a fresh
+ * allowance. `kind` is snapshotted on new rows; rows written before that
+ * snapshot existed fall back to matching the rule being applied, which is what
+ * the count used to do.
+ */
+export function interventionsAgainstRun(applied: AppliedPenalty[], runId: string, ruleId: string): number {
+  return applied.filter((entry) => entry.runId === runId && !entry.revocation
+    && (entry.kind === "INTERVENTION" || (entry.kind === undefined && entry.ruleId === ruleId))).length;
+}
+
+export type PenaltyApplication =
+  | { outcome: "APPLIED"; penalty: AppliedPenalty }
+  | { outcome: "RUN_ENDED"; penalty: null };
+
+export async function applyPenalty(competitorId: string, ruleId: string, byUser: Actor, runId?: string): Promise<PenaltyApplication> {
   if (!(await getCompetitor(competitorId))) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   const result = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: ruleKey(ruleId), ConsistentRead: true }));
   const rule = result.Item as PenaltyRule | undefined;
   if (!rule) throw new ApiError(404, "NOT_FOUND", "Penalty rule not found");
   if (!rule.active) throw new ApiError(409, "CONFLICT", "Penalty rule is inactive");
+
+  // Rule 7.3(2) charges five seconds for the first two interventions only;
+  // 7.3(3) makes the third end the run at max time and says nothing about a
+  // further charge. So the third is checked *before* the write and records no
+  // penalty — the end-run resolution is what goes in the record instead.
+  if (rule.kind === "INTERVENTION" && runId) {
+    const prior = interventionsAgainstRun(await listAppliedPenalties(competitorId), runId, ruleId);
+    if (prior >= 2) {
+      await endRunAtMaxTime(competitorId, runId, "INTERVENTION_LIMIT",
+        `Ended by the third unauthorized intervention (${rule.label})`, byUser);
+      return { outcome: "RUN_ENDED", penalty: null };
+    }
+  }
+
   const at = new Date().toISOString();
   const stage = (await getCompetitionState()).activeStage;
   const item: AppliedPenalty & { PK: string } = {
     PK: `COMP#${competitorId}`, SK: `PENALTY#${at}#${ruleId}`,
-    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser: byUser.id, byUserName: byUser.name, at, stage, ...(runId ? { runId } : {}),
+    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser: byUser.id, byUserName: byUser.name, at, stage,
+    ...(rule.kind ? { kind: rule.kind } : {}), ...(runId ? { runId } : {}),
   };
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
@@ -127,16 +158,7 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
     }
     throw error;
   }
-  // Rule 7.3(3): a third unauthorized intervention against the same attempt
-  // ends the run outright rather than only stacking a further time charge.
-  if (rule.kind === "INTERVENTION" && runId) {
-    const applied = await listAppliedPenalties(competitorId);
-    const occurrences = applied.filter((entry) => entry.ruleId === ruleId && entry.runId === runId && !entry.revocation).length;
-    if (occurrences >= 3) {
-      await endRunAtMaxTime(competitorId, runId, "INTERVENTION_LIMIT", `Ended by the third unauthorized intervention (${rule.label})`, byUser);
-    }
-  }
-  return item;
+  return { outcome: "APPLIED", penalty: item };
 }
 
 export async function revokePenalty(competitorId: string, penaltySk: string, reason: string, byUser: Actor): Promise<AppliedPenalty> {

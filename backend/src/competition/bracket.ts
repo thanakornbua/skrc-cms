@@ -64,18 +64,51 @@ export function drawBrackets(
   });
 }
 
-function winnerFromResult(matchItem: BracketMatch, result: CategoryStageResults): string | null {
+/**
+ * Whether a Final or third-place match is still level after Rule 6.5(a)-(c),
+ * which is the precondition for sudden death under 6.6(1). Rule 6.5(2)
+ * withholds the administrative registration-time tiebreak from these two
+ * matches, so a tie here has no other way to resolve itself.
+ */
+export function matchIsTied(matchItem: BracketMatch, result: CategoryStageResults): boolean {
+  if (matchItem.round !== "FINAL" && matchItem.round !== "THIRD_PLACE") return false;
   const byId = new Map(result.ranked.map((item) => [item.competitorId, item]));
   const aResult = byId.get(matchItem.teamAId);
   const bResult = byId.get(matchItem.teamBId);
-  if ((matchItem.round === "FINAL" || matchItem.round === "THIRD_PLACE") && aResult && bResult) {
-    const tiedBeforeAdministrativeTiebreak = Math.min(aResult.completedRunCount, 2) === Math.min(bResult.completedRunCount, 2)
-      && aResult.finalTimeMs === bResult.finalTimeMs
-      && aResult.lapTimeMs === bResult.lapTimeMs
-      && aResult.secondBestTimeMs === bResult.secondBestTimeMs
-      && aResult.penaltyTimeMs === bResult.penaltyTimeMs;
-    if (tiedBeforeAdministrativeTiebreak) return null;
-  }
+  if (!aResult || !bResult) return false;
+  return Math.min(aResult.completedRunCount, 2) === Math.min(bResult.completedRunCount, 2)
+    && aResult.finalTimeMs === bResult.finalTimeMs
+    && aResult.lapTimeMs === bResult.lapTimeMs
+    && aResult.secondBestTimeMs === bResult.secondBestTimeMs
+    && aResult.penaltyTimeMs === bResult.penaltyTimeMs;
+}
+
+/**
+ * One team's sudden-death attempt. `chargedMs` is the attempt's own elapsed
+ * time plus only those penalties tagged to that run — per the operator's
+ * 2026-08-17 decision, a sudden-death penalty decides the head-to-head and
+ * never joins the stage total, which Rule 6.6(3) keeps intact separately.
+ */
+export interface SuddenDeathAttempt {
+  competitorId: string;
+  completed: boolean;
+  chargedMs: number;
+}
+
+/**
+ * Rule 6.6(4)-(5). A finisher beats a team that took the stage maximum; two
+ * finishers are separated by time; anything else — two maximums, or an exact
+ * dead heat — returns null, which means another round is required.
+ */
+export function suddenDeathWinner(a: SuddenDeathAttempt, b: SuddenDeathAttempt): string | null {
+  if (a.completed !== b.completed) return a.completed ? a.competitorId : b.competitorId;
+  if (!a.completed) return null;
+  if (a.chargedMs === b.chargedMs) return null;
+  return a.chargedMs < b.chargedMs ? a.competitorId : b.competitorId;
+}
+
+function winnerFromResult(matchItem: BracketMatch, result: CategoryStageResults): string | null {
+  if (matchIsTied(matchItem, result)) return null;
   const rank = new Map(result.ranked.map((item) => [item.competitorId, item.rank]));
   const a = rank.get(matchItem.teamAId);
   const b = rank.get(matchItem.teamBId);
@@ -85,16 +118,30 @@ function winnerFromResult(matchItem: BracketMatch, result: CategoryStageResults)
   return null;
 }
 
+/**
+ * Resolves a tied Final / third-place match from whatever sudden-death rounds
+ * have actually been run, returning null while the tie still stands.
+ */
+export type SuddenDeathResolver = (matchItem: BracketMatch) => string | null;
+
 export function settleRound(
   bracket: CompetitionBracket,
   round: BracketRound,
   result: CategoryStageResults,
   completedAt: string,
+  resolveSuddenDeath: SuddenDeathResolver = () => null,
 ): CompetitionBracket {
   const matches = bracket.matches.map((item) => {
     if (item.round !== round || item.winnerId) return item;
-    const winnerId = winnerFromResult(item, result);
-    if (!winnerId) throw new ApiError(409, "CONFLICT", `${item.matchId} has no winner; a sudden-death attempt is required`);
+    // Rule 6.6(6): an administrative decision stands in for a result that could
+    // not be produced on the track, so it outranks a still-tied comparison.
+    const winnerId = item.administrativeDecision?.winnerId
+      ?? winnerFromResult(item, result)
+      ?? resolveSuddenDeath(item);
+    if (!winnerId) {
+      throw new ApiError(409, "CONFLICT",
+        `${item.matchId} is tied; open a sudden-death round (Rule 6.6) before concluding`);
+    }
     return { ...item, winnerId, completedAt };
   });
   return { ...bracket, matches };
@@ -151,6 +198,9 @@ export interface PublicBracket {
     startsFirst: string;
     winnerTeamName: string | null;
     status: "PENDING" | "COMPLETE";
+    /** Rule 10.1(2) allows match progress publicly; team names only, never IDs. */
+    suddenDeath: Array<{ round: number; startsFirst: string; openedAt: string }>;
+    settledAdministratively: boolean;
   }>;
 }
 
@@ -184,6 +234,12 @@ export function publicizeBrackets(
           startsFirst: names.get(item.startsFirstId) ?? "—",
           winnerTeamName: item.winnerId ? names.get(item.winnerId) ?? null : null,
           status: item.winnerId ? "COMPLETE" : "PENDING",
+          suddenDeath: (item.suddenDeath ?? []).map((round) => ({
+            round: round.round,
+            startsFirst: names.get(round.startsFirstId) ?? "—",
+            openedAt: round.openedAt,
+          })),
+          settledAdministratively: Boolean(item.administrativeDecision),
         };
       }),
     };

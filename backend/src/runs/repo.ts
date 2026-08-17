@@ -6,7 +6,7 @@ import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import { ApiError } from "../errors.js";
-import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
+import { getCompetitionState, isEligibleForStage, openSuddenDeathRound } from "../competition/state.js";
 import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { listCorrections } from "../timing/repo.js";
@@ -122,8 +122,12 @@ export async function processGateEvent(
       return { accepted: false, reason: "invalid_state" };
     }
     const [stageRuns, corrections] = await Promise.all([listRuns(lane.competitorId), listCorrections(lane.competitorId)]);
+    // A Rule 6.6 sudden-death attempt is granted on top of the stage's three,
+    // so it bypasses the attempt cap — but only once per opened round, which
+    // `openSuddenDeathRound` enforces by looking for an already-tagged run.
+    const suddenDeathRound = openSuddenDeathRound(competition, lane.competitorId, stageRuns);
     const attemptState = stageAttemptState(stageRuns, corrections, competition.activeStage);
-    if (attemptState.unresolved || attemptState.consumed >= ATTEMPTS_PER_ROUND) {
+    if (attemptState.unresolved || (suddenDeathRound === undefined && attemptState.consumed >= ATTEMPTS_PER_ROUND)) {
       return { accepted: false, reason: "invalid_state" };
     }
     const maxTimeMs = configuredMaxTimeMs;
@@ -141,6 +145,7 @@ export async function processGateEvent(
           TableName: TABLE_NAME,
           Item: { ...runKey(lane.competitorId, event.eventId), runId: event.eventId,
             stage: competition.activeStage,
+            ...(suddenDeathRound !== undefined ? { suddenDeathRound } : {}),
             laneId: event.laneId, startDeviceTs: event.deviceTs, stopDeviceTs: null,
             elapsedMs: null, splits: [], debounce: { [event.gateId]: event.deviceTs },
             minTimeMs, maxTimeMs, createdAt: now },

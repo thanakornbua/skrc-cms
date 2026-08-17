@@ -8,6 +8,13 @@ interface Props {
   value: string;
   onChange: (digits: string) => void;
   onEnter?: () => void;
+  /**
+   * Renders a tappable button that fires `onEnter`. Pass it wherever Enter is
+   * the only way to submit: `inputMode="numeric"` gives phones a keypad with no
+   * return key, so on mobile those fields are otherwise a dead end. Omit it
+   * where the surrounding layout already shows its own action button.
+   */
+  submitLabel?: string;
   placeholder?: string;
   autoFocus?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
@@ -20,7 +27,7 @@ interface Props {
  * is stripped, and the field ends up holding `0042` rather than `C-C-0042`.
  */
 export default function CompetitorIdInput({
-  id, label, value, onChange, onEnter, placeholder = "0042", autoFocus, inputRef,
+  id, label, value, onChange, onEnter, submitLabel, placeholder = "0042", autoFocus, inputRef,
 }: Props) {
   return (
     <div className="field">
@@ -42,6 +49,11 @@ export default function CompetitorIdInput({
           }}
         />
       </div>
+      {onEnter && submitLabel && (
+        <button className="competitor-id-submit" type="button" disabled={!value} onClick={onEnter}>
+          {submitLabel}
+        </button>
+      )}
     </div>
   );
 }

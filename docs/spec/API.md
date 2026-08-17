@@ -265,12 +265,17 @@ Cognito `sub` values.
 - `PUT /admin/config/penalties/:ruleId` (admin): `{label,penaltyMs,active,kind?}`;
   omitting `kind` clears it, so a caller preserving `INTERVENTION` must resend it.
 - `POST /committee/competitors/:id/penalties` (committee/admin): `{ruleId,runId?}`;
-  snapshots the current label/duration. `runId` should be the competitor's
+  snapshots the current label/duration/`kind`. `runId` should be the competitor's
   currently in-flight run when the applied rule has `kind:"INTERVENTION"` — Rule
-  7.3(2)-(3) counts interventions per attempt: the first two against the same
-  `runId` are ordinary time penalties, and the third auto-ends that run (attempt
-  consumed, stage max time charged — never voided) via the same mechanism as a
-  missed STOP. `runId` is ignored for any rule without that `kind`.
+  7.3(2)-(3) counts interventions per attempt, across **every** intervention rule
+  rather than per `ruleId`: the first two against the same `runId` are ordinary
+  time penalties, and the third auto-ends that run (attempt consumed, stage max
+  time charged — never voided) via the same mechanism as a missed STOP. The third
+  carries **no** further time charge, so it writes no penalty record. `runId` is
+  ignored for any rule without that `kind`.
+  - **Response 201** `{outcome:"APPLIED",penalty}` when a penalty was recorded.
+  - **Response 200** `{outcome:"RUN_ENDED",penalty:null}` when this was the third
+    intervention and the run was ended instead.
 - `POST /admin/competitors/:id/penalties/:penaltySk/revoke` (admin): `{reason}`.
 - `POST /admin/competitors/:id/runs/:runId/resolve` (admin):
   `{decision:"consume"|"void",reason}` for an `UNDER_REVIEW` run.
@@ -331,7 +336,10 @@ Cognito `sub` values.
 
 #### `GET /admin/competition/state`
 - **Role:** committee/admin.
-- **Response:** `{phase,activeStage,eligibleCompetitorIds}`.
+- **Response:** `{phase,activeStage,eligibleCompetitorIds,matches}`, where `matches`
+  lists the unsettled Final / third-place matches as
+  `{category,matchId,round,teamA,teamB,startsFirst,suddenDeath[],settledAdministratively}`
+  — the input the console needs to open a Rule 6.6 round. Team names, not IDs.
 
 #### `POST /admin/competition/advance`
 - **Role:** admin. Body `{ "confirm": "ADVANCE" }`.
@@ -343,7 +351,30 @@ Cognito `sub` values.
 - **Role:** admin only.
 - **Request:** `{ "confirm": "CONCLUDE" }` (exact string required — a safety check, not real security).
 - Allowed only during Finals. Settles the final and third-place matches, then computes 1st–4th from those match winners/losers and 5th–8th from the quarterfinal results.
-- **Errors:** `400 VALIDATION_ERROR` wrong confirm string. `409 CONFLICT` already concluded.
+- A match still level after Rule 6.5(a)-(c) blocks the conclusion with `409 CONFLICT` naming the match, because Rule 6.5(2) withholds the registration-time tiebreak from these two matches. Resolve it with sudden death below.
+- **Errors:** `400 VALIDATION_ERROR` wrong confirm string. `409 CONFLICT` already concluded, or a tied Final/third-place match.
+
+#### `POST /admin/competition/sudden-death`
+- **Role:** admin only. Body `{confirm:"SUDDEN_DEATH",category,matchId}`.
+- Rule 6.6(2): opens one more round for a tied Final or third-place match. Each team
+  is granted a single extra attempt that sits **outside** the stage's three — it is
+  excluded from the consumed-attempt count and never enters the stage average — and
+  the running order is drawn again server-side.
+- Rule 6.6(4)-(5) then decides the head-to-head once both teams have run: a finisher
+  beats a maximum time, two finishers are split on time, and two maximums or an exact
+  dead heat simply require another round. Penalties applied during a sudden-death run
+  count only in that comparison (operator decision, 2026-08-17).
+- **Response 201:** `{round,startsFirstId}`.
+- **Errors:** `409 CONFLICT` when the match is not tied, is already settled, is not a
+  Final/third-place match, or when the previous round has not been run out by both teams.
+
+#### `POST /admin/competition/sudden-death/administrative`
+- **Role:** admin only. Body `{confirm:"ADMINISTRATIVE",category,matchId,reason}`.
+- Rule 6.6(6): the fallback when the match cannot continue for safety, venue or
+  operational reasons. Awards the match on earlier registration approval and records
+  the reason and actor. Deliberately an explicit act — the ranking code never falls
+  back to registration time for these matches on its own.
+- **Response 200:** `{winnerId}`.
 
 #### `POST /admin/competition/reopen`
 - **Role:** admin only.

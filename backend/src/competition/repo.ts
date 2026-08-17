@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { BatchWriteCommand, PutCommand, QueryCommand, ScanCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import type { BatchWriteCommandInput } from "@aws-sdk/lib-dynamodb";
@@ -6,11 +7,15 @@ import { ApiError } from "../errors.js";
 import type { CompetitorRecord } from "../competitors/types.js";
 import { listRuns } from "../runs/repo.js";
 import { listAppliedPenalties, listCorrections } from "../timing/repo.js";
+import { isStageAttempt } from "../timing/budget.js";
 import { rankStageCategory, type StageScoringInput } from "./scoring.js";
-import { addFinals, addSemifinals, drawBrackets, settleRound } from "./bracket.js";
+import {
+  addFinals, addSemifinals, drawBrackets, matchIsTied, settleRound, suddenDeathWinner,
+  type SuddenDeathAttempt, type SuddenDeathResolver,
+} from "./bracket.js";
 import { COMPETITION_STATE_KEY, getCompetitionState } from "./state.js";
 import {
-  COMPETITION_STAGES, NEXT_STAGE, type CategoryStageResults, type CompetitionBracket, type CompetitionStage,
+  COMPETITION_STAGES, NEXT_STAGE, type BracketMatch, type CategoryStageResults, type CompetitionBracket, type CompetitionStage,
   type CompetitionState, type StageRankedResult,
 } from "./types.js";
 import type { Actor } from "../auth/types.js";
@@ -60,7 +65,7 @@ async function assertStageSettled(stage: CompetitionStage, eligible?: string[]):
     .filter((input) => !input.competitor.disqualified.bool)
     .map((input) => {
       const corrected = new Set(input.corrections.filter((item) => (item.stage ?? "ROUND_1") === stage).map((item) => item.runId));
-      const consumed = input.runs.filter((run) => (run.stage ?? "ROUND_1") === stage).filter((run) =>
+      const consumed = input.runs.filter((run) => isStageAttempt(run, stage)).filter((run) =>
         run.status === "COMPLETE" || run.status === "TIMED_OUT" || run.status === "INVALID" || corrected.has(run.runId)
       ).length;
       return { competitorId: input.competitor.competitorId, consumed };
@@ -242,18 +247,149 @@ export async function getCompetitorRank(category: string, competitorId: string):
   return typeof item?.rank === "number" ? item.rank : null;
 }
 
+/**
+ * One team's attempt in a given sudden-death round, or null while that attempt
+ * has not been run or resolved. Penalties tagged to the run join `chargedMs`
+ * and go no further: Rule 6.6(3) keeps the match's own penalty total separate,
+ * and the stage average never sees a sudden-death run at all.
+ */
+function suddenDeathAttempt(input: StageScoringInput, round: number): SuddenDeathAttempt | null {
+  const run = input.runs.find((item) => item.suddenDeathRound === round && item.status !== "VOID");
+  if (!run) return null;
+  const correction = input.corrections.find((item) => item.runId === run.runId);
+  const completed = Boolean(correction) || run.status === "COMPLETE";
+  const elapsedMs = correction?.elapsedMs
+    ?? (run.status === "COMPLETE" ? run.elapsedMs
+      : run.status === "TIMED_OUT" || run.status === "INVALID" ? run.maxTimeMs : null);
+  if (elapsedMs === null) return null;
+  const penaltyMs = input.penalties
+    .filter((item) => item.runId === run.runId && !item.revocation)
+    .reduce((sum, item) => sum + item.penaltyMs, 0);
+  return { competitorId: input.competitor.competitorId, completed, chargedMs: elapsedMs + penaltyMs };
+}
+
+/**
+ * Walks a match's sudden-death rounds oldest-first and returns the first one
+ * that produced a winner. Rounds where a team has yet to run, or where both
+ * took the maximum, simply carry the tie forward (Rule 6.6(5)).
+ */
+function suddenDeathResolver(inputs: StageScoringInput[]): SuddenDeathResolver {
+  const byId = new Map(inputs.map((item) => [item.competitor.competitorId, item]));
+  return (matchItem: BracketMatch) => {
+    for (const round of matchItem.suddenDeath ?? []) {
+      const a = byId.get(matchItem.teamAId);
+      const b = byId.get(matchItem.teamBId);
+      if (!a || !b) continue;
+      const aAttempt = suddenDeathAttempt(a, round.round);
+      const bAttempt = suddenDeathAttempt(b, round.round);
+      if (!aAttempt || !bAttempt) continue;
+      const winnerId = suddenDeathWinner(aAttempt, bAttempt);
+      if (winnerId) return winnerId;
+    }
+    return null;
+  };
+}
+
+/** The match an admin named, checked against everything Rule 6.6(1) requires. */
+async function tiedMatchFor(state: CompetitionState, category: string, matchId: string): Promise<{
+  bracket: CompetitionBracket; match: BracketMatch; result: CategoryStageResults; inputs: StageScoringInput[];
+}> {
+  if (state.phase !== "OPEN") throw new ApiError(409, "CONFLICT", "Competition is concluded");
+  if (state.activeStage !== "THE_BEST") throw new ApiError(409, "CONFLICT", "Sudden death applies only to the Final and third-place match");
+  const bracket = (state.brackets ?? []).find((item) => item.category === category);
+  if (!bracket) throw new ApiError(404, "NOT_FOUND", `No bracket for ${category}`);
+  const match = bracket.matches.find((item) => item.matchId === matchId);
+  if (!match) throw new ApiError(404, "NOT_FOUND", `No match ${matchId} in ${category}`);
+  if (match.round !== "FINAL" && match.round !== "THIRD_PLACE") {
+    throw new ApiError(409, "CONFLICT", "Only the Final and third-place match use sudden death (Rule 6.5(2))");
+  }
+  if (match.winnerId || match.administrativeDecision) throw new ApiError(409, "CONFLICT", `${matchId} is already settled`);
+  const inputs = await scoringInputs();
+  const result = rankStageCategory(inputs, "THE_BEST", true).find((item) => item.category === category);
+  if (!result) throw new ApiError(409, "CONFLICT", `${category} has no Final result yet`);
+  if (!matchIsTied(match, result)) throw new ApiError(409, "CONFLICT", `${matchId} is not tied; it resolves under Rule 6.5`);
+  return { bracket, match, result, inputs };
+}
+
+function withMatch(state: CompetitionState, category: string, matchId: string, replace: (match: BracketMatch) => BracketMatch): CompetitionBracket[] {
+  return (state.brackets ?? []).map((bracket) => bracket.category !== category ? bracket : {
+    ...bracket,
+    matches: bracket.matches.map((item) => item.matchId === matchId ? replace(item) : item),
+  });
+}
+
+/**
+ * Rule 6.6(2): grant both teams one more attempt and re-randomise who runs
+ * first. A further round may only open once the previous one has actually been
+ * run out by both teams, otherwise an admin could stack unrun rounds.
+ */
+export async function startSuddenDeathRound(
+  byUser: Actor, category: string, matchId: string, random: (upperExclusive: number) => number = randomInt,
+): Promise<{ round: number; startsFirstId: string }> {
+  const state = await getCompetitionState();
+  const { match, inputs } = await tiedMatchFor(state, category, matchId);
+  const rounds = match.suddenDeath ?? [];
+  const previous = rounds[rounds.length - 1];
+  if (previous) {
+    const byId = new Map(inputs.map((item) => [item.competitor.competitorId, item]));
+    const ran = [match.teamAId, match.teamBId]
+      .every((id) => { const input = byId.get(id); return input ? suddenDeathAttempt(input, previous.round) !== null : false; });
+    if (!ran) throw new ApiError(409, "CONFLICT", `Sudden-death round ${previous.round} is still in progress`);
+  }
+  const round = rounds.length + 1;
+  const startsFirstId = random(2) === 0 ? match.teamAId : match.teamBId;
+  const opened = { round, startsFirstId, openedAt: new Date().toISOString(), openedBy: byUser.id, openedByName: byUser.name };
+  await putOpenState(state, {
+    ...state,
+    brackets: withMatch(state, category, matchId, (item) => ({ ...item, suddenDeath: [...rounds, opened] })),
+    updatedAt: opened.openedAt, updatedBy: byUser.id, updatedByName: byUser.name,
+  });
+  return { round, startsFirstId };
+}
+
+/**
+ * Rule 6.6(6): when the match cannot continue for safety, venue or operational
+ * reasons, the organizer may fall back to the earlier registration-approval
+ * time. Deliberately an explicit, reasoned admin act — never something the
+ * ranking code slides into on its own.
+ */
+export async function decideMatchAdministratively(
+  byUser: Actor, category: string, matchId: string, reason: string,
+): Promise<{ winnerId: string }> {
+  const state = await getCompetitionState();
+  const { match, result } = await tiedMatchFor(state, category, matchId);
+  const approvedAt = (competitorId: string) =>
+    result.ranked.find((item) => item.competitorId === competitorId)?.tieTimestamp ?? "";
+  const winnerId = approvedAt(match.teamAId) <= approvedAt(match.teamBId) ? match.teamAId : match.teamBId;
+  const at = new Date().toISOString();
+  await putOpenState(state, {
+    ...state,
+    brackets: withMatch(state, category, matchId, (item) => ({
+      ...item,
+      administrativeDecision: { winnerId, reason, byUser: byUser.id, byUserName: byUser.name, at },
+    })),
+    updatedAt: at, updatedBy: byUser.id, updatedByName: byUser.name,
+  });
+  return { winnerId };
+}
+
 export async function concludeCompetition(byUser: Actor): Promise<{ phase: "CONCLUDED"; concludedAt: string; results: CategoryStageResults[] }> {
   const state = await getCompetitionState();
   if (state.phase === "CONCLUDED") throw new ApiError(409, "CONFLICT", "Competition is already concluded");
   if (state.activeStage !== "THE_BEST") throw new ApiError(409, "CONFLICT", "Competition can conclude only after reaching The Best");
   await assertStageSettled("THE_BEST", state.eligibleCompetitorIds);
-  const current = await calculateStageRankings("THE_BEST", true);
+  const inputs = await scoringInputs();
+  const current = rankStageCategory(inputs, "THE_BEST", true);
   const snapshots = { ...(state.stageResults ?? {}), THE_BEST: current };
   const concludedAt = new Date().toISOString();
+  const resolveSuddenDeath = suddenDeathResolver(inputs);
   const brackets = (state.brackets ?? []).map((bracket) => {
     const result = current.find((item) => item.category === bracket.category);
     if (!result) throw new ApiError(409, "CONFLICT", `${bracket.category} has no final result`);
-    return settleRound(settleRound(bracket, "FINAL", result, concludedAt), "THIRD_PLACE", result, concludedAt);
+    return settleRound(
+      settleRound(bracket, "FINAL", result, concludedAt, resolveSuddenDeath),
+      "THIRD_PLACE", result, concludedAt, resolveSuddenDeath,
+    );
   });
   const internalResults = bracketFinalResults(snapshots, brackets);
   const publicResults = publicize(internalResults);

@@ -37,6 +37,13 @@ export interface AppliedPenalty {
   byUserName?: string;
   at: string;
   stage?: CompetitionStage;
+  /**
+   * The rule's kind, snapshotted at application time like `label` and
+   * `penaltyMs` (Rule 7.1(2)). Rule 7.3(3) counts interventions per attempt
+   * however they were cited, so the count reads this rather than matching on
+   * `ruleId` — two organizer-defined intervention rules still share one limit.
+   */
+  kind?: "INTERVENTION";
   /** The run this occurrence happened during, when applied while a run was active. Required to count Rule 7.3(3)'s per-attempt intervention limit. */
   runId?: string;
   revocation?: { reason: string; byUser: string; byUserName?: string; at: string };

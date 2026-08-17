@@ -11,7 +11,17 @@ import { normaliseCompetitorId } from "../competitorId";
 type Role = "admin" | "committee" | "competitor";
 type Stage = "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
 interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number> }
-interface CompetitionState { phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[] }
+/** An unsettled Final / third-place match, the only place Rule 6.6 applies. */
+interface PendingMatch {
+  category: string; matchId: string; round: "FINAL" | "THIRD_PLACE";
+  teamA: string; teamB: string; startsFirst: string;
+  suddenDeath: Array<{ round: number; startsFirst: string }>;
+  settledAdministratively: boolean;
+}
+interface CompetitionState {
+  phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[];
+  matches?: PendingMatch[];
+}
 interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }
 interface Run {
   runId: string; status: "RUNNING" | "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
@@ -160,6 +170,40 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     finally { setBusy(false); }
   }
 
+  // Rule 6.6(2): each round grants both teams one extra attempt and the server
+  // re-randomises who runs first, so the operator is told the order rather than
+  // choosing it.
+  async function openSuddenDeath(match: PendingMatch): Promise<void> {
+    const round = match.suddenDeath.length + 1;
+    if (!window.confirm(`Open sudden-death round ${round} for ${match.teamA} vs ${match.teamB}? Each team gets one extra attempt.`)) return;
+    setBusy(true); setError(null);
+    try {
+      const opened = await ec2Json<{ round: number; startsFirstId: string }>("/admin/competition/sudden-death", {
+        method: "POST", body: JSON.stringify({ confirm: "SUDDEN_DEATH", category: match.category, matchId: match.matchId }),
+      });
+      await loadConfig();
+      setNotice(`Sudden-death round ${opened.round} is open. The running order was drawn again — check the order below before arming a lane.`);
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not open sudden death"); }
+    finally { setBusy(false); }
+  }
+
+  // Rule 6.6(6): only when the match cannot be run at all.
+  async function decideAdministratively(match: PendingMatch): Promise<void> {
+    if (window.prompt(`Type ADMINISTRATIVE to settle ${match.teamA} vs ${match.teamB} off the track, by earlier registration approval.`) !== "ADMINISTRATIVE") return;
+    const reason = window.prompt("Why can this match not be run? (recorded in the audit trail)")?.trim();
+    if (!reason) return;
+    setBusy(true); setError(null);
+    try {
+      await ec2Json("/admin/competition/sudden-death/administrative", {
+        method: "POST",
+        body: JSON.stringify({ confirm: "ADMINISTRATIVE", category: match.category, matchId: match.matchId, reason }),
+      });
+      await loadConfig();
+      setNotice("Match settled administratively under Rule 6.6(6). The reason is recorded.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Administrative decision failed"); }
+    finally { setBusy(false); }
+  }
+
   async function reopen(): Promise<void> {
     if (window.prompt("Type REOPEN to undo the published result. The previous ranking is kept and marked superseded.") !== "REOPEN") return;
     const reason = window.prompt("Reason for reopening (recorded in the audit trail):")?.trim();
@@ -184,13 +228,16 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     }
     setBusy(true);
     try {
-      await ec2Json(`/committee/competitors/${encodeURIComponent(competitor.competitorId)}/penalties`, {
-        method: "POST", body: JSON.stringify({ ruleId: rule.ruleId, ...(rule.kind === "INTERVENTION" ? { runId: activeRun!.runId } : {}) }),
-      });
+      const applied = await ec2Json<{ outcome: "APPLIED" | "RUN_ENDED" }>(
+        `/committee/competitors/${encodeURIComponent(competitor.competitorId)}/penalties`, {
+          method: "POST", body: JSON.stringify({ ruleId: rule.ruleId, ...(rule.kind === "INTERVENTION" ? { runId: activeRun!.runId } : {}) }),
+        });
       await lookup(competitor.competitorId);
-      setNotice(rule.kind === "INTERVENTION"
-        ? "Intervention penalty applied. A third occurrence on this attempt ends the run automatically (Rule 7.3(3))."
-        : "Penalty applied.");
+      setNotice(applied.outcome === "RUN_ENDED"
+        ? "Third intervention on this attempt — the run is ended at the stage maximum and no further time charge applies (Rule 7.3(3))."
+        : rule.kind === "INTERVENTION"
+          ? "Intervention penalty applied. A third occurrence on this attempt ends the run automatically (Rule 7.3(3))."
+          : "Penalty applied.");
     } catch (err) { setError(err instanceof Error ? err.message : "Penalty failed"); }
     finally { setBusy(false); }
   }
@@ -346,6 +393,44 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         <p>{competitionState?.activeStage === "ROUND_1" ? t("ทุกทีมที่ลงทะเบียนมีสิทธิ์แข่งขัน", "All registered teams are eligible.") : `${competitionState?.eligibleCompetitorIds.length ?? 0} advancing teams eligible`}</p>
         <p>{t("ผลของแต่ละรอบแยกจากกัน การเลื่อนรอบจะบันทึกผลรอบปัจจุบัน", "Each stage is independent. Advancing freezes the current stage result.")}</p>
         <div className="button-row">{competitionState?.activeStage !== "THE_BEST" && competitionState?.phase === "OPEN" && <button type="button" onClick={advance}>{t("เลื่อนไปรอบถัดไป", "Advance stage")}</button>}{competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && <button className="danger" type="button" onClick={conclude}>{t("สรุปผล", "Conclude")}</button>}<button className="secondary" type="button" onClick={reopen}>{t("เปิดใหม่", "Reopen")}</button></div>
+
+        {/* Rule 6.6 — a level Final or third-place match has no other way out:
+            Rule 6.5(2) withholds the registration-time tiebreak from these two,
+            so concluding stays blocked until sudden death produces a winner. */}
+        {competitionState?.activeStage === "THE_BEST" && competitionState.phase === "OPEN" && (competitionState.matches ?? []).length > 0 && (
+          <div className="sudden-death-panel">
+            <h3>{t("การตัดสินฉับพลัน (ข้อ 6.6)", "Sudden death (Rule 6.6)")}</h3>
+            {(competitionState.matches ?? []).map((match) => (
+              <div className="rule-row sudden-death-match" key={`${match.category}-${match.matchId}`}>
+                <span>
+                  <span className="technical">{match.matchId}</span> {match.teamA} vs {match.teamB}
+                  <br />
+                  <small>
+                    {match.suddenDeath.length === 0
+                      ? t(`เริ่มก่อน: ${match.startsFirst}`, `Starts first: ${match.startsFirst}`)
+                      : match.suddenDeath.map((round) => t(
+                        `รอบตัดสิน ${round.round}: ${round.startsFirst} เริ่มก่อน`,
+                        `Round ${round.round}: ${round.startsFirst} starts first`,
+                      )).join(" · ")}
+                    {match.settledAdministratively && ` — ${t("ตัดสินทางปกครองแล้ว", "settled administratively")}`}
+                  </small>
+                </span>
+                {!match.settledAdministratively && <span className="button-row">
+                  <button type="button" disabled={busy} onClick={() => openSuddenDeath(match)}>
+                    {t(`เปิดรอบตัดสินที่ ${match.suddenDeath.length + 1}`, `Open round ${match.suddenDeath.length + 1}`)}
+                  </button>
+                  <button className="secondary" type="button" disabled={busy} onClick={() => decideAdministratively(match)}>
+                    {t("ตัดสินทางปกครอง 6.6(6)", "Rule 6.6(6)")}
+                  </button>
+                </span>}
+              </div>
+            ))}
+            <p className="scan-hint">{t(
+              "เปิดได้เฉพาะเมื่อผลยังเสมอกันตามข้อ 6.5 (ก)-(ค) แต่ละรอบให้สิทธิวิ่งเพิ่มทีมละหนึ่งครั้ง",
+              "Only opens while the match is level under Rule 6.5(a)-(c). Each round grants one extra attempt per team.",
+            )}</p>
+          </div>
+        )}
       </div>
       </div>
     </div>}

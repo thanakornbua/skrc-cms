@@ -32,6 +32,7 @@ Source of truth for every ⛔ HUMAN decision named in `IMPLEMENTATION_PLAN.md`. 
 | D26 | Robot spec checks | ✅ DECIDED | 2026-08-17. Rule 3.2's 4000 g limit is verified by the system against the inspector's measurement; Rules 3.1 (dimensions) and 3.3 (voltage) are inspector pass/fail. Overall result is the conjunction, derived server-side. Inspection repeats before each round (Rule 3.7(1)). |
 | D27 | Desktop console credentials | ✅ DECIDED | 2026-08-17. The operator laptop holds no AWS keys: the signed-in staff member's Cognito token is exchanged via a Cognito identity pool for short-lived, role-scoped credentials. Gate events spool to disk and flush on reconnect, so a network drop never loses a time. |
 | D28 | Audit trail identity | ✅ DECIDED | 2026-08-17. Audit records store both `byUser` (stable id) and `byUserName`, denormalised at write time so the record stays truthful if the account is renamed or removed. |
+| D29 | Sudden-death penalty scope | ✅ DECIDED | 2026-08-17. Penalties applied during a Rule 6.6 sudden-death run count into **that head-to-head comparison only** — compare elapsed plus the penalties tagged to that `runId` — and never join the stage penalty total or the stage average. The extra attempt is modelled as `suddenDeathRound` on the run inside `THE_BEST`, not as a new stage, and Rule 6.6(6)'s administrative fallback is an explicit admin action with a mandatory reason, never a silent fallthrough to registration time. |
 
 ## Operator inputs (not ⛔ HUMAN decisions, but recorded here)
 

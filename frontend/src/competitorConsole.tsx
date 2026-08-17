@@ -158,12 +158,13 @@ export function ScanConsole({ value, onChange, onSubmit, inputRef }: ScanConsole
           id={inputId} inputRef={inputRef}
           label={t("สแกนหรือกรอกหมายเลขผู้เข้าแข่งขัน", "Competitor ID")}
           value={value} onChange={onChange} onEnter={onSubmit} autoFocus
+          submitLabel={t("ค้นหา", "Look up")}
         />
         <button className="secondary scan-camera-btn" type="button" onClick={cameraActive ? stopCamera : startCamera}>
           {cameraActive ? t("หยุดกล้อง", "Stop camera") : t("ใช้กล้อง", "Use camera")}
         </button>
       </div>
-      <p className="scan-hint">{t("สแกนคิวอาร์หรือพิมพ์หมายเลขแล้วกด Enter", "Scan the QR or type an ID, then press Enter")}</p>
+      <p className="scan-hint">{t("สแกนคิวอาร์ หรือพิมพ์หมายเลขแล้วกด Enter หรือปุ่มค้นหา", "Scan the QR, or type an ID then press Enter / tap Look up")}</p>
       {cameraActive && <div className="scan-camera"><div id={readerId} /></div>}
     </div>
   );

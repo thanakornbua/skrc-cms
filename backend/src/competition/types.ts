@@ -50,6 +50,28 @@ export interface StageRankedResult {
 
 export type BracketRound = "QUARTERFINAL" | "SEMIFINAL" | "FINAL" | "THIRD_PLACE";
 
+/**
+ * One Rule 6.6 sudden-death round. Each round grants both teams a single extra
+ * attempt and re-randomises who runs first (6.6(2)); rounds repeat until one
+ * team wins (6.6(5)), so this is a list rather than a flag.
+ */
+export interface SuddenDeathRound {
+  round: number;
+  startsFirstId: string;
+  openedAt: string;
+  openedBy: string;
+  openedByName?: string;
+}
+
+/** Rule 6.6(6): the match could not continue, so it was settled off the track. */
+export interface AdministrativeDecision {
+  winnerId: string;
+  reason: string;
+  byUser: string;
+  byUserName?: string;
+  at: string;
+}
+
 export interface BracketMatch {
   matchId: string;
   round: BracketRound;
@@ -59,6 +81,8 @@ export interface BracketMatch {
   startsFirstId: string;
   winnerId: string | null;
   completedAt: string | null;
+  suddenDeath?: SuddenDeathRound[];
+  administrativeDecision?: AdministrativeDecision;
 }
 
 export interface CompetitionBracket {

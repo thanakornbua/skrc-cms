@@ -13,16 +13,22 @@ const runStage = (run: RunRecord): CompetitionStage => run.stage ?? "ROUND_1";
 const correctionStage = (correction: TimeCorrection): CompetitionStage => correction.stage ?? "ROUND_1";
 const penaltyStage = (penalty: AppliedPenalty): CompetitionStage => penalty.stage ?? "ROUND_1";
 
+/** Runs granted by Rule 6.6(2), which sit outside the stage's own three attempts. */
+const suddenDeathRunIds = (input: StageScoringInput): Set<string> =>
+  new Set(input.runs.filter((run) => run.suddenDeathRound !== undefined).map((run) => run.runId));
+
 function stagePenalty(input: StageScoringInput, stage: CompetitionStage): number {
+  const excluded = suddenDeathRunIds(input);
   return input.penalties
-    .filter((item) => penaltyStage(item) === stage && !item.revocation)
+    .filter((item) => penaltyStage(item) === stage && !item.revocation
+      && !(item.runId !== undefined && excluded.has(item.runId)))
     .reduce((sum, item) => sum + item.penaltyMs, 0);
 }
 
 function scoredRuns(input: StageScoringInput, stage: CompetitionStage) {
   const corrections = new Map(input.corrections.filter((item) => correctionStage(item) === stage).map((item) => [item.runId, item]));
   return input.runs
-    .filter((run) => runStage(run) === stage && run.status !== "VOID")
+    .filter((run) => runStage(run) === stage && run.status !== "VOID" && run.suddenDeathRound === undefined)
     .map((run) => {
       const correction = corrections.get(run.runId);
       const completed = Boolean(correction) || run.status === "COMPLETE";
@@ -93,15 +99,12 @@ export function rankStageCategory(inputs: StageScoringInput[], stage: Competitio
       if (aCompletionTier !== bCompletionTier) {
         return bCompletionTier - aCompletionTier;
       }
-      if (stage === "ROUND_1" || stage === "BEST_OF_4") {
-        if (a.result.completedLap !== b.result.completedLap) return a.result.completedLap ? -1 : 1;
-        if (!a.result.completedLap) {
-          return b.result.furthestCheckpoint - a.result.furthestCheckpoint ||
-            (a.result.tieTimestamp ?? "").localeCompare(b.result.tieTimestamp ?? "") ||
-            a.input.competitor.competitorId.localeCompare(b.input.competitor.competitorId);
-        }
-      }
-      return a.result.finalTimeMs! - b.result.finalTimeMs! ||
+      // Rule 6.4(3) orders every team inside a completion tier by final time,
+      // including the tier with no completed run at all: those teams all carry
+      // max times, so what separates them is accumulated penalty. Checkpoint
+      // progress deliberately plays no part (Rule 6.7, D11) — it is recorded
+      // for operations and display only.
+      return (a.result.finalTimeMs ?? Number.MAX_SAFE_INTEGER) - (b.result.finalTimeMs ?? Number.MAX_SAFE_INTEGER) ||
         (a.result.lapTimeMs ?? Number.MAX_SAFE_INTEGER) - (b.result.lapTimeMs ?? Number.MAX_SAFE_INTEGER) ||
         (a.result.secondBestTimeMs ?? Number.MAX_SAFE_INTEGER) - (b.result.secondBestTimeMs ?? Number.MAX_SAFE_INTEGER) ||
         a.result.penaltyTimeMs - b.result.penaltyTimeMs ||

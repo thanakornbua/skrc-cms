@@ -23,6 +23,13 @@ export interface RunRecord {
   runId: string;
   /** Absent only on legacy records, which are interpreted as ROUND_1. */
   stage?: CompetitionStage;
+  /**
+   * Set when this run is a Rule 6.6 sudden-death attempt, holding the round it
+   * belongs to. Such a run is granted on top of the three per stage, so it is
+   * excluded from the consumed-attempt count and never folded into the stage
+   * average — it only decides its own head-to-head.
+   */
+  suddenDeathRound?: number;
   laneId: string;
   startDeviceTs: number;
   stopDeviceTs: number | null;
