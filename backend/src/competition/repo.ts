@@ -13,6 +13,7 @@ import {
   COMPETITION_STAGES, NEXT_STAGE, type CategoryStageResults, type CompetitionBracket, type CompetitionStage,
   type CompetitionState, type StageRankedResult,
 } from "./types.js";
+import type { Actor } from "../auth/types.js";
 
 type BatchWriteRequests = NonNullable<NonNullable<BatchWriteCommandInput["RequestItems"]>[string]>;
 
@@ -134,7 +135,7 @@ async function putOpenState(previous: CompetitionState, next: CompetitionState):
   }
 }
 
-export async function advanceCompetitionStage(byUser: string): Promise<CompetitionState> {
+export async function advanceCompetitionStage(byUser: Actor): Promise<CompetitionState> {
   const state = await getCompetitionState();
   if (state.phase !== "OPEN") throw new ApiError(409, "COMPETITION_CONCLUDED", "Competition is concluded");
   const nextStage = NEXT_STAGE[state.activeStage];
@@ -145,7 +146,7 @@ export async function advanceCompetitionStage(byUser: string): Promise<Competiti
   let brackets: CompetitionBracket[];
   let eligibleCompetitorIds: string[];
   if (state.activeStage === "ROUND_1") {
-    brackets = drawBrackets(current, now, byUser);
+    brackets = drawBrackets(current, now, byUser.id);
     eligibleCompetitorIds = brackets.flatMap((bracket) => bracket.positions.map((item) => item.competitorId));
   } else if (state.activeStage === "BEST_OF_4") {
     brackets = (state.brackets ?? []).map((bracket) => {
@@ -167,7 +168,7 @@ export async function advanceCompetitionStage(byUser: string): Promise<Competiti
     ...state, phase: "OPEN", activeStage: nextStage, eligibleCompetitorIds,
     brackets,
     stageResults: { ...(state.stageResults ?? {}), [state.activeStage]: current },
-    updatedAt: now, updatedBy: byUser,
+    updatedAt: now, updatedBy: byUser.id, updatedByName: byUser.name,
   };
   await putOpenState(state, next);
   return next;
@@ -203,7 +204,13 @@ function bracketFinalResults(
   });
 }
 
-async function deleteRankingSnapshots(categories: string[]): Promise<void> {
+/**
+ * Removes ranking items written by a conclusion that then FAILED partway. This
+ * rolls back an incomplete write — those rows were never a published official
+ * result — and is the only place deletion is legitimate under Rule 10.2(2).
+ * Reopening a successfully concluded competition must supersede, never delete.
+ */
+async function rollbackPartialRankingSnapshots(categories: string[]): Promise<void> {
   for (const category of categories) {
     let ExclusiveStartKey: Record<string, unknown> | undefined;
     do {
@@ -235,7 +242,7 @@ export async function getCompetitorRank(category: string, competitorId: string):
   return typeof item?.rank === "number" ? item.rank : null;
 }
 
-export async function concludeCompetition(byUser: string): Promise<{ phase: "CONCLUDED"; concludedAt: string; results: CategoryStageResults[] }> {
+export async function concludeCompetition(byUser: Actor): Promise<{ phase: "CONCLUDED"; concludedAt: string; results: CategoryStageResults[] }> {
   const state = await getCompetitionState();
   if (state.phase === "CONCLUDED") throw new ApiError(409, "CONFLICT", "Competition is already concluded");
   if (state.activeStage !== "THE_BEST") throw new ApiError(409, "CONFLICT", "Competition can conclude only after reaching The Best");
@@ -252,7 +259,7 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
   const publicResults = publicize(internalResults);
   await putOpenState(state, {
     ...state, phase: "CONCLUDED", stageResults: snapshots, brackets, results: publicResults,
-    concludedAt, concludedBy: byUser, updatedAt: concludedAt, updatedBy: byUser,
+    concludedAt, concludedBy: byUser.id, concludedByName: byUser.name, updatedAt: concludedAt, updatedBy: byUser.id, updatedByName: byUser.name,
   });
   try {
     for (const category of internalResults) for (const item of category.ranked) {
@@ -262,7 +269,7 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
       }));
     }
   } catch (error) {
-    await deleteRankingSnapshots(internalResults.map((item) => item.category));
+    await rollbackPartialRankingSnapshots(internalResults.map((item) => item.category));
     await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME, Key: COMPETITION_STATE_KEY,
       UpdateExpression: "SET #phase = :open REMOVE concludedAt, concludedBy, results",
@@ -274,12 +281,68 @@ export async function concludeCompetition(byUser: string): Promise<{ phase: "CON
   return { phase: "CONCLUDED", concludedAt, results: publicResults };
 }
 
-export async function reopenCompetition(): Promise<void> {
+/**
+ * Marks every published ranking row of a concluded competition as superseded,
+ * leaving the row itself in place.
+ *
+ * Rule 10.2(2) makes the database the official evidentiary record and forbids
+ * hard-deleting it, and the published final ranking is exactly the record it
+ * protects. A later conclusion overwrites these keys with the new official
+ * result; anything it does not overwrite stays visibly superseded rather than
+ * silently vanishing.
+ */
+async function supersedeRankingSnapshots(
+  categories: string[], at: string, byUser: Actor, reason: string,
+): Promise<void> {
+  for (const category of categories) {
+    let ExclusiveStartKey: Record<string, unknown> | undefined;
+    do {
+      const found = await ddbDoc.send(new QueryCommand({
+        TableName: TABLE_NAME, KeyConditionExpression: "PK = :pk",
+        ExpressionAttributeValues: { ":pk": `RANKING#${category}` },
+        ProjectionExpression: "PK, SK", ExclusiveStartKey,
+      }));
+      for (const key of found.Items ?? []) {
+        await ddbDoc.send(new UpdateCommand({
+          TableName: TABLE_NAME, Key: { PK: key.PK, SK: key.SK },
+          UpdateExpression: "SET supersededAt = :at, supersededBy = :by, supersededReason = :reason",
+        ExpressionAttributeValues: { ":at": at, ":by": byUser.id, ":byName": byUser.name, ":reason": reason },
+        }));
+      }
+      ExclusiveStartKey = found.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (ExclusiveStartKey);
+  }
+}
+
+export async function reopenCompetition(byUser: Actor, reason: string): Promise<void> {
   const state = await getCompetitionState();
-  await deleteRankingSnapshots(state.results?.map((item) => item.category) ?? []);
+  if (state.phase !== "CONCLUDED") throw new ApiError(409, "CONFLICT", "Competition is not concluded");
+  const at = new Date().toISOString();
+  await supersedeRankingSnapshots(state.results?.map((item) => item.category) ?? [], at, byUser, reason);
+
+  // The reopen itself is an official act and needs its own trace: who undid a
+  // published result, when, and why.
+  await ddbDoc.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: {
+      PK: "CONFIG#COMPETITION", SK: `AUDIT#REOPEN#${at}`,
+      type: "COMPETITION_REOPENED", reason, byUser: byUser.id, byUserName: byUser.name, at,
+      supersededConcludedAt: state.concludedAt ?? null,
+      supersededResults: state.results ?? [],
+    },
+  }));
+
   await ddbDoc.send(new UpdateCommand({
     TableName: TABLE_NAME, Key: COMPETITION_STATE_KEY,
-    UpdateExpression: "SET #phase = :open REMOVE concludedAt, concludedBy, results",
-    ExpressionAttributeNames: { "#phase": "phase" }, ExpressionAttributeValues: { ":open": "OPEN" },
+    // The previous conclusion is retained on the state as well, so the record
+    // of what was published survives the phase going back to OPEN.
+    UpdateExpression:
+      "SET #phase = :open, supersededConcludedAt = :concludedAt, supersededResults = :results, supersededAt = :at, supersededBy = :by"
+      + " REMOVE concludedAt, concludedBy, results",
+    ExpressionAttributeNames: { "#phase": "phase" },
+    ExpressionAttributeValues: {
+      ":open": "OPEN", ":at": at, ":by": byUser.id, ":byName": byUser.name,
+      ":concludedAt": state.concludedAt ?? null, ":results": state.results ?? [],
+    },
   }));
 }

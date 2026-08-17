@@ -3,6 +3,8 @@ import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import type { CompetitorRecord } from "./types.js";
+import { normaliseCompetitorId } from "../competitorId.js";
+import type { Actor } from "../auth/types.js";
 
 function keyComp(competitorId: string) {
   return { PK: `COMP#${competitorId}`, SK: "PROFILE" };
@@ -17,7 +19,7 @@ export async function getCompetitor(competitorId: string): Promise<CompetitorRec
 
 export async function recordPasswordResetRequest(
   competitorId: string,
-  byUser: string,
+  byUser: Actor,
   at: string
 ): Promise<void> {
   const deleteAt = new Date(Date.parse(at) + 180 * 24 * 60 * 60 * 1000);
@@ -28,7 +30,8 @@ export async function recordPasswordResetRequest(
         PK: `COMP#${competitorId}`,
         SK: `AUDIT#PASSWORD_RESET#${at}`,
         type: "PASSWORD_RESET_REQUESTED",
-        byUser,
+        byUser: byUser.id,
+        byUserName: byUser.name,
         at,
         deleteBy: deleteAt.toISOString(),
       },
@@ -55,11 +58,14 @@ export async function listCompetitors(filters: ListFilters): Promise<CompetitorR
   // Badge/QR scans and typed competitor numbers are the common check-in path.
   // Resolve those with one keyed read rather than querying the whole GSI.
   if (/^C-\d+$/i.test(search)) {
-    const item = await getCompetitor(search.toUpperCase());
-    if (!item) return [];
-    if (filters.category && item.category !== filters.category) return [];
-    if (filters.status && item.status !== filters.status) return [];
-    return [item];
+    const item = await getCompetitor(normaliseCompetitorId(search) ?? search.toUpperCase());
+    // A miss here is not proof of absence — fall through to the substring
+    // search rather than reporting "no results" for a partial number.
+    if (item) {
+      const categoryMatches = !filters.category || item.category === filters.category;
+      const statusMatches = !filters.status || item.status === filters.status;
+      return categoryMatches && statusMatches ? [item] : [];
+    }
   }
 
   const result = await ddbDoc.send(
@@ -112,7 +118,7 @@ export interface CheckInResult {
 
 type CompetitorStatusResult = CompetitorRecord["status"];
 
-export async function checkIn(competitorId: string, byUser: string): Promise<CheckInResult> {
+export async function checkIn(competitorId: string, byUser: Actor): Promise<CheckInResult> {
   const existing = await getCompetitor(competitorId);
   if (!existing) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
 
@@ -130,13 +136,14 @@ export async function checkIn(competitorId: string, byUser: string): Promise<Che
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: keyComp(competitorId),
-        UpdateExpression: "SET #status = :checkedIn, checkedInAt = :at, checkedInBy = :byUser, GSI1SK = :gsi1sk",
+        UpdateExpression: "SET #status = :checkedIn, checkedInAt = :at, checkedInBy = :byUser, checkedInByName = :byUserName, GSI1SK = :gsi1sk",
         ConditionExpression: "#status = :registered",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: {
           ":checkedIn": "CHECKED_IN",
           ":at": checkedInAt,
-          ":byUser": byUser,
+          ":byUser": byUser.id,
+          ":byUserName": byUser.name,
           ":registered": "REGISTERED",
           ":gsi1sk": `${existing.category}#CHECKED_IN#${competitorId}`,
         },
@@ -158,8 +165,8 @@ export async function checkIn(competitorId: string, byUser: string): Promise<Che
   return { status: "CHECKED_IN", checkedInAt, alreadyCheckedIn: false };
 }
 
-export async function disqualifyCompetitor(competitorId: string, reason: string, byUser: string): Promise<CompetitorRecord["disqualified"]> {
-  const disqualified = { bool: true, reason, byUser, at: new Date().toISOString() };
+export async function disqualifyCompetitor(competitorId: string, reason: string, byUser: Actor): Promise<CompetitorRecord["disqualified"]> {
+  const disqualified = { bool: true, reason, byUser: byUser.id, byUserName: byUser.name, at: new Date().toISOString() };
   try {
     await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME, Key: keyComp(competitorId),
@@ -180,8 +187,8 @@ export async function disqualifyCompetitor(competitorId: string, reason: string,
   }
 }
 
-export async function reinstateCompetitor(competitorId: string, reason: string, byUser: string): Promise<CompetitorRecord["disqualified"]> {
-  const disqualified = { bool: false, reason, byUser, at: new Date().toISOString() };
+export async function reinstateCompetitor(competitorId: string, reason: string, byUser: Actor): Promise<CompetitorRecord["disqualified"]> {
+  const disqualified = { bool: false, reason, byUser: byUser.id, byUserName: byUser.name, at: new Date().toISOString() };
   try {
     await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME, Key: keyComp(competitorId),

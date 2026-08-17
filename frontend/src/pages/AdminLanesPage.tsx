@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiClientError, ec2Json } from "../api";
 import BrandHeader from "../components/BrandHeader";
 import LoadingScreen from "../components/LoadingScreen";
 import LoginGate from "../components/LoginGate";
 import NavBar from "../components/NavBar";
 import { t } from "../i18n";
+import CompetitorIdInput from "../components/CompetitorIdInput";
+import { normaliseCompetitorId } from "../competitorId";
 
 interface Lane {
   laneId: string;
@@ -103,19 +105,12 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
   }
 
   async function handleAssign(laneId: string): Promise<void> {
-    const competitorId = (assignValues[laneId] ?? "").trim();
+    const competitorId = normaliseCompetitorId(assignValues[laneId] ?? "");
     if (!competitorId) return;
     if (await laneAction(laneId, "assign", { competitorId })) {
       setAssignValues((v) => ({ ...v, [laneId]: "" }));
     }
     assignInputRefs.current[laneId]?.focus();
-  }
-
-  function handleAssignKeyDown(e: KeyboardEvent<HTMLInputElement>, laneId: string): void {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleAssign(laneId);
-    }
   }
 
   return (
@@ -149,18 +144,17 @@ function AdminLanesDashboard({ signOutAndReset }: { signOutAndReset: () => Promi
 
             {lane.state === "IDLE" && (
               <div className="field">
-                <label htmlFor={`lane-assign-${lane.laneId}`}>{t("สแกนหรือกรอกหมายเลข", "Competitor ID")}</label>
-                <input
+                <CompetitorIdInput
                   id={`lane-assign-${lane.laneId}`}
-                  ref={(el) => {
+                  label={t("สแกนหรือกรอกหมายเลข", "Competitor ID")}
+                  inputRef={(el) => {
                     assignInputRefs.current[lane.laneId] = el;
                   }}
                   value={assignValues[lane.laneId] ?? ""}
-                  onChange={(e) =>
-                    setAssignValues((v) => ({ ...v, [lane.laneId]: e.target.value }))
+                  onChange={(digits) =>
+                    setAssignValues((v) => ({ ...v, [lane.laneId]: digits }))
                   }
-                  onKeyDown={(e) => handleAssignKeyDown(e, lane.laneId)}
-                  placeholder="C-0042"
+                  onEnter={() => handleAssign(lane.laneId)}
                 />
                 <button
                   type="button"

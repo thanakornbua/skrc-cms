@@ -1,15 +1,18 @@
 import { ConditionalCheckFailedException, TransactionCanceledException } from "@aws-sdk/client-dynamodb";
 import {
-  GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand,
+  GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
+import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
+import { ApiError } from "../errors.js";
 import { getCompetitionState, isEligibleForStage } from "../competition/state.js";
 import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { listCorrections } from "../timing/repo.js";
 import { stageAttemptState } from "../timing/budget.js";
-import type { GateEventInput, RunRecord, RunSplit } from "./types.js";
+import type { EndRunResolution, GateEventInput, RunRecord, RunSplit } from "./types.js";
+import type { Actor } from "../auth/types.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIMEOUT_GRACE_MS = 100;
@@ -288,13 +291,20 @@ export async function voidActiveRunAndResetLane(
 }
 
 /**
- * Rule 7.3(3): a third (or later) unauthorized intervention within the same
- * attempt ends the run immediately — the attempt is consumed and the team
+ * Ends an in-flight run immediately: the attempt is consumed and the team
  * receives the stage's maximum time, exactly like a missed STOP. It is
- * deliberately NOT a void: void means the attempt is refunded, which would
- * reward repeated interference instead of penalizing it.
+ * deliberately NOT a void — void refunds the attempt, which would reward the
+ * very situations this covers.
+ *
+ * Serves every rule that ends a run without a STOP:
+ *   INTERVENTION_LIMIT  Rule 7.3(3), a third unauthorized intervention
+ *   RESTART_LIMIT       Rule 5.3(6), a fourth restart
+ *   STALLED             Rule 5.4(1)-(2), no progress for 15 seconds
+ *   FORFEIT             Rule 5.4(3), the team gives the attempt up
+ *   GRACE_EXPIRED       Rule 8.4(4), unreleased at the end of the grace period
+ *   OFFICIAL_STOP       Rule 5.1(2), an official orders the run to end
  */
-export async function forceEndRunForIntervention(competitorId: string, runId: string, reason: string, byUser: string): Promise<boolean> {
+export async function endRunAtMaxTime(competitorId: string, runId: string, resolution: EndRunResolution, reason: string, byUser: Actor): Promise<boolean> {
   const run = (await listRuns(competitorId)).find((item) => item.runId === runId);
   if (!run || run.status !== undefined) return false;
   const at = new Date().toISOString();
@@ -306,7 +316,7 @@ export async function forceEndRunForIntervention(competitorId: string, runId: st
         ConditionExpression: "attribute_not_exists(#status)",
         ExpressionAttributeNames: { "#status": "status" },
         ExpressionAttributeValues: {
-          ":timedOut": "TIMED_OUT", ":resolution": "INTERVENTION_LIMIT", ":reason": reason, ":at": at, ":by": byUser,
+          ":timedOut": "TIMED_OUT", ":resolution": resolution, ":reason": reason, ":at": at, ":by": byUser.id, ":byName": byUser.name,
         },
       } },
       { Update: {
@@ -324,6 +334,60 @@ export async function forceEndRunForIntervention(competitorId: string, runId: st
     if (error instanceof TransactionCanceledException) return false;
     throw error;
   }
+}
+
+/**
+ * Records an attempt that was consumed without the robot ever being released,
+ * so no run record exists to end: Rule 8.4(4)'s expired grace period, and a
+ * team that never presents at all (Rule 6.1(3) — the attempt still counts at
+ * the stage maximum rather than vanishing from the standings).
+ *
+ * The synthesized run is shaped exactly like a timed-out one, so scoring and
+ * the attempt budget need no special case: both already read TIMED_OUT as
+ * "consumed, worth maxTimeMs".
+ */
+export async function recordForfeitedAttempt(
+  competitorId: string, resolution: EndRunResolution, reason: string, byUser: Actor,
+): Promise<{ runId: string; maxTimeMs: number }> {
+  const competitorResult = await ddbDoc.send(new GetCommand({
+    TableName: TABLE_NAME, Key: { PK: `COMP#${competitorId}`, SK: "PROFILE" }, ConsistentRead: true,
+  }));
+  const category = competitorResult.Item?.category as string | undefined;
+  if (!category) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
+
+  const competition = await getCompetitionState();
+  const timingResult = await ddbDoc.send(new GetCommand({
+    TableName: TABLE_NAME, Key: { PK: `CONFIG#CATEGORY#${category}`, SK: "PROFILE" }, ConsistentRead: true,
+  }));
+  const minTimeMs = timingResult.Item?.minTimeMs;
+  const maxTimeMs = timingResult.Item?.stageMaxTimeMs?.[competition.activeStage] ?? timingResult.Item?.maxTimeMs;
+  if (typeof minTimeMs !== "number" || typeof maxTimeMs !== "number") {
+    throw new ApiError(409, "CONFLICT", `Category ${category} has no timing configuration for this stage`);
+  }
+
+  const [stageRuns, corrections] = await Promise.all([listRuns(competitorId), listCorrections(competitorId)]);
+  const attemptState = stageAttemptState(stageRuns, corrections, competition.activeStage);
+  if (attemptState.consumed >= ATTEMPTS_PER_ROUND) {
+    throw new ApiError(409, "CONFLICT", "Every attempt for this stage has already been consumed");
+  }
+  if (attemptState.unresolved) {
+    throw new ApiError(409, "CONFLICT", "Resolve the run still under review before consuming another attempt");
+  }
+
+  const at = new Date().toISOString();
+  const runId = `forfeit-${randomUUID()}`;
+  await ddbDoc.send(new PutCommand({
+    TableName: TABLE_NAME,
+    Item: {
+      ...runKey(competitorId, runId), runId, stage: competition.activeStage,
+      laneId: "", startDeviceTs: 0, stopDeviceTs: null, elapsedMs: null, splits: [], debounce: {},
+      status: "TIMED_OUT", minTimeMs, maxTimeMs,
+      reviewResolution: resolution, reviewReason: reason, reviewedAt: at, reviewedBy: byUser.id, reviewedByName: byUser.name,
+      createdAt: at,
+    },
+    ConditionExpression: "attribute_not_exists(PK)",
+  }));
+  return { runId, maxTimeMs };
 }
 
 /** Closes missed-STOP runs at the snapshotted maximum allowed time. */

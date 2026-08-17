@@ -1288,3 +1288,44 @@ tbody tr:hover { background: var(--sunk); }
     display: block;
   }
 }
+
+/* Competitor number entry: the `C-` is a fixed affix so operators type digits
+   only, while a badge scanner's full `C-0042` still lands correctly. */
+.competitor-id-input {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--hairline-2);
+  background: var(--surface);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.competitor-id-affix {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 14px;
+  color: var(--color-text-2);
+  font-weight: var(--weight-semibold);
+  user-select: none;
+}
+
+.competitor-id-input input {
+  border: none;
+  padding-left: 0;
+  background: transparent;
+}
+
+.competitor-id-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.competitor-id-input input:focus { box-shadow: none; }
+
+/* Rule 3.2 is checked against the typed measurement, so warn before submit. */
+.inspection-overweight {
+  color: var(--color-error);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-3);
+}
+
+.inspection-breakdown { font-family: var(--font-mono); opacity: 0.85; }

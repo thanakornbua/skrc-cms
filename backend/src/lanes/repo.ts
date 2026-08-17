@@ -9,6 +9,7 @@ import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
 import type { LaneConfigEntry, LaneRecord } from "./types.js";
 import { voidActiveRunAndResetLane } from "../runs/repo.js";
 import { getAttemptState } from "../timing/repo.js";
+import type { Actor } from "../auth/types.js";
 
 function keyLane(laneId: string) {
   return { PK: `LANE#${laneId}`, SK: "STATE" };
@@ -207,7 +208,7 @@ export async function assignLane(
   }
 }
 
-export async function armLane(laneId: string, byUser: string): Promise<LaneRecord> {
+export async function armLane(laneId: string, byUser: Actor): Promise<LaneRecord> {
   laneConfigEntry(laneId);
   try {
     const result = await ddbDoc.send(
@@ -220,7 +221,7 @@ export async function armLane(laneId: string, byUser: string): Promise<LaneRecor
         ExpressionAttributeValues: {
           ":armed": "ARMED",
           ":assigned": "ASSIGNED",
-          ":byUser": byUser,
+          ":byUser": byUser.id,
           ":at": new Date().toISOString(),
         },
         ReturnValues: "ALL_NEW",

@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { ApiError } from "../errors.js";
 import { deriveRole, extractBearerToken, verifyIdToken } from "./verifyToken.js";
 import type { Role } from "./types.js";
+import { setOperatorIdToken, usesOperatorCredentials } from "../db/credentials.js";
 
 export async function requireAuth(
   req: Request,
@@ -17,12 +18,22 @@ export async function requireAuth(
 
   try {
     const claims = await verifyIdToken(token);
+    const role = deriveRole(claims);
     req.user = {
       sub: claims.sub,
       username: claims.username,
-      role: deriveRole(claims),
+      displayName: claims.displayName,
+      role,
       competitorId: claims.competitorId,
     };
+    // On the desktop console this freshly verified staff token is also what
+    // mints the process's short-lived AWS credentials, so keep the newest one.
+    // Competitor tokens never qualify — their identity-pool role would not
+    // carry table access anyway, and storing one would only mask a real
+    // "no operator signed in" state.
+    if (usesOperatorCredentials() && (role === "committee" || role === "admin")) {
+      setOperatorIdToken(token);
+    }
     next();
   } catch {
     next(new ApiError(401, "UNAUTHORIZED", "Invalid or expired token"));

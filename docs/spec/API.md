@@ -164,8 +164,17 @@ Cognito `sub` values.
 - **Role:** staff.
 - **Response 200:** `{ "items": [ { competitorId, name, teamName, category, status, disqualified.bool } ] }` — via GSI1, `q` is a client-applied substring filter on name/team (simple `contains`, no full-text search).
 
+> **Competitor numbers.** Every `:id` path parameter is normalised to the
+> canonical `C-0042` form before any handler runs (`backend/src/competitorId.ts`,
+> installed via `router.param`). Operators may type digits only, and badge
+> scanners send the full printed `C-0042`; both resolve to the same key, as do
+> `c-14` and `C-14`. Bodies carrying a competitor number use the shared
+> `competitorIdSchema`.
+
 #### `POST /admin/competitors/:id/check-in`
-- **Role:** admin.
+- **Role:** committee (admin passes as a superset). Rule 8.1(1) places check-in
+  under general staff authority, and 8.1(2)'s admin-reserved list excludes it.
+  The path keeps its `/admin` prefix for compatibility with deployed clients.
 - **Request:** `{}`.
 - **Response 200:** `{ "status": "CHECKED_IN", "checkedInAt": "..." }`. Idempotent — repeat on already-checked-in returns current state with `"notice": "already checked in"`.
 - **Errors:** `404 NOT_FOUND`.
@@ -185,7 +194,14 @@ Cognito `sub` values.
 
 #### `POST /committee/competitors/:id/weight-inspections`
 - **Role:** committee (admin passes).
-- **Request:** `{ "inspectionId":"uuid", "stage":"CHECK_IN"|"PRE_COMPETITION", "weightGrams":2500, "result":"PASS"|"FAIL", "notes":"optional" }`.
+- **Request:** `{ "inspectionId":"uuid", "stage":"CHECK_IN"|"PRE_COMPETITION"|"ROUND_1"|"BEST_OF_4"|"BEST_OF_2"|"THE_BEST", "weightGrams":2500, "dimensionResult":"PASS"|"FAIL", "voltageResult":"PASS"|"FAIL", "notes":"optional" }`.
+  Inspection repeats before every round per Rule 3.7(1), not once per event.
+  **Neither the weight verdict nor the overall verdict is accepted from the
+  client.** The server derives `weightResult` by comparing `weightGrams` against
+  Rule 3.2's 4000 g limit (recorded as `weightLimitGrams`), and `result` is PASS
+  only when weight, dimension (Rule 3.1) and voltage (Rule 3.3) all pass — so an
+  over-weight robot cannot be recorded as passing. Dimension and voltage remain
+  inspector judgements, since neither is measurable by the system.
 - **Response 200:** `{ inspection, status, inspectedAt, duplicate }`. A passed pre-competition inspection advances to `INSPECTED` only when a passed check-in inspection exists.
 - **Errors:** `409 NOT_CHECKED_IN` before check-in; `409 CHECK_IN_INSPECTION_REQUIRED` when the pre-competition stage is attempted without a passed first weigh-in; `404 NOT_FOUND`.
 
@@ -262,6 +278,20 @@ Cognito `sub` values.
   an `UNDER_REVIEW` or `TIMED_OUT` run; time must be inside snapshotted limits.
   Admin-only per Rule 8.5(1), which reserves official time correction to
   ผู้ดูแลระบบ specifically — committee cannot call this even though it can void.
+- `POST /committee/competitors/:id/end-run` (**committee/admin**):
+  `{resolution,reason}` where `resolution` is one of `STALLED`, `FORFEIT`,
+  `GRACE_EXPIRED`, `NO_SHOW`, `OFFICIAL_STOP`, `RESTART_LIMIT`. Ends the
+  competitor's current attempt at the stage maximum and **consumes** it — the
+  opposite of `/void`, which refunds. This is the single action behind every
+  rule that ends a run without a STOP: Rule 5.3(6) fourth restart, 5.4(1)-(3)
+  stall/forfeit, 5.1(2) official stop, 8.4(4) expired grace period, and 6.1(3)
+  a team that never presented. If a run is in flight it is ended in place; if
+  the robot was never released, a run is synthesized already `TIMED_OUT` so the
+  no-show is ranked last per Rule 6.4(2) rather than being absent from the
+  standings. A no-show is explicitly **not** a disqualification: the team keeps
+  any time it had already set. Returns `409 CONFLICT` if the attempts for the
+  stage are already spent, if a run is `UNDER_REVIEW`, or if the in-flight run
+  resolved (e.g. a STOP landed) before the write.
 - `POST /admin/competitors/:id/runs/:runId/void` (**committee/admin**): `{reason}`;
   administrative void (Rule 5.5 — "เจ้าหน้าที่" broadly, not admin-only) of any
   finished run in the active stage — `COMPLETE`, `TIMED_OUT`, `INVALID`, or

@@ -6,10 +6,11 @@ import { ApiError } from "../errors.js";
 import { getCompetitionState } from "../competition/state.js";
 import type { CompetitionStage } from "../competition/types.js";
 import { getCompetitor } from "../competitors/repo.js";
-import { forceEndRunForIntervention, listRuns } from "../runs/repo.js";
-import type { RunRecord } from "../runs/types.js";
+import { endRunAtMaxTime, listRuns, recordForfeitedAttempt } from "../runs/repo.js";
+import type { EndRunResolution, RunRecord } from "../runs/types.js";
 import type { AppliedPenalty, CategoryTiming, PenaltyRule, TimeCorrection, TimeResult } from "./types.js";
 import { consumedStageBudgetMs } from "./budget.js";
+import type { Actor } from "../auth/types.js";
 
 const categoryKey = (category: string) => ({ PK: `CONFIG#CATEGORY#${category}`, SK: "PROFILE" });
 const ruleKey = (ruleId: string) => ({ PK: `CONFIG#PENALTY#${ruleId}`, SK: "PROFILE" });
@@ -34,22 +35,17 @@ export function stageMaximum(timing: CategoryTiming, stage: CompetitionStage): n
   return timing.stageMaxTimeMs?.[stage] ?? timing.maxTimeMs;
 }
 
-export function stageAttemptMaximum(timing: CategoryTiming, stage: CompetitionStage): number {
-  return timing.stageMaxAttempts?.[stage] ?? 3;
-}
-
 export async function putCategoryTiming(
   category: string,
   minTimeMs: number,
   stageMaxTimeMs: Record<CompetitionStage, number>,
-  stageMaxAttempts: Record<CompetitionStage, number>,
-  byUser: string
+  byUser: Actor
 ): Promise<CategoryTiming> {
   const item: CategoryTiming & { PK: string; SK: string } = {
     ...categoryKey(category), category, minTimeMs,
     // Retained for old clients/readers; Round 1 is the migration fallback.
-    maxTimeMs: stageMaxTimeMs.ROUND_1, stageMaxTimeMs, stageMaxAttempts,
-    updatedAt: new Date().toISOString(), updatedBy: byUser,
+    maxTimeMs: stageMaxTimeMs.ROUND_1, stageMaxTimeMs,
+    updatedAt: new Date().toISOString(), updatedBy: byUser.id, updatedByName: byUser.name,
   };
   await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
   return item;
@@ -64,17 +60,17 @@ export async function listPenaltyRules(): Promise<PenaltyRule[]> {
   return ((result.Items ?? []) as PenaltyRule[]).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export async function createPenaltyRule(label: string, penaltyMs: number, byUser: string, kind?: "INTERVENTION"): Promise<PenaltyRule> {
+export async function createPenaltyRule(label: string, penaltyMs: number, byUser: Actor, kind?: "INTERVENTION"): Promise<PenaltyRule> {
   const ruleId = randomUUID();
   const item: PenaltyRule & { PK: string; SK: string } = {
     ...ruleKey(ruleId), ruleId, label, penaltyMs, active: true, ...(kind ? { kind } : {}),
-    updatedAt: new Date().toISOString(), updatedBy: byUser,
+    updatedAt: new Date().toISOString(), updatedBy: byUser.id, updatedByName: byUser.name,
   };
   await ddbDoc.send(new PutCommand({ TableName: TABLE_NAME, Item: item, ConditionExpression: "attribute_not_exists(PK)" }));
   return item;
 }
 
-export async function updatePenaltyRule(ruleId: string, input: { label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }, byUser: string): Promise<PenaltyRule> {
+export async function updatePenaltyRule(ruleId: string, input: { label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }, byUser: Actor): Promise<PenaltyRule> {
   const result = await ddbDoc.send(new UpdateCommand({
     TableName: TABLE_NAME, Key: ruleKey(ruleId),
     UpdateExpression: input.kind
@@ -84,7 +80,7 @@ export async function updatePenaltyRule(ruleId: string, input: { label: string; 
     ExpressionAttributeValues: {
       ":label": input.label, ":penalty": input.penaltyMs, ":active": input.active,
       ...(input.kind ? { ":kind": input.kind } : {}),
-      ":at": new Date().toISOString(), ":by": byUser,
+      ":at": new Date().toISOString(), ":by": byUser.id, ":byName": byUser.name,
     },
     ReturnValues: "ALL_NEW",
   }));
@@ -101,7 +97,7 @@ export async function listAppliedPenalties(competitorId: string): Promise<Applie
   return (result.Items ?? []) as AppliedPenalty[];
 }
 
-export async function applyPenalty(competitorId: string, ruleId: string, byUser: string, runId?: string): Promise<AppliedPenalty> {
+export async function applyPenalty(competitorId: string, ruleId: string, byUser: Actor, runId?: string): Promise<AppliedPenalty> {
   if (!(await getCompetitor(competitorId))) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   const result = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: ruleKey(ruleId), ConsistentRead: true }));
   const rule = result.Item as PenaltyRule | undefined;
@@ -111,7 +107,7 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
   const stage = (await getCompetitionState()).activeStage;
   const item: AppliedPenalty & { PK: string } = {
     PK: `COMP#${competitorId}`, SK: `PENALTY#${at}#${ruleId}`,
-    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser, at, stage, ...(runId ? { runId } : {}),
+    ruleId, label: rule.label, penaltyMs: rule.penaltyMs, byUser: byUser.id, byUserName: byUser.name, at, stage, ...(runId ? { runId } : {}),
   };
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: [
@@ -137,13 +133,13 @@ export async function applyPenalty(competitorId: string, ruleId: string, byUser:
     const applied = await listAppliedPenalties(competitorId);
     const occurrences = applied.filter((entry) => entry.ruleId === ruleId && entry.runId === runId && !entry.revocation).length;
     if (occurrences >= 3) {
-      await forceEndRunForIntervention(competitorId, runId, `Ended by the third unauthorized intervention (${rule.label})`, byUser);
+      await endRunAtMaxTime(competitorId, runId, "INTERVENTION_LIMIT", `Ended by the third unauthorized intervention (${rule.label})`, byUser);
     }
   }
   return item;
 }
 
-export async function revokePenalty(competitorId: string, penaltySk: string, reason: string, byUser: string): Promise<AppliedPenalty> {
+export async function revokePenalty(competitorId: string, penaltySk: string, reason: string, byUser: Actor): Promise<AppliedPenalty> {
   try {
     const result = await ddbDoc.send(new UpdateCommand({
       TableName: TABLE_NAME, Key: { PK: `COMP#${competitorId}`, SK: penaltySk },
@@ -179,7 +175,7 @@ export async function listCorrections(competitorId: string): Promise<TimeCorrect
   return (result.Items ?? []) as TimeCorrection[];
 }
 
-export async function correctRun(competitorId: string, runId: string, elapsedMs: number, reason: string, byUser: string): Promise<TimeCorrection> {
+export async function correctRun(competitorId: string, runId: string, elapsedMs: number, reason: string, byUser: Actor): Promise<TimeCorrection> {
   const result = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
   const run = result.Item as RunRecord | undefined;
   if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");
@@ -190,7 +186,7 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
     throw new ApiError(400, "VALIDATION_ERROR", "Corrected time must be within the run's snapshotted limits");
   }
   const item: TimeCorrection & { PK: string; SK: string } = {
-    ...correctionKey(competitorId, runId), runId, elapsedMs, reason, byUser,
+    ...correctionKey(competitorId, runId), runId, elapsedMs, reason, byUser: byUser.id, byUserName: byUser.name,
     at: new Date().toISOString(), stage: run.stage ?? "ROUND_1",
   };
   try {
@@ -237,7 +233,7 @@ export async function correctRun(competitorId: string, runId: string, elapsedMs:
   return item;
 }
 
-export async function resolveUnderReview(competitorId: string, runId: string, decision: "consume" | "void", reason: string, byUser: string): Promise<void> {
+export async function resolveUnderReview(competitorId: string, runId: string, decision: "consume" | "void", reason: string, byUser: Actor): Promise<void> {
   const runResult = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
   const run = runResult.Item as RunRecord | undefined;
   if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");
@@ -267,6 +263,40 @@ export async function resolveUnderReview(competitorId: string, runId: string, de
 }
 
 /**
+ * Ends a competitor's current attempt at the stage maximum, consuming it.
+ *
+ * Covers both shapes the rules produce. If a run is in flight it is ended in
+ * place (Rules 5.3(6), 5.4, 5.1(2)). If the robot was never released there is
+ * no run to end, so one is synthesized as already timed out (Rules 8.4(4) and
+ * 6.1(3)) — otherwise a no-show would simply be absent from the standings
+ * instead of ranked last, which is what Rule 6.4(2) requires.
+ *
+ * Never a void: a void refunds the attempt, and every situation here is one the
+ * rules say the team must be charged for.
+ */
+export async function endAttemptAtMaxTime(
+  competitorId: string, resolution: EndRunResolution, reason: string, byUser: Actor,
+): Promise<{ runId: string; status: "TIMED_OUT"; resolution: EndRunResolution; consumedExistingRun: boolean }> {
+  const runs = await listRuns(competitorId);
+  const activeStage = (await getCompetitionState()).activeStage;
+  const inFlight = runs.find((run) => (run.stage ?? "ROUND_1") === activeStage && run.status === undefined);
+
+  if (inFlight) {
+    const ended = await endRunAtMaxTime(competitorId, inFlight.runId, resolution, reason, byUser);
+    if (!ended) {
+      // The run resolved on its own between the read and the write — most
+      // likely a STOP arrived. Report the conflict rather than silently
+      // charging a second attempt for the same event.
+      throw new ApiError(409, "CONFLICT", "The run finished before it could be ended; re-check the result");
+    }
+    return { runId: inFlight.runId, status: "TIMED_OUT", resolution, consumedExistingRun: true };
+  }
+
+  const created = await recordForfeitedAttempt(competitorId, resolution, reason, byUser);
+  return { runId: created.runId, status: "TIMED_OUT", resolution, consumedExistingRun: false };
+}
+
+/**
  * Administrative void of an already-finished run (Rule 5.5 — only officials may
  * declare a run VOID). Unlike `resolveUnderReview`, this covers any terminal run,
  * not just ones flagged UNDER_REVIEW — e.g. a completed run later found to be
@@ -278,7 +308,7 @@ export async function resolveUnderReview(competitorId: string, runId: string, de
  * committee flagging a run and admin subsequently calling `/redo` never race
  * each other into a spurious 409.
  */
-export async function voidRun(competitorId: string, runId: string, reason: string, byUser: string): Promise<void> {
+export async function voidRun(competitorId: string, runId: string, reason: string, byUser: Actor): Promise<void> {
   const runResult = await ddbDoc.send(new GetCommand({ TableName: TABLE_NAME, Key: runKey(competitorId, runId), ConsistentRead: true }));
   const run = runResult.Item as RunRecord | undefined;
   if (!run) throw new ApiError(404, "NOT_FOUND", "Run not found");

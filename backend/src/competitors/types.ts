@@ -4,6 +4,8 @@ export interface DisqualifiedInfo {
   bool: boolean;
   reason: string | null;
   byUser: string | null;
+  /** Denormalised display name of `byUser`, so the record reads without a lookup. */
+  byUserName?: string | null;
   at: string | null;
 }
 

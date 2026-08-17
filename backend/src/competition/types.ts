@@ -85,7 +85,9 @@ export interface CompetitionState {
   brackets?: CompetitionBracket[];
   concludedAt?: string;
   concludedBy?: string;
+  concludedByName?: string;
   results?: CategoryStageResults[];
   updatedAt?: string;
   updatedBy?: string;
+  updatedByName?: string;
 }

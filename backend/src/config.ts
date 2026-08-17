@@ -11,6 +11,10 @@ export const config = {
   dynamoTable: process.env.DYNAMO_TABLE ?? "robo-compet",
   port: Number(process.env.PORT ?? 3000),
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
+  // Set only on the packaged desktop console, where there is no execution role
+  // and the operator's Cognito sign-in supplies short-lived AWS credentials.
+  // Unset in Lambda, which keeps the default credential chain.
+  cognitoIdentityPoolId: process.env.COGNITO_IDENTITY_POOL_ID?.trim() || null,
   get cognitoUserPoolId(): string {
     return required("COGNITO_USER_POOL_ID");
   },

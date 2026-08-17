@@ -13,7 +13,13 @@ const clientId = process.env.COGNITO_CLIENT_ID;
 const amplifyAppId = process.env.AMPLIFY_APP_ID;
 const amplifyBranch = process.env.AMPLIFY_BRANCH ?? "main";
 const amplifyRegion = process.env.AMPLIFY_REGION ?? "ap-southeast-1";
-const corsOrigin = process.env.CORS_ORIGIN ?? "*";
+/** Comma-separated, matching create-regweek.ts — the admin console is reached
+ *  from the custom domain, the Amplify default domain, and localhost in dev. */
+const corsOrigins = (process.env.CORS_ORIGIN ?? "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+if (corsOrigins.length === 0) throw new Error("CORS_ORIGIN must contain at least one origin");
 if (!poolId || !clientId || !amplifyAppId) throw new Error("COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID, and AMPLIFY_APP_ID are required");
 
 const functionName = `${prefix}-control-plane`;
@@ -57,7 +63,7 @@ async function functionArn(roleArn: string): Promise<string> {
   throw new Error("unreachable");
 }
 async function httpApi(target: string): Promise<{ id: string; endpoint: string }> {
-  const cors = { AllowOrigins: [corsOrigin], AllowMethods: ["GET", "POST"], AllowHeaders: ["authorization", "content-type"], MaxAge: 300 };
+  const cors = { AllowOrigins: corsOrigins, AllowMethods: ["GET", "POST"], AllowHeaders: ["authorization", "content-type"], MaxAge: 300 };
   const existing = (await api.send(new GetApisCommand({}))).Items?.find((item) => item.Name === apiName);
   const apiId = existing?.ApiId;
   const endpoint = existing?.ApiEndpoint;

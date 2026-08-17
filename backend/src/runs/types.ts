@@ -1,3 +1,16 @@
+/**
+ * Why a run ended at the stage maximum instead of at a STOP. Each value maps to
+ * the rule that requires the attempt to be consumed rather than refunded.
+ */
+export type EndRunResolution =
+  | "INTERVENTION_LIMIT"
+  | "RESTART_LIMIT"
+  | "STALLED"
+  | "FORFEIT"
+  | "GRACE_EXPIRED"
+  | "NO_SHOW"
+  | "OFFICIAL_STOP";
+
 export interface RunSplit {
   gateId: string;
   deviceTs: number;
@@ -21,10 +34,11 @@ export interface RunRecord {
   status?: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW" | "INVALID" | "VOID";
   minTimeMs: number;
   maxTimeMs: number;
-  reviewResolution?: "CONSUME" | "VOID" | "CORRECTED" | "ADMIN_VOID" | "INTERVENTION_LIMIT";
+  reviewResolution?: "CONSUME" | "VOID" | "CORRECTED" | "ADMIN_VOID" | EndRunResolution;
   reviewReason?: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  reviewedByName?: string;
   createdAt: string;
 }
 

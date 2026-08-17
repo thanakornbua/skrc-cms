@@ -48,6 +48,8 @@ async function loadRuntimeConfiguration(): Promise<string> {
   Object.assign(process.env, parseEnvFile(await readFile(selected, "utf8")));
   process.env.PORT = String(APP_PORT);
   process.env.CORS_ORIGIN ||= `http://127.0.0.1:${APP_PORT}`;
+  // Credentials come from the operator's Cognito sign-in (see
+  // backend/src/db/credentials.ts), not from a profile or a key on disk.
   process.env.AWS_SDK_LOAD_CONFIG = "1";
   return selected;
 }
@@ -143,6 +145,13 @@ async function startServices(): Promise<void> {
       }
     } finally { draining = false; }
   };
+  // Gate events are persisted before delivery, so a network drop never loses a
+  // time. Draining only on the next serial line, though, would leave a backlog
+  // sitting on disk once connectivity returned — a lane that finished during
+  // the outage would stay unrecorded until the next robot crossed the sensor.
+  const drainTimer = setInterval(() => { void drain(); }, 5000);
+  drainTimer.unref(); timers.push(drainTimer);
+
   const onLine = async (line: string) => {
     const parsed = unoCore.parseUnoLine(line, Math.floor(performance.now()) >>> 0);
     if (!parsed || parsed.command === "CLEAR") return;

@@ -12,8 +12,14 @@ import { getCompetitionState, isEligibleForStage } from "../competition/state.js
 import { scoreCompetitorStage } from "../competition/scoring.js";
 import type { StageRankedResult } from "../competition/types.js";
 import { listWeightInspections } from "../inspections/repo.js";
+import { competitorIdParam } from "../competitorId.js";
+import { actorOf } from "../auth/types.js";
 
 export const competitorsRouter = Router();
+
+// Every `:id` on this router is a competitor number; accept scanned/typed
+// variants like `c-14` and resolve them to the canonical `C-0014`.
+competitorsRouter.param("id", competitorIdParam);
 
 competitorsRouter.get(
   "/competitors/:id",
@@ -133,13 +139,15 @@ competitorsRouter.get(
   }
 );
 
+// Rule 8.1(1) puts check-in under general staff authority, and 8.1(2)'s
+// admin-reserved list does not include it. Admin passes requireRole("committee").
 competitorsRouter.post(
   "/admin/competitors/:id/check-in",
   requireAuth,
-  requireRole("admin"),
+  requireRole("committee"),
   async (req, res, next) => {
     try {
-      const result = await checkIn(req.params.id, req.user!.username);
+      const result = await checkIn(req.params.id, actorOf(req.user!));
       res.status(200).json({
         status: result.status,
         checkedInAt: result.checkedInAt,
@@ -201,7 +209,7 @@ competitorsRouter.post(
 
       await requestPasswordReset(competitor.cognitoSub);
       const requestedAt = new Date().toISOString();
-      await recordPasswordResetRequest(competitor.competitorId, req.user!.username, requestedAt);
+      await recordPasswordResetRequest(competitor.competitorId, actorOf(req.user!), requestedAt);
       res.status(202).json({ status: "RESET_CODE_SENT", requestedAt });
     } catch (error) {
       next(error);
@@ -215,7 +223,7 @@ competitorsRouter.post("/committee/competitors/:id/disqualify", requireAuth, req
   try {
     const parsed = reasonSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "reason is required", zodToFields(parsed.error));
-    const { bool, reason, at } = await disqualifyCompetitor(req.params.id, parsed.data.reason, req.user!.username);
+    const { bool, reason, at } = await disqualifyCompetitor(req.params.id, parsed.data.reason, actorOf(req.user!));
     res.status(200).json({ disqualified: { bool, reason, at } });
   } catch (error) { next(error); }
 });
@@ -224,7 +232,7 @@ competitorsRouter.post("/admin/competitors/:id/reinstate", requireAuth, requireR
   try {
     const parsed = reasonSchema.safeParse(req.body);
     if (!parsed.success) throw new ApiError(400, "VALIDATION_ERROR", "reason is required", zodToFields(parsed.error));
-    await reinstateCompetitor(req.params.id, parsed.data.reason, req.user!.username);
+    await reinstateCompetitor(req.params.id, parsed.data.reason, actorOf(req.user!));
     res.status(200).json({ disqualified: { bool: false } });
   } catch (error) { next(error); }
 });

@@ -4,14 +4,16 @@ import { GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from "@aws
 import { ddbDoc, TABLE_NAME } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { getCompetitor } from "../competitors/repo.js";
-import type { InspectionResult, InspectionStage, WeightInspectionRecord } from "./types.js";
-import { advancesToInspected, requiresPassedCheckIn } from "./workflow.js";
+import { MAX_ROBOT_WEIGHT_GRAMS, type InspectionResult, type InspectionStage, type WeightInspectionRecord } from "./types.js";
+import { advancesToInspected, overallInspectionResult, requiresPassedCheckIn, weightResultFor } from "./workflow.js";
+import type { Actor } from "../auth/types.js";
 
 export interface RecordWeightInspectionInput {
   inspectionId?: string;
   stage: InspectionStage;
   weightGrams: number;
-  result: InspectionResult;
+  dimensionResult: InspectionResult;
+  voltageResult: InspectionResult;
   notes?: string;
 }
 
@@ -46,13 +48,21 @@ async function existingInspection(
 export async function recordWeightInspection(
   competitorId: string,
   input: RecordWeightInspectionInput,
-  byUser: string
+  byUser: Actor
 ): Promise<{ inspection: WeightInspectionRecord; status: string; inspectedAt: string | null; duplicate: boolean }> {
   const competitor = await getCompetitor(competitorId);
   if (!competitor) throw new ApiError(404, "NOT_FOUND", "Competitor not found");
   if (competitor.status === "REGISTERED") {
     throw new ApiError(409, "NOT_CHECKED_IN", "Competitor must check in before weighing");
   }
+
+  // Rule 3.2 is checked against the measurement rather than left to the
+  // inspector's button press; 3.1 and 3.3 stay human judgements. The overall
+  // verdict is the conjunction, so an over-weight robot cannot be passed.
+  const weightResult = weightResultFor(input.weightGrams);
+  const result = overallInspectionResult({
+    weightResult, dimensionResult: input.dimensionResult, voltageResult: input.voltageResult,
+  });
 
   const inspectionId = input.inspectionId ?? randomUUID();
   const key = inspectionKey(competitorId, input.stage, inspectionId);
@@ -62,9 +72,14 @@ export async function recordWeightInspection(
     competitorId,
     stage: input.stage,
     weightGrams: input.weightGrams,
-    result: input.result,
+    weightResult,
+    weightLimitGrams: MAX_ROBOT_WEIGHT_GRAMS,
+    dimensionResult: input.dimensionResult,
+    voltageResult: input.voltageResult,
+    result,
     notes: input.notes?.trim() || null,
-    byUser,
+    byUser: byUser.id,
+    byUserName: byUser.name,
     at: new Date().toISOString(),
   };
 
@@ -81,7 +96,7 @@ export async function recordWeightInspection(
     }
   }
 
-  const shouldAdvance = advancesToInspected(competitor.status, input.stage, input.result, checkInPassed);
+  const shouldAdvance = advancesToInspected(competitor.status, input.stage, result, checkInPassed);
 
   try {
     if (shouldAdvance) {
@@ -116,7 +131,9 @@ export async function recordWeightInspection(
     if (error instanceof ConditionalCheckFailedException || error instanceof TransactionCanceledException) {
       const duplicate = await existingInspection(competitorId, input.stage, inspectionId);
       if (duplicate) {
-        if (duplicate.weightGrams !== input.weightGrams || duplicate.result !== input.result ||
+        if (duplicate.weightGrams !== input.weightGrams || duplicate.result !== result ||
+            duplicate.dimensionResult !== input.dimensionResult ||
+            duplicate.voltageResult !== input.voltageResult ||
             duplicate.notes !== (input.notes?.trim() || null)) {
           throw new ApiError(409, "IDEMPOTENCY_CONFLICT", "inspectionId was already used with different values");
         }

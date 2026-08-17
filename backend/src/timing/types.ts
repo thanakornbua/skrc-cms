@@ -6,10 +6,9 @@ export interface CategoryTiming {
   /** Legacy fallback retained while old configurations are migrated. */
   maxTimeMs: number;
   stageMaxTimeMs?: Record<CompetitionStage, number>;
-  /** Maximum consumed attempts allowed independently in each stage. */
-  stageMaxAttempts?: Record<CompetitionStage, number>;
   updatedAt: string;
   updatedBy: string;
+  updatedByName?: string;
 }
 
 export interface PenaltyRule {
@@ -26,6 +25,7 @@ export interface PenaltyRule {
   kind?: "INTERVENTION";
   updatedAt: string;
   updatedBy: string;
+  updatedByName?: string;
 }
 
 export interface AppliedPenalty {
@@ -34,11 +34,12 @@ export interface AppliedPenalty {
   label: string;
   penaltyMs: number;
   byUser: string;
+  byUserName?: string;
   at: string;
   stage?: CompetitionStage;
   /** The run this occurrence happened during, when applied while a run was active. Required to count Rule 7.3(3)'s per-attempt intervention limit. */
   runId?: string;
-  revocation?: { reason: string; byUser: string; at: string };
+  revocation?: { reason: string; byUser: string; byUserName?: string; at: string };
 }
 
 export interface TimeCorrection {
@@ -46,6 +47,7 @@ export interface TimeCorrection {
   elapsedMs: number;
   reason: string;
   byUser: string;
+  byUserName?: string;
   at: string;
   stage?: CompetitionStage;
 }

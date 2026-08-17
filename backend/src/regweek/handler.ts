@@ -29,6 +29,7 @@ import {
   resetManagedUserPassword,
   updateManagedUser,
 } from "./cognito.js";
+import { optionalCompetitorIdSchema } from "../competitorId.js";
 
 export const PDPA_CONSENT_VERSION = "2026-08-01-v3";
 
@@ -122,10 +123,10 @@ const rejectSchema = z.object({
 });
 
 const managedUserRole = z.enum(["competitor", "committee", "admin"]);
-const managedCompetitorId = z.union([
-  z.literal(""),
-  z.string().trim().min(2).max(80).regex(/^[A-Za-z0-9_-]+$/, "Invalid competitor ID"),
-]).optional().default("");
+// A bad value here is written to Cognito `custom:competitorId`, which is what
+// the self-access checks compare against — so it must be the canonical form,
+// not any loosely-shaped identifier.
+const managedCompetitorId = optionalCompetitorIdSchema;
 
 export const createManagedUserSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(254),

@@ -3,7 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p .",
     "create-table": "tsx src/create-table.ts",
@@ -11,6 +13,7 @@
     "create-auth-email": "tsx src/create-auth-email.ts",
     "create-rehearsal-role": "tsx src/create-rehearsal-role.ts",
     "create-control-plane": "tsx src/create-control-plane.ts",
+    "create-desktop-identity-pool": "tsx src/create-desktop-identity-pool.ts",
     "switch-amplify-mode": "tsx src/switch-amplify-mode.ts",
     "bootstrap-staff": "tsx src/bootstrap-staff.ts",
     "create-regweek": "tsx src/create-regweek.ts",
@@ -32,6 +35,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-apigatewayv2": "^3.700.0",
+    "@aws-sdk/client-cognito-identity": "^3.1111.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.700.0",
     "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/client-iam": "^3.700.0",

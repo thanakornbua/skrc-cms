@@ -47,6 +47,8 @@ function getVerifier() {
 export interface VerifiedClaims {
   sub: string;
   username: string;
+  /** Human-readable name for the audit trail; falls back to email, then username. */
+  displayName: string;
   email: string | undefined;
   groups: string[];
   competitorId: string | null;
@@ -59,7 +61,10 @@ export async function verifyIdToken(token: string): Promise<VerifiedClaims> {
     (payload["custom:competitorId"] as string | undefined) ?? null;
   const username = (payload["cognito:username"] as string | undefined) ?? payload.sub;
   const email = payload["email"] as string | undefined;
-  return { sub: payload.sub, username, email, groups, competitorId };
+  // Staff accounts carry `name`; competitor accounts may not, so degrade to
+  // something a human can still recognise rather than storing a bare UUID.
+  const displayName = (payload["name"] as string | undefined)?.trim() || email || username;
+  return { sub: payload.sub, username, displayName, email, groups, competitorId };
 }
 
 export function deriveRole(claims: VerifiedClaims): Role {

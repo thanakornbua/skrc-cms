@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { ApiClientError, ec2Json } from "../api";
 import BrandHeader from "../components/BrandHeader";
@@ -6,15 +6,24 @@ import LoadingScreen from "../components/LoadingScreen";
 import LoginGate from "../components/LoginGate";
 import NavBar from "../components/NavBar";
 import { t } from "../i18n";
+import CompetitorIdInput from "../components/CompetitorIdInput";
+import { normaliseCompetitorId } from "../competitorId";
 
 type Role = "admin" | "committee" | "competitor";
 type CompetitorStatus = "REGISTERED" | "CHECKED_IN" | "INSPECTED" | "RUN_COMPLETE";
-type InspectionStage = "CHECK_IN" | "PRE_COMPETITION";
+type InspectionStage = "CHECK_IN" | "PRE_COMPETITION" | "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
+
+/** Rule 3.2 — shown so the inspector can see what the measurement is judged against. */
+const MAX_ROBOT_WEIGHT_GRAMS = 4000;
 
 interface WeightInspection {
   inspectionId: string;
   stage: InspectionStage;
   weightGrams: number;
+  weightResult: "PASS" | "FAIL";
+  weightLimitGrams: number;
+  dimensionResult: "PASS" | "FAIL";
+  voltageResult: "PASS" | "FAIL";
   result: "PASS" | "FAIL";
   notes: string | null;
   at: string;
@@ -50,10 +59,20 @@ interface Lane {
 }
 
 const CAMERA_READER_ID = "committee-scan-camera-reader";
+// Rule 3.7(1): inspection is a standing power, so the robot is re-checked
+// before each round rather than only once at the start of the day.
 const STAGES: Array<{ key: InspectionStage; title: string; description: string }> = [
-  { key: "CHECK_IN", title: "ชั่งน้ำหนักเมื่อเช็คอิน · Check-in weigh-in", description: "บันทึกน้ำหนักครั้งแรกเมื่อทีมมาถึง" },
-  { key: "PRE_COMPETITION", title: "ชั่งน้ำหนักก่อนแข่งขัน · Pre-competition weigh-in", description: "ยืนยันน้ำหนักอีกครั้งก่อนจัดทีมลงสนาม" },
+  { key: "CHECK_IN", title: "ตรวจสภาพเมื่อเช็คอิน · Check-in inspection", description: "ตรวจครั้งแรกเมื่อทีมมาถึง" },
+  { key: "PRE_COMPETITION", title: "ตรวจสภาพก่อนแข่งขัน · Pre-competition inspection", description: "ยืนยันอีกครั้งก่อนจัดทีมลงสนาม" },
+  { key: "ROUND_1", title: "ก่อนรอบคัดเลือก · Before qualifying", description: "ตรวจซ้ำก่อนเริ่มรอบคัดเลือก" },
+  { key: "BEST_OF_4", title: "ก่อนรอบ 8 ทีม · Before quarterfinals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
+  { key: "BEST_OF_2", title: "ก่อนรอบรองชนะเลิศ · Before semifinals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
+  { key: "THE_BEST", title: "ก่อนรอบชิงชนะเลิศ · Before finals", description: "ตรวจซ้ำก่อนเริ่มรอบ" },
 ];
+
+const EMPTY_BY_STAGE: Record<InspectionStage, string> = {
+  CHECK_IN: "", PRE_COMPETITION: "", ROUND_1: "", BEST_OF_4: "", BEST_OF_2: "", THE_BEST: "",
+};
 
 const STATUS_BADGE: Record<CompetitorStatus, string> = {
   REGISTERED: "warning", CHECKED_IN: "success", INSPECTED: "", RUN_COMPLETE: "",
@@ -71,8 +90,8 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
   const [role, setRole] = useState<Role>("competitor");
   const [inputValue, setInputValue] = useState("");
   const [card, setCard] = useState<CompetitorCard | null>(null);
-  const [weights, setWeights] = useState<Record<InspectionStage, string>>({ CHECK_IN: "", PRE_COMPETITION: "" });
-  const [notes, setNotes] = useState<Record<InspectionStage, string>>({ CHECK_IN: "", PRE_COMPETITION: "" });
+  const [weights, setWeights] = useState<Record<InspectionStage, string>>({ ...EMPTY_BY_STAGE });
+  const [notes, setNotes] = useState<Record<InspectionStage, string>>({ ...EMPTY_BY_STAGE });
   const [hardware, setHardware] = useState<HardwareDevice[]>([]);
   const [lanes, setLanes] = useState<Lane[]>([]);
   const [assignValues, setAssignValues] = useState<Record<string, string>>({});
@@ -101,7 +120,7 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
   }, []);
 
   async function lookup(competitorId: string): Promise<void> {
-    const id = competitorId.trim().toUpperCase();
+    const id = normaliseCompetitorId(competitorId);
     if (!id) return;
     setLookupError(null); setToast(null);
     try { setCard(await ec2Json<CompetitorCard>(`/competitors/${encodeURIComponent(id)}`)); }
@@ -113,12 +132,8 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     } finally { setInputValue(""); inputRef.current?.focus(); }
   }
 
-  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key === "Enter") { event.preventDefault(); lookup(inputValue); }
-  }
-
   async function checkIn(): Promise<void> {
-    if (!card || role !== "admin") return;
+    if (!card || (role !== "committee" && role !== "admin")) return;
     setBusy(true); setLookupError(null);
     try {
       await ec2Json(`/admin/competitors/${encodeURIComponent(card.competitorId)}/check-in`, { method: "POST", body: "{}" }, { retryNetwork: true });
@@ -128,7 +143,16 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     finally { setBusy(false); }
   }
 
-  async function submitWeight(stage: InspectionStage, result: "PASS" | "FAIL"): Promise<void> {
+  /**
+   * The weight verdict is not sent: the server derives it from the measurement
+   * against Rule 3.2's 4000 g limit, and the overall verdict is the conjunction
+   * of all three checks. Dimension (3.1) and voltage (3.3) stay inspector calls.
+   */
+  async function submitInspection(
+    stage: InspectionStage,
+    dimensionResult: "PASS" | "FAIL",
+    voltageResult: "PASS" | "FAIL",
+  ): Promise<void> {
     if (!card) return;
     const weightGrams = Number(weights[stage]);
     if (!Number.isFinite(weightGrams) || weightGrams <= 0) {
@@ -137,17 +161,17 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     }
     setBusy(true); setLookupError(null);
     try {
-      await ec2Json(`/committee/competitors/${encodeURIComponent(card.competitorId)}/weight-inspections`, {
+      const saved = await ec2Json<{ inspection: WeightInspection }>(`/committee/competitors/${encodeURIComponent(card.competitorId)}/weight-inspections`, {
         method: "POST",
         body: JSON.stringify({
-          inspectionId: crypto.randomUUID(), stage, weightGrams, result,
+          inspectionId: crypto.randomUUID(), stage, weightGrams, dimensionResult, voltageResult,
           notes: notes[stage].trim() || undefined,
         }),
       }, { retryNetwork: true });
       setWeights((current) => ({ ...current, [stage]: "" }));
       setNotes((current) => ({ ...current, [stage]: "" }));
       await lookup(card.competitorId);
-      setToast(result === "PASS"
+      setToast(saved.inspection.result === "PASS"
         ? t("บันทึกผลผ่านการตรวจแล้ว", "Passing inspection recorded.")
         : t("บันทึกผลไม่ผ่านแล้ว สามารถตรวจซ้ำได้", "Failed inspection recorded; reinspection remains available."));
     } catch (error) { setLookupError(error instanceof Error ? error.message : "Inspection failed"); }
@@ -190,8 +214,6 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
     finally { setBusy(false); }
   }
 
-  const checkInInspection = card ? latestInspection(card.weightInspections, "CHECK_IN") : null;
-  const preCompetitionInspection = card ? latestInspection(card.weightInspections, "PRE_COMPETITION") : null;
   const checkInPassed = card?.weightInspections.some((item) => item.stage === "CHECK_IN" && item.result === "PASS") ?? false;
 
   return <div className="page page-wide competition-console">
@@ -217,9 +239,8 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
       <div className="card scan-console">
         <span className="section-kicker">{t("ค้นหาทีม", "Team lookup")}</span>
         <div className="scan-input-row">
-          <div className="field"><label htmlFor={inputId}>{t("สแกนหรือกรอกหมายเลขผู้เข้าแข่งขัน", "Competitor ID")}</label>
-            <input id={inputId} ref={inputRef} className="technical" value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleInputKeyDown} autoFocus placeholder="C-0042" />
-          </div>
+          <CompetitorIdInput id={inputId} inputRef={inputRef} label={t("สแกนหรือกรอกหมายเลขผู้เข้าแข่งขัน", "Competitor ID")}
+            value={inputValue} onChange={setInputValue} onEnter={() => lookup(inputValue)} autoFocus />
           <button className="secondary scan-camera-btn" type="button" onClick={cameraActive ? stopCamera : startCamera}>{cameraActive ? t("หยุดกล้อง", "Stop camera") : t("ใช้กล้อง", "Use camera")}</button>
         </div>
         <p className="scan-hint">{t("สแกนคิวอาร์หรือพิมพ์หมายเลขแล้วกด Enter", "Scan the QR or type an ID, then press Enter")}</p>
@@ -232,23 +253,37 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
 
         {card.status === "REGISTERED" && <div className="inspection-gate">
           <p>{t("ทีมผ่านการอนุมัติแล้ว แต่ยังไม่ได้เช็คอิน", "Approved team awaiting check-in.")}</p>
-          {role === "admin" ? <button type="button" onClick={checkIn}>{t("เช็คอินทีม", "Check in team")}</button> : <div className="warning-banner">{t("ต้องให้ผู้ดูแลระบบเช็คอินก่อน", "An administrator must check this team in.")}</div>}
+          {role === "committee" || role === "admin" ? <button type="button" onClick={checkIn}>{t("เช็คอินทีม", "Check in team")}</button> : <div className="warning-banner">{t("ต้องให้กรรมการเช็คอินก่อน", "A committee member must check this team in.")}</div>}
         </div>}
 
         {card.status !== "REGISTERED" && <div className="inspection-stage-grid">
           {STAGES.map((stage, index) => {
-            const latest = stage.key === "CHECK_IN" ? checkInInspection : preCompetitionInspection;
+            const latest = latestInspection(card.weightInspections, stage.key);
             const enabled = stage.key === "CHECK_IN" || checkInPassed;
+            const typedWeight = Number(weights[stage.key]);
+            const overWeight = Number.isFinite(typedWeight) && typedWeight > MAX_ROBOT_WEIGHT_GRAMS;
             const completed = latest?.result === "PASS";
             return <section className="inspection-stage" data-complete={completed} key={stage.key}>
               <header><span className="inspection-step">{index + 1}</span><div><h3>{stage.title}</h3><p>{stage.description}</p></div></header>
               {latest && <div className={`inspection-reading ${latest.result === "PASS" ? "success" : "error"}`}>
-                <strong>{(latest.weightGrams / 1000).toFixed(3)} kg</strong><span>{latest.result} · {dateTime(latest.at)}</span>{latest.notes && <small>{latest.notes}</small>}
+                <strong>{(latest.weightGrams / 1000).toFixed(3)} kg</strong><span>{latest.result} · {dateTime(latest.at)}</span>
+                <small className="inspection-breakdown">
+                  {t("น้ำหนัก", "Weight")}: {latest.weightResult} · {t("ขนาด", "Size")}: {latest.dimensionResult} · {t("แรงดัน", "Voltage")}: {latest.voltageResult}
+                </small>
+                {latest.notes && <small>{latest.notes}</small>}
               </div>}
-              {!completed && enabled && <form onSubmit={(event) => { event.preventDefault(); submitWeight(stage.key, "PASS"); }}>
-                <div className="field"><label htmlFor={`${stage.key}-weight`}>{t("น้ำหนักหุ่นยนต์ (กรัม)", "Robot weight (grams)")}</label><input id={`${stage.key}-weight`} type="number" min="1" max="100000" step="0.1" inputMode="decimal" required value={weights[stage.key]} onChange={(e) => setWeights((current) => ({ ...current, [stage.key]: e.target.value }))} placeholder="2500" /></div>
+              {!completed && enabled && <form onSubmit={(event) => { event.preventDefault(); submitInspection(stage.key, "PASS", "PASS"); }}>
+                <div className="field"><label htmlFor={`${stage.key}-weight`}>{t(`น้ำหนักหุ่นยนต์ (กรัม, ไม่เกิน ${MAX_ROBOT_WEIGHT_GRAMS})`, `Robot weight (grams, limit ${MAX_ROBOT_WEIGHT_GRAMS})`)}</label><input id={`${stage.key}-weight`} type="number" min="1" max="100000" step="0.1" inputMode="decimal" required value={weights[stage.key]} onChange={(e) => setWeights((current) => ({ ...current, [stage.key]: e.target.value }))} placeholder="2500" /></div>
                 <div className="field"><label htmlFor={`${stage.key}-notes`}>{t("หมายเหตุ", "Notes")}</label><input id={`${stage.key}-notes`} maxLength={500} value={notes[stage.key]} onChange={(e) => setNotes((current) => ({ ...current, [stage.key]: e.target.value }))} /></div>
-                <div className="inspection-actions"><button type="submit">{t("ผ่าน", "Pass")}</button><button className="danger" type="button" onClick={() => submitWeight(stage.key, "FAIL")}>{t("ไม่ผ่าน", "Fail")}</button></div>
+                {overWeight && <p className="inspection-overweight" role="alert">
+                  {t(`เกินพิกัด ${MAX_ROBOT_WEIGHT_GRAMS} กรัม ตามข้อ 3.2 — ระบบจะบันทึกเป็นไม่ผ่าน`,
+                     `Over the ${MAX_ROBOT_WEIGHT_GRAMS} g limit (Rule 3.2) — this will be recorded as a fail.`)}
+                </p>}
+                <div className="inspection-actions">
+                  <button type="submit">{t("ขนาดและแรงดันผ่าน", "Size & voltage pass")}</button>
+                  <button className="danger" type="button" onClick={() => submitInspection(stage.key, "FAIL", "PASS")}>{t("ขนาดไม่ผ่าน", "Size fail")}</button>
+                  <button className="danger" type="button" onClick={() => submitInspection(stage.key, "PASS", "FAIL")}>{t("แรงดันไม่ผ่าน", "Voltage fail")}</button>
+                </div>
               </form>}
               {!enabled && <p className="inspection-locked">{t("ต้องผ่านการชั่งน้ำหนักเมื่อเช็คอินก่อน", "Pass the check-in weigh-in first.")}</p>}
             </section>;
@@ -261,13 +296,13 @@ function CommitteeScanDashboard({ signOutAndReset }: { signOutAndReset: () => Pr
       <div className="section-heading"><span className="section-kicker">LANE CONTROL</span><h2 id="competition-lanes-title">{t("จัดทีมลงสนามและเตรียมจับเวลา", "Assign and arm lanes")}</h2></div>
       <div className="competition-lane-grid">
         {lanes.map((lane) => {
-          const candidate = (assignValues[lane.laneId] ?? "").trim().toUpperCase();
+          const candidate = normaliseCompetitorId(assignValues[lane.laneId] ?? "");
           return <article className="card competition-lane" data-state={lane.state} key={lane.laneId}>
             <header><div><span className="technical">{t("สนาม", "LANE")} {lane.laneId}</span><h3>{lane.competitorId ? (card?.competitorId === lane.competitorId ? card.teamName : lane.competitorId) : t("สนามว่าง", "Lane available")}</h3></div><span className={`status-badge ${lane.state === "RUNNING" ? "success" : lane.state === "ARMED" ? "warning" : ""}`}>{lane.state}</span></header>
             {lane.deviceId && <p className="competition-lane-device">{t("อุปกรณ์", "Device")}: <span className="technical">{lane.deviceId}</span></p>}
             {lane.state === "IDLE" && role === "admin" && <div className="lane-assign-controls">
-              <div className="field"><label htmlFor={`console-lane-${lane.laneId}`}>{t("หมายเลขผู้เข้าแข่งขัน", "Competitor ID")}</label><input id={`console-lane-${lane.laneId}`} value={assignValues[lane.laneId] ?? ""} onChange={(event) => setAssignValues((current) => ({ ...current, [lane.laneId]: event.target.value }))} placeholder={card?.competitorId ?? "C-0042"} /></div>
-              <div className="lane-button-row"><button type="button" disabled={!candidate} onClick={() => laneAction(lane.laneId, "assign", candidate)}>{t("จัดลงสนาม", "Assign")}</button>{card && <button className="secondary" type="button" onClick={() => laneAction(lane.laneId, "assign", card.competitorId)}>{t("ใช้ทีมที่เปิดอยู่", "Use scanned team")}</button>}</div>
+              <CompetitorIdInput id={`console-lane-${lane.laneId}`} label={t("หมายเลขผู้เข้าแข่งขัน", "Competitor ID")} value={assignValues[lane.laneId] ?? ""} onChange={(digits) => setAssignValues((current) => ({ ...current, [lane.laneId]: digits }))} />
+              <div className="lane-button-row"><button type="button" disabled={!candidate} onClick={() => { if (candidate) laneAction(lane.laneId, "assign", candidate); }}>{t("จัดลงสนาม", "Assign")}</button>{card && <button className="secondary" type="button" onClick={() => laneAction(lane.laneId, "assign", card.competitorId)}>{t("ใช้ทีมที่เปิดอยู่", "Use scanned team")}</button>}</div>
             </div>}
             {lane.state === "ASSIGNED" && role === "admin" && <button className="lane-primary-action" type="button" onClick={() => laneAction(lane.laneId, "arm")}>{t("เตรียมจับเวลา", "Arm lane")}</button>}
             {lane.state === "ARMED" && <div className="lane-ready-message"><strong>{t("พร้อมรับสัญญาณเริ่ม", "Ready for START trigger")}</strong><span>{t("การตรวจจับครั้งถัดไปจะเริ่มเวลา", "The next sensor detection starts the run.")}</span></div>}

@@ -3,11 +3,13 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/middleware.js";
 import { ApiError, zodToFields } from "../errors.js";
 import { armLane, assignLane, listLanes, resetLane } from "./repo.js";
+import { competitorIdSchema } from "../competitorId.js";
+import { actorOf } from "../auth/types.js";
 
 export const lanesRouter = Router();
 
 const assignSchema = z.object({
-  competitorId: z.string().trim().min(1),
+  competitorId: competitorIdSchema,
 });
 
 lanesRouter.get(
@@ -67,7 +69,7 @@ lanesRouter.post(
   requireRole("admin"),
   async (req, res, next) => {
     try {
-      const lane = await armLane(req.params.laneId, req.user!.username);
+      const lane = await armLane(req.params.laneId, actorOf(req.user!));
       res.status(200).json({
         laneId: lane.laneId,
         state: lane.state,

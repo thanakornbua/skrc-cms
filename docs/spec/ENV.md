@@ -9,6 +9,7 @@ Never commit real values. Each of `backend/`, `frontend/`, and the registration-
 | `AWS_REGION` | `ap-southeast-7` | Fixed by D5. |
 | `RESOURCE_PREFIX` | `robo-compet` | Prefix for Cognito/Lambda/IAM/API Gateway resources. Set `robo-compet-staging` for an isolated rehearsal. |
 | `DYNAMO_TABLE` | `robo-compet` | Fixed by D5. |
+| `COGNITO_IDENTITY_POOL_ID` | _(unset)_ | Desktop console only. When set, the signed-in staff operator's Cognito token is exchanged for short-lived AWS credentials instead of using a profile or access key. Unset in Lambda, which keeps its execution role. |
 | `COGNITO_USER_POOL_ID` | `ap-southeast-7_xxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `COGNITO_CLIENT_ID` | `xxxxxxxxxxxxxxxxxxxxxxxxxx` | Printed by `ops/create-auth.ts` (Phase 2). |
 | `CORS_ORIGIN` | `https://competitive.skrc.suankularb.space` | Fixed frontend origin. |

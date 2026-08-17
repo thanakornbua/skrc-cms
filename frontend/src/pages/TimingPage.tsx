@@ -5,10 +5,12 @@ import LoadingScreen from "../components/LoadingScreen";
 import LoginGate from "../components/LoginGate";
 import NavBar from "../components/NavBar";
 import { t } from "../i18n";
+import CompetitorIdInput from "../components/CompetitorIdInput";
+import { normaliseCompetitorId } from "../competitorId";
 
 type Role = "admin" | "committee" | "competitor";
 type Stage = "ROUND_1" | "BEST_OF_4" | "BEST_OF_2" | "THE_BEST";
-interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number>; stageMaxAttempts?: Record<Stage, number> }
+interface Timing { category: string; minTimeMs: number; maxTimeMs: number; stageMaxTimeMs?: Record<Stage, number> }
 interface CompetitionState { phase: "OPEN" | "CONCLUDED"; activeStage: Stage; eligibleCompetitorIds: string[] }
 interface Rule { ruleId: string; label: string; penaltyMs: number; active: boolean; kind?: "INTERVENTION" }
 interface Run {
@@ -26,6 +28,9 @@ interface Competitor {
 }
 
 const seconds =(ms: number | null | undefined) => ms == null ? "—" : `${(ms / 1000).toFixed(3)} s`;
+/** Rules 4.2(2)/4.5(1) fix this at three; it is shown, never configured. */
+const ATTEMPTS_PER_ROUND = 3;
+
 const stageLabel: Record<Stage, string> = { ROUND_1: "Qualifying round", BEST_OF_4: "Quarterfinals", BEST_OF_2: "Semifinals", THE_BEST: "Finals" };
 /** Semantic status-badge class per run outcome (see status-badge in CSS). */
 const RUN_BADGE: Record<Run["status"], string> = {
@@ -41,7 +46,6 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   const [category, setCategory] = useState("Line Tracing - Open");
   const [minSeconds, setMinSeconds] = useState("");
   const [stageMaxSeconds, setStageMaxSeconds] = useState<Record<Stage, string>>({ ROUND_1: "180", BEST_OF_4: "180", BEST_OF_2: "180", THE_BEST: "180" });
-  const [stageMaxAttempts, setStageMaxAttempts] = useState<Record<Stage, string>>({ ROUND_1: "3", BEST_OF_4: "3", BEST_OF_2: "3", THE_BEST: "3" });
   const [competitionState, setCompetitionState] = useState<CompetitionState | null>(null);
   const [ruleLabel, setRuleLabel] = useState("");
   const [penaltySeconds, setPenaltySeconds] = useState("");
@@ -77,7 +81,6 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         setCategory(current.category);
         setMinSeconds(String(current.minTimeMs / 1000));
         setStageMaxSeconds(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, String((current.stageMaxTimeMs?.[stage] ?? current.maxTimeMs) / 1000)])) as Record<Stage, string>);
-        setStageMaxAttempts(Object.fromEntries((Object.keys(stageLabel) as Stage[]).map((stage) => [stage, "3"])) as Record<Stage, string>);
       }
     }
   }
@@ -91,7 +94,9 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
 
   async function lookup(id = competitorId): Promise<void> {
     setError(null); setBusy(true);
-    try { setCompetitor(await ec2Json<Competitor>(`/competitors/${encodeURIComponent(id.trim())}`)); }
+    const normalised = normaliseCompetitorId(id);
+    if (!normalised) { setBusy(false); return; }
+    try { setCompetitor(await ec2Json<Competitor>(`/competitors/${encodeURIComponent(normalised)}`)); }
     catch (err) { setCompetitor(null); setError(err instanceof Error ? err.message : "Lookup failed"); }
     finally { setBusy(false); }
   }
@@ -104,7 +109,6 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
         body: JSON.stringify({
           category, minTimeMs: Math.round(Number(minSeconds) * 1000),
           stageMaxTimeMs: Object.fromEntries(Object.entries(stageMaxSeconds).map(([stage, value]) => [stage, Math.round(Number(value) * 1000)])),
-          stageMaxAttempts: Object.fromEntries(Object.entries(stageMaxAttempts).map(([stage, value]) => [stage, Number(value)])),
         }),
       });
       await loadConfig("admin"); setNotice("Timing limits saved for future attempts.");
@@ -157,9 +161,14 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
   }
 
   async function reopen(): Promise<void> {
-    if (!window.confirm("Reopen the competition and delete the frozen ranking snapshot?")) return;
-    setBusy(true);
-    try { await ec2Json("/admin/competition/reopen", { method: "POST" }); setNotice("Competition reopened."); }
+    if (window.prompt("Type REOPEN to undo the published result. The previous ranking is kept and marked superseded.") !== "REOPEN") return;
+    const reason = window.prompt("Reason for reopening (recorded in the audit trail):")?.trim();
+    if (!reason) return;
+    setBusy(true); setError(null);
+    try {
+      await ec2Json("/admin/competition/reopen", { method: "POST", body: JSON.stringify({ confirm: "REOPEN", reason }) });
+      setNotice("Competition reopened. The previous ranking was superseded, not deleted.");
+    }
     catch (err) { setError(err instanceof Error ? err.message : "Reopen failed"); }
     finally { setBusy(false); }
   }
@@ -314,7 +323,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
             <legend>{stageLabel[stage]}</legend>
             <div className="timing-stage-fields">
               <div className="field"><label htmlFor={id}>{t("เวลาสูงสุด (วินาที)", "Maximum seconds")}</label><input id={id} required type="number" min="0.001" step="0.001" value={stageMaxSeconds[stage]} onChange={(event) => setStageMaxSeconds((current) => ({ ...current, [stage]: event.target.value }))} /></div>
-              <div className="field"><label htmlFor={`${id}-attempts`}>{t("จำนวนสิทธิ (กำหนดโดยกติกา)", "Attempts (fixed by rules)")}</label><input id={`${id}-attempts`} type="number" value={stageMaxAttempts[stage]} disabled /></div>
+              <div className="field"><label htmlFor={`${id}-attempts`}>{t("จำนวนสิทธิ (กำหนดโดยกติกา)", "Attempts (fixed by rules)")}</label><input id={`${id}-attempts`} type="number" value={ATTEMPTS_PER_ROUND} disabled /></div>
             </div>
           </fieldset>)}</div>
           <button type="submit">{t("บันทึก", "Save limits")}</button>
@@ -342,7 +351,7 @@ function TimingDashboard({ signOutAndReset }: { signOutAndReset: () => Promise<v
     </div>}
 
     <div className="card lookup-card"><span className="section-kicker">OPERATIONS</span><h2>{t("ค้นหาผู้เข้าแข่งขัน", "Competitor lookup")}</h2>
-      <div className="lookup-row"><div className="field"><label htmlFor={lookupId}>{t("หมายเลขผู้เข้าแข่งขัน", "Competitor number")}</label><input id={lookupId} className="technical" value={competitorId} onChange={(e) => setCompetitorId(e.target.value)} placeholder="C-0042" /></div>
+      <div className="lookup-row"><CompetitorIdInput id={lookupId} label={t("หมายเลขผู้เข้าแข่งขัน", "Competitor number")} value={competitorId} onChange={setCompetitorId} onEnter={() => lookup()} />
       <button type="button" onClick={() => lookup()}>{t("ค้นหา", "Lookup")}</button></div>
     </div>
     {competitor && <div className="card competitor-result"><span className="section-kicker technical">{competitor.competitorId}</span><h2>{competitor.teamName}</h2>

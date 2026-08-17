@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../auth/middleware.js";
 import { ApiError } from "../errors.js";
 import { advanceCompetitionStage, calculateRankings, calculateStageRankings, concludeCompetition, getCompetitionState, reopenCompetition } from "./repo.js";
 import { publicizeBrackets } from "./bracket.js";
+import { actorOf } from "../auth/types.js";
 
 export const competitionRouter = Router();
 
@@ -40,7 +41,7 @@ competitionRouter.post("/admin/competition/advance", requireAuth, requireRole("a
     if (!z.object({ confirm: z.literal("ADVANCE") }).safeParse(req.body).success) {
       throw new ApiError(400, "VALIDATION_ERROR", "confirm must equal ADVANCE");
     }
-    const state = await advanceCompetitionStage(req.user!.username);
+    const state = await advanceCompetitionStage(actorOf(req.user!));
     res.status(200).json({ phase: state.phase, activeStage: state.activeStage, eligibleCompetitorIds: state.eligibleCompetitorIds ?? [] });
   } catch (error) { next(error); }
 });
@@ -50,12 +51,26 @@ competitionRouter.post("/admin/competition/conclude", requireAuth, requireRole("
     if (!z.object({ confirm: z.literal("CONCLUDE") }).safeParse(req.body).success) {
       throw new ApiError(400, "VALIDATION_ERROR", "confirm must equal CONCLUDE");
     }
-    res.status(200).json(await concludeCompetition(req.user!.username));
+    res.status(200).json(await concludeCompetition(actorOf(req.user!)));
   } catch (error) { next(error); }
 });
 
-competitionRouter.post("/admin/competition/reopen", requireAuth, requireRole("admin"), async (_req, res, next) => {
-  try { await reopenCompetition(); res.status(200).json({ phase: "OPEN" }); } catch (error) { next(error); }
+// Reopening undoes a PUBLISHED official result, so it carries the same
+// confirmation guard as advance/conclude and additionally requires a written
+// reason — Rule 10.2(2) keeps the superseded ranking in the record, and the
+// reason is what makes that record meaningful.
+competitionRouter.post("/admin/competition/reopen", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const input = z.object({
+      confirm: z.literal("REOPEN"),
+      reason: z.string().trim().min(1).max(400),
+    }).safeParse(req.body);
+    if (!input.success) {
+      throw new ApiError(400, "VALIDATION_ERROR", "confirm must equal REOPEN and reason is required");
+    }
+    await reopenCompetition(actorOf(req.user!), input.data.reason);
+    res.status(200).json({ phase: "OPEN" });
+  } catch (error) { next(error); }
 });
 
 competitionRouter.get("/admin/competition/export", requireAuth, requireRole("admin"), async (_req, res, next) => {
