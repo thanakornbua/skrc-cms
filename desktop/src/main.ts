@@ -79,6 +79,17 @@ async function loadRuntimeConfiguration(): Promise<string> {
     }
   }
   Object.assign(process.env, parseEnvFile(await readFile(selected, "utf8")));
+  // An identity pool ID that is malformed — a leftover placeholder, most
+  // often — is otherwise only discovered as an anonymous 500 on every page
+  // once the operator is already signed in and mid-setup. AWS's own pattern.
+  const identityPool = process.env.COGNITO_IDENTITY_POOL_ID?.trim();
+  if (identityPool && !/^[\w-]+:[0-9a-f-]+$/i.test(identityPool)) {
+    throw new Error(
+      `COGNITO_IDENTITY_POOL_ID in ${selected} is not a valid identity pool ID: "${identityPool}". ` +
+      "Run `npm run create-desktop-identity-pool --prefix ops` and use the ID it prints, " +
+      "or remove the line to fall back to the machine's AWS profile."
+    );
+  }
   process.env.PORT = String(APP_PORT);
   process.env.CORS_ORIGIN ||= `http://127.0.0.1:${APP_PORT}`;
   // Credentials come from the operator's Cognito sign-in (see
