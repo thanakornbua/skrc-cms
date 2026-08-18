@@ -6,6 +6,7 @@ import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
 import { emitFieldChanged } from "../lanes/events.js";
+import { recordLaneResult } from "../lanes/last-result.js";
 import { ApiError } from "../errors.js";
 import { getCompetitionState, isEligibleForStage, openSuddenDeathRound } from "../competition/state.js";
 import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
@@ -236,6 +237,14 @@ export async function processGateEvent(
       } });
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: transactionItems }));
+    // The lane is IDLE from here and the competitor is cleared, so the finishing
+    // time would leave the screen the moment it was set. Hand it to the display
+    // layer, which holds it briefly before going back to idle.
+    recordLaneResult(event.laneId, {
+      competitorId: lane.competitorId,
+      elapsedMs: elapsed,
+      status: finalStatus as "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW",
+    });
     // A gate event arrives over the serial port, not over HTTP, so it misses
     // the request-level signal: the start of a run is exactly when the overlay
     // clock must begin.
@@ -337,6 +346,13 @@ export async function endRunAtMaxTime(competitorId: string, runId: string, resol
         ExpressionAttributeValues: { ":idle": "IDLE", ":running": "RUNNING", ":cid": competitorId, ":none": null, ":at": at },
       } },
     ] }));
+    // A run ended by an official is still a result the audience just watched;
+    // hold it like any other, at the maximum time it was charged.
+    recordLaneResult(run.laneId, {
+      competitorId,
+      elapsedMs: run.maxTimeMs,
+      status: "TIMED_OUT",
+    });
     return true;
   } catch (error) {
     // The run already resolved (e.g. STOP arrived first) or the lane already

@@ -9,11 +9,20 @@
 
 export type LaneState = "IDLE" | "ASSIGNED" | "ARMED" | "RUNNING";
 
+export interface LaneResult {
+  teamName: string | null;
+  elapsedMs: number;
+  status: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW";
+  finishedAt: string;
+}
+
 export interface PublicLane {
   laneId: string;
   state: LaneState;
   teamName: string | null;
   runStartedAt: string | null;
+  /** The result this lane just produced, if any. */
+  lastResult?: LaneResult | null;
 }
 
 export interface PublicLanesSnapshot {
@@ -68,12 +77,22 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
+ * How long a finishing time stays on screen after the lane has gone idle.
+ *
+ * The lane clears the moment a run stops, so without this the number the
+ * audience just watched being set would disappear in the same frame. Five
+ * seconds is long enough to read a time aloud and short enough that the next
+ * team arming replaces it — which it does, since a live lane always wins.
+ */
+export const RESULT_HOLD_MS = 5000;
+
+/**
  * What the three sources should read right now.
  *
  * A running lane shows a live clock counted from `runStartedAt`. An armed lane
- * shows its team at 0.000, so the audience sees who is about to go. An idle
- * field clears the run fields rather than leaving a stale team and time on
- * screen; the stage name always stands.
+ * shows its team at 0.000, so the audience sees who is about to go. A lane that
+ * just finished holds its result for RESULT_HOLD_MS. Only then does the field
+ * clear back to the stage name; a stale team and time are never left up.
  */
 export function overlayText(
   snapshot: PublicLanesSnapshot | null,
@@ -83,7 +102,17 @@ export function overlayText(
   if (!snapshot) return { SKRC_StageName: "", SKRC_TeamName: "", SKRC_ElapsedTime: "" };
   const lane = focusLane(snapshot.lanes);
   const blank = { SKRC_StageName: snapshot.stageLabel, SKRC_TeamName: "", SKRC_ElapsedTime: "" };
-  if (!lane || !lane.teamName) return blank;
+  if (!lane || !lane.teamName) {
+    const held = heldResult(snapshot, nowMs, skewMs);
+    if (held?.teamName) {
+      return {
+        SKRC_StageName: snapshot.stageLabel,
+        SKRC_TeamName: held.teamName,
+        SKRC_ElapsedTime: formatElapsed(held.elapsedMs),
+      };
+    }
+    return blank;
+  }
 
   if (lane.state === "RUNNING" && lane.runStartedAt) {
     const startedMs = Date.parse(lane.runStartedAt);
@@ -104,4 +133,27 @@ export function overlayText(
   }
 
   return blank;
+}
+
+/**
+ * The most recent result still inside its hold window, if any.
+ *
+ * Checked only when no lane is live: an armed or running lane is what the
+ * audience is watching now, and it takes the screen from a finished one.
+ */
+export function heldResult(
+  snapshot: PublicLanesSnapshot,
+  nowMs: number,
+  skewMs = 0,
+): LaneResult | null {
+  let newest: LaneResult | null = null;
+  for (const lane of snapshot.lanes) {
+    const result = lane.lastResult;
+    if (!result) continue;
+    const finishedMs = Date.parse(result.finishedAt);
+    if (!Number.isFinite(finishedMs)) continue;
+    if (nowMs - skewMs - finishedMs > RESULT_HOLD_MS) continue;
+    if (!newest || finishedMs > Date.parse(newest.finishedAt)) newest = result;
+  }
+  return newest;
 }

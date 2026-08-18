@@ -41,7 +41,16 @@ export function overlayPage(): string {
     font-size: 9vh; font-weight: 700;
     font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
   }
-  .hidden { visibility: hidden; }
+  /* A held result is a different thing from a running clock and should not be
+     mistaken for one: it stops moving, and it says so. */
+  #overlay.result #clock { color: #7dffa8; }
+  #overlay.result.timed-out #clock { color: #ffcf6b; }
+  #tag {
+    font-size: 2.6vh; letter-spacing: 0.22em; text-transform: uppercase;
+    font-weight: 700; opacity: 0.95;
+  }
+  #overlay > * { transition: opacity 220ms ease; }
+  .hidden { visibility: hidden; opacity: 0; }
 </style>
 </head>
 <body>
@@ -49,14 +58,22 @@ export function overlayPage(): string {
   <div id="stage"></div>
   <div id="team" class="hidden"></div>
   <div id="clock" class="hidden"></div>
+  <div id="tag" class="hidden"></div>
 </div>
 <script>
 (function () {
   var stageEl = document.getElementById("stage");
   var teamEl = document.getElementById("team");
   var clockEl = document.getElementById("clock");
+  var tagEl = document.getElementById("tag");
+  var overlayEl = document.getElementById("overlay");
   var snapshot = null;
   var skewMs = 0;
+
+  /* Matches RESULT_HOLD_MS in the bridge, so the browser overlay and the text
+     files clear at the same moment on a scene that uses both. */
+  var RESULT_HOLD_MS = 5000;
+  var RESULT_TAGS = { COMPLETE: "Final", TIMED_OUT: "Time limit", UNDER_REVIEW: "Under review" };
 
   function focusLane(lanes) {
     var order = ["RUNNING", "ARMED", "ASSIGNED"];
@@ -81,28 +98,57 @@ export function overlayPage(): string {
     el.classList.toggle("hidden", text === "");
   }
 
+  /* The newest result still inside its hold window. Only consulted when no lane
+     is live: a team arming is what the audience is watching now, and it takes
+     the screen from a finished one. */
+  function heldResult(lanes, now) {
+    var newest = null;
+    for (var i = 0; i < lanes.length; i++) {
+      var result = lanes[i].lastResult;
+      if (!result) continue;
+      var finished = Date.parse(result.finishedAt);
+      if (!isFinite(finished) || now - skewMs - finished > RESULT_HOLD_MS) continue;
+      if (!newest || finished > Date.parse(newest.finishedAt)) newest = result;
+    }
+    return newest;
+  }
+
+  function paint(mode, team, clock, tag) {
+    overlayEl.classList.toggle("result", mode === "result");
+    overlayEl.classList.toggle("timed-out", tag === RESULT_TAGS.TIMED_OUT || tag === RESULT_TAGS.UNDER_REVIEW);
+    show(teamEl, team);
+    show(clockEl, clock);
+    show(tagEl, tag);
+  }
+
   /* Redrawn every frame: the clock is the only thing that moves, and the
      browser is already painting anyway. */
   function draw() {
     requestAnimationFrame(draw);
-    if (!snapshot) { show(stageEl, ""); show(teamEl, ""); show(clockEl, ""); return; }
+    var now = Date.now();
+    if (!snapshot) { show(stageEl, ""); paint("idle", "", "", ""); return; }
     show(stageEl, snapshot.stageLabel || "");
-    var lane = focusLane(snapshot.lanes || []);
-    if (!lane || !lane.teamName) { show(teamEl, ""); show(clockEl, ""); return; }
-    if (lane.state === "RUNNING" && lane.runStartedAt) {
+    var lanes = snapshot.lanes || [];
+    var lane = focusLane(lanes);
+
+    if (lane && lane.teamName && lane.state === "RUNNING" && lane.runStartedAt) {
       var started = Date.parse(lane.runStartedAt);
-      if (!isFinite(started)) { show(teamEl, ""); show(clockEl, ""); return; }
-      show(teamEl, lane.teamName);
-      show(clockEl, formatElapsed(Date.now() - skewMs - started));
+      if (isFinite(started)) {
+        paint("live", lane.teamName, formatElapsed(now - skewMs - started), "");
+        return;
+      }
+    }
+    if (lane && lane.teamName && lane.state === "ARMED") {
+      paint("live", lane.teamName, formatElapsed(0), "On the line");
       return;
     }
-    if (lane.state === "ARMED") {
-      show(teamEl, lane.teamName);
-      show(clockEl, formatElapsed(0));
+
+    var held = heldResult(lanes, now);
+    if (held && held.teamName) {
+      paint("result", held.teamName, formatElapsed(held.elapsedMs), RESULT_TAGS[held.status] || "Final");
       return;
     }
-    show(teamEl, "");
-    show(clockEl, "");
+    paint("idle", "", "", "");
   }
   requestAnimationFrame(draw);
 

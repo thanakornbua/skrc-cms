@@ -9,6 +9,7 @@ import { STAGE_LABELS } from "../competition/types.js";
 import { competitorIdSchema } from "../competitorId.js";
 import { actorOf } from "../auth/types.js";
 import { onFieldChanged } from "./events.js";
+import { getLaneResult } from "./last-result.js";
 
 export const lanesRouter = Router();
 
@@ -32,12 +33,25 @@ const assignSchema = z.object({
  */
 async function publicLanesSnapshot() {
   const [lanes, competition] = await Promise.all([listLanes(), getCompetitionState()]);
-  const named = await Promise.all(lanes.map(async (lane) => ({
-    laneId: lane.laneId,
-    state: lane.state,
-    teamName: lane.competitorId ? (await getCompetitor(lane.competitorId))?.teamName ?? null : null,
-    runStartedAt: lane.runStartedAt,
-  })));
+  const named = await Promise.all(lanes.map(async (lane) => {
+    // The result the lane just produced, so a display can hold a finishing time
+    // on screen instead of losing it the moment the lane returns to IDLE.
+    const result = getLaneResult(lane.laneId);
+    return {
+      laneId: lane.laneId,
+      state: lane.state,
+      teamName: lane.competitorId ? (await getCompetitor(lane.competitorId))?.teamName ?? null : null,
+      runStartedAt: lane.runStartedAt,
+      lastResult: result
+        ? {
+            teamName: (await getCompetitor(result.competitorId))?.teamName ?? null,
+            elapsedMs: result.elapsedMs,
+            status: result.status,
+            finishedAt: result.finishedAt,
+          }
+        : null,
+    };
+  }));
   return {
     activeStage: competition.activeStage,
     stageLabel: STAGE_LABELS[competition.activeStage],

@@ -105,8 +105,20 @@ so OBS never reads a half-written line.
 | --- | --- |
 | A lane is `RUNNING` | Team name, and a clock counting from the run's start |
 | A lane is `ARMED` | Team name, `0:00.000` — the audience sees who is about to go |
-| Nothing armed or running | Stage name only; team and clock are cleared |
+| A run just finished | The finishing team and its final time, held for five seconds |
+| Nothing armed, running or just finished | Stage name only; team and clock are cleared |
 | Before the first successful poll | All three blank |
+
+A lane goes IDLE the instant a run stops, so without the hold the number the
+audience just watched being set would leave the screen in the same frame. Five
+seconds is long enough to read a time aloud, and an arming lane replaces it
+early — a live lane always outranks a finished one.
+
+The Browser Source overlay marks a held result rather than letting it read as a
+still-running clock: the time turns green and is captioned **Final**, or amber
+for **Time limit** and **Under review**. An armed team is captioned **On the
+line**. The text sources carry the same team and time, without the caption —
+there are only three of them.
 
 If several lanes are ever configured, `RUNNING` takes precedence over `ARMED`.
 
