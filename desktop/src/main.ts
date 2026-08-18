@@ -14,6 +14,8 @@ let serial: SerialPort | null = null;
 let timers: NodeJS.Timeout[] = [];
 let obsBridge: { outDir: string; refresh(): Promise<void>; stop(): void } | null = null;
 let overlayUnsubscribe: (() => void) | null = null;
+/** Set once quitting starts, so the serial retry does not reopen a port mid-shutdown. */
+let shuttingDown = false;
 
 /**
  * Mirrors everything the main process prints into a file.
@@ -302,47 +304,73 @@ async function startServices(): Promise<void> {
       () => { void heartbeat("ERROR", "No Arduino COM port found").catch(console.error); }, 10_000);
     missingPortTimer.unref(); timers.push(missingPortTimer);
   } else {
-    serial = new SerialPort({ path: portPath, baudRate: 115200 });
-    // Serial faults used to be reported only to the table, where the operator
-    // sees a status dot and no reason. The reason is the whole diagnosis: a
-    // port held by Arduino IDE's Serial Monitor and a missing cable look
-    // identical on screen and are fixed differently.
-    serial.on("open", () => {
-      console.log(`Serial port ${portPath} open at 115200 baud`);
-      heartbeat("CONNECTED").catch(console.error);
-    });
-    serial.on("data", (chunk: Buffer) => {
-      buffer += chunk.toString("utf8");
-      if (buffer.length > 8192) buffer = buffer.slice(-2048);
-      for (;;) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) break;
-        const line = buffer.slice(0, newline).replace(/\r$/, "");
-        buffer = buffer.slice(newline + 1);
-        processing = processing.then(() => onLine(line)).catch((error) => console.error("UNO line failed:", error));
-      }
-    });
-    serial.on("error", (error) => {
-      console.error(`Serial port ${portPath} error: ${error.message}`);
-      heartbeat("ERROR", error.message).catch(console.error);
-    });
-    serial.on("close", () => {
-      console.warn(`Serial port ${portPath} closed`);
-      heartbeat("DISCONNECTED", "COM port closed").catch(console.error);
-    });
-    // Report what the port is actually doing. Sending CONNECTED on a fixed
-    // timer regardless would keep the console showing a healthy Arduino after
-    // the cable was pulled — the one thing this indicator exists to catch.
-    const heartbeatTimer = setInterval(() => {
+    /**
+     * Opens the port, and keeps trying.
+     *
+     * "Access denied" — the Serial Monitor still open, a previous instance not
+     * yet gone — used to be permanent for the life of the application: the port
+     * was opened once at startup and never again, so freeing it meant
+     * restarting the console. At a venue that is the wrong order of operations.
+     * Reopen on a timer instead, so closing whatever holds the port is enough.
+     */
+    const openSerial = () => {
+      if (shuttingDown) return;
+      const port = new SerialPort({ path: portPath, baudRate: 115200, autoOpen: false });
+      serial = port;
+      port.on("open", () => {
+        console.log(`Serial port ${portPath} open at 115200 baud`);
+        heartbeat("CONNECTED").catch(console.error);
+      });
+      port.on("data", (chunk: Buffer) => {
+        buffer += chunk.toString("utf8");
+        if (buffer.length > 8192) buffer = buffer.slice(-2048);
+        for (;;) {
+          const newline = buffer.indexOf("\n");
+          if (newline < 0) break;
+          const line = buffer.slice(0, newline).replace(/\r$/, "");
+          buffer = buffer.slice(newline + 1);
+          processing = processing.then(() => onLine(line)).catch((error) => console.error("UNO line failed:", error));
+        }
+      });
+      // Serial faults used to be reported only to the table, where the operator
+      // sees a status dot and no reason. The reason is the whole diagnosis: a
+      // port held by Arduino IDE's Serial Monitor and a missing cable look
+      // identical on screen and are fixed differently.
+      port.on("error", (error) => {
+        console.error(`Serial port ${portPath} error: ${error.message}`);
+        heartbeat("ERROR", error.message).catch(console.error);
+      });
+      port.on("close", () => {
+        console.warn(`Serial port ${portPath} closed`);
+        heartbeat("DISCONNECTED", "COM port closed").catch(console.error);
+      });
+      port.open((error) => {
+        if (error) console.error(`Serial port ${portPath} did not open: ${error.message} — retrying every 5s`);
+      });
+    };
+    openSerial();
+
+    // One timer covers both reopening and reporting: if the port is not open,
+    // say so and try again; if it is, the heartbeat is the ordinary one.
+    const serialTimer = setInterval(() => {
+      if (shuttingDown) return;
       const open = serial?.isOpen ?? false;
+      if (!open) {
+        // Not open by definition here, so there is nothing to close — just drop
+        // the old handlers before the replacement attaches its own.
+        serial?.removeAllListeners();
+        serial = null;
+        openSerial();
+      }
       void heartbeat(open ? "CONNECTED" : "ERROR", open ? null : `COM port ${portPath} is not open`)
         .catch(console.error);
-    }, 10_000);
-    heartbeatTimer.unref(); timers.push(heartbeatTimer);
+    }, 5000);
+    serialTimer.unref(); timers.push(serialTimer);
   }
 }
 
 async function shutdown(): Promise<void> {
+  shuttingDown = true;
   for (const timer of timers) clearInterval(timer);
   timers = [];
   overlayUnsubscribe?.(); overlayUnsubscribe = null;
@@ -377,6 +405,7 @@ else {
   app.on("before-quit", (event) => {
     if (!server && !serial) return;
     event.preventDefault();
+    shuttingDown = true;
     const closingServer = server; const closingSerial = serial;
     server = null; serial = null;
     overlayUnsubscribe?.(); overlayUnsubscribe = null;
