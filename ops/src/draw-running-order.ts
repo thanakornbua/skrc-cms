@@ -106,5 +106,7 @@ if (csvPath) {
     .concat(rows.map((row) => [row.category, row.round, row.position, `"${row.teamName.replace(/"/g, '""')}"`, row.competitorId].join(",")))
     .join("\n");
   await writeFile(csvPath, `${csv}\n`, "utf8");
-  console.log(`CSV written to ${csvPath}`);
+  console.log(rows.length === 0
+    ? `CSV written to ${csvPath} — headers only, no teams were drawn.`
+    : `CSV written to ${csvPath} — ${rows.length} run slots.`);
 }
