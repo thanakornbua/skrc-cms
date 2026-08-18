@@ -73,3 +73,28 @@ Credentials are the one thing that needs the network. They last about an hour,
 so a drop longer than that leaves the console unable to write until the operator
 is online again — at which point the spool flushes on its own. Timing capture is
 never blocked by this; only the push to DynamoDB waits.
+
+## Updating the installed console
+
+Two commands. In WSL, build and package:
+
+```bash
+scripts/package-desktop.sh
+```
+
+It writes `~/skrc-builds/SKRC-Competition-Day-win32-x64.zip` plus a `BUILD.txt`
+naming the commit — on the laptop there is no repository to ask, and two 144 MB
+zips look identical. Then, in PowerShell on the operator machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\thanakornbua\skrc-robo-compet\scripts\update-desktop.ps1
+```
+
+That stops every running copy, replaces the folder, relaunches, and waits until
+port 7070 is actually listening before reporting success. Extracting over a
+running copy is the failure worth knowing about: Windows skips locked files, so
+it silently changes nothing and looks like it worked.
+
+`competition-day.env`, the overlay files and the logs live in
+`%APPDATA%\SKRC Competition Day` and are untouched by an update; the competition
+itself lives in DynamoDB. Only the program is replaced.
