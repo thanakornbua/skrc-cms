@@ -57,7 +57,7 @@ than by scaling the source, which would blur it:
 | `color` | `#ffffff` | `#00ff88`, `white` |
 | `weight` | `700` | `100`–`900`, `normal`, `bold` |
 | `align` | `left` | `left`, `center`, `right` |
-| `font` | Segoe UI | any family name available on the machine |
+| `font` | IBM Plex Sans, IBM Plex Sans Thai | any family installed on the machine |
 
 ```
 http://127.0.0.1:7070/overlay/clock?size=90px&color=%2300ff88&align=center
@@ -70,6 +70,28 @@ instead of rendering nothing.
 A field is empty whenever it would be meaningless — no team on the line, a team
 with no completed run — and an empty page draws nothing, so no visibility
 toggling is needed.
+
+### Fonts
+
+The overlay asks for **IBM Plex Sans**, with **IBM Plex Sans Thai** behind it.
+Both are needed: Plex Sans carries no Thai glyphs, so a Thai team name would
+otherwise fall through to whatever Windows picked next — a different face, at a
+different weight, mid-scene. A browser can only use a font installed on the
+machine drawing it, so install them wherever OBS runs:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-overlay-fonts.ps1
+```
+
+Per-user, so no administrator rights, and safe to re-run. Restart OBS
+afterwards. Verify with:
+
+```powershell
+[Drawing.FontFamily]::Families | Where-Object Name -like "IBM Plex*"
+```
+
+Neither family is bundled with the application: IBM Plex is SIL Open Font
+License 1.1, and the licence file is installed alongside the fonts.
 
 ## Pulling the data yourself
 

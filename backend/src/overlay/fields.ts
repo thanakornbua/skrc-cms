@@ -38,6 +38,15 @@ const ALIGN = /^(left|center|right)$/;
 /** Font families, not a full font shorthand: letters, digits, spaces, commas. */
 const FONT = /^[a-z0-9 ,'-]{1,80}$/i;
 
+/**
+ * IBM Plex Sans first, and IBM Plex Sans Thai behind it because Plex Sans
+ * carries no Thai glyphs — a Thai team name would otherwise fall through to
+ * whatever Windows picked, mid-scene, at a different weight and size. Both
+ * must be installed on the machine running OBS; the browser cannot use a font
+ * that is not there. See ops/OBS_BRIDGE.md for the install.
+ */
+export const DEFAULT_FONT_STACK = `"IBM Plex Sans", "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif`;
+
 export function fieldStyle(query: Record<string, unknown>): FieldStyle {
   const pick = (key: string, pattern: RegExp, fallback: string): string => {
     const value = query[key];
@@ -48,6 +57,6 @@ export function fieldStyle(query: Record<string, unknown>): FieldStyle {
     color: pick("color", COLOR, "#ffffff"),
     weight: pick("weight", WEIGHT, "700"),
     align: pick("align", ALIGN, "left"),
-    font: pick("font", FONT, "Segoe UI, system-ui, sans-serif"),
+    font: pick("font", FONT, DEFAULT_FONT_STACK),
   };
 }

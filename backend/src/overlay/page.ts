@@ -25,7 +25,7 @@ export function overlayPage(): string {
   :root { color-scheme: dark; }
   html, body {
     margin: 0; height: 100%; background: transparent;
-    font-family: "Segoe UI", system-ui, sans-serif; color: #fff;
+    font-family: "IBM Plex Sans", "IBM Plex Sans Thai", "Segoe UI", system-ui, sans-serif; color: #fff;
   }
   #overlay {
     display: flex; flex-direction: column; gap: 0.15em;
