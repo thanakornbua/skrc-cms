@@ -1,4 +1,32 @@
-# OBS overlay bridge
+# OBS overlay
+
+Two ways to get the field onto the stream. **Prefer the Browser Source** — it
+is pushed, so a team name appears in the same moment the lane is armed, and the
+clock is redrawn every frame instead of whenever OBS next reads a file.
+
+## Browser Source (recommended)
+
+Add a **Browser Source**, URL:
+
+```
+http://127.0.0.1:7070/overlay
+```
+
+Set its width and height to the canvas size (1920×1080), leave "Shutdown source
+when not visible" **off** so it stays connected, and position it in the scene.
+The page has a transparent background and draws the stage name, the team name
+and the running clock; style and crop it from OBS as any other source.
+
+It holds an SSE connection to `/public/lanes/stream`, which sends the current
+state on connect and every change as it happens, with a slow refresh underneath
+as a safety net. If the console restarts, the browser reconnects on its own —
+nobody has to touch OBS. A failed refresh leaves the last known state on screen
+rather than blanking mid-run.
+
+Nothing is loaded from the internet: no fonts, no scripts, no images. The
+overlay keeps working at a venue with no uplink.
+
+## Text files
 
 Feeds three OBS text sources — `SKRC_StageName`, `SKRC_TeamName`,
 `SKRC_ElapsedTime` — from the competition API.
@@ -8,7 +36,7 @@ WebSocket connection, no password, and no plugin: OBS and the bridge can start,
 stop, or crash in any order without either needing to know. The worst failure is
 a number that stops updating, never a blank or broken scene.
 
-## One-time OBS setup
+### One-time OBS setup
 
 For each of the three text sources: **Properties → tick "Read from file" →
 browse to the matching `.txt`**. Leave everything else — font, colour, position
@@ -25,7 +53,7 @@ obs/SKRC_ElapsedTime.txt
 Start the console (or the CLI below) once before configuring the sources, so the
 files exist and the file picker can see them.
 
-## On competition day: nothing to run
+### On competition day: nothing to run
 
 The bridge is built into the Windows application. **SKRC Competition Day** starts
 it against its own loopback API (`http://127.0.0.1:7070`) as it boots, so the
@@ -47,7 +75,7 @@ Paste that path into the OBS file picker's location bar to get there. Two keys i
 If the bridge fails to start it is logged and the application carries on: the
 timing console never depends on the overlay.
 
-## The CLI, for rehearsal or a second laptop
+### The CLI, for rehearsal or a second laptop
 
 From `ops/`, when driving OBS from a machine other than the operator's, or
 against a remote API during rehearsal:

@@ -12,7 +12,8 @@ let window: BrowserWindow | null = null;
 let server: Server | null = null;
 let serial: SerialPort | null = null;
 let timers: NodeJS.Timeout[] = [];
-let obsBridge: { outDir: string; stop(): void } | null = null;
+let obsBridge: { outDir: string; refresh(): Promise<void>; stop(): void } | null = null;
+let overlayUnsubscribe: (() => void) | null = null;
 
 /**
  * Mirrors everything the main process prints into a file.
@@ -180,7 +181,7 @@ async function startOverlayBridge(): Promise<void> {
 }
 
 async function startServices(): Promise<void> {
-  const [appModule, runModule, hardwareModule, gateModule, spoolModule, unoCore, configModule, credentialsModule] = await Promise.all([
+  const [appModule, runModule, hardwareModule, gateModule, spoolModule, unoCore, configModule, credentialsModule, eventsModule] = await Promise.all([
     import("../../backend/src/app.js"),
     import("../../backend/src/runs/repo.js"),
     import("../../backend/src/hardware/repo.js"),
@@ -189,6 +190,7 @@ async function startServices(): Promise<void> {
     import("../../ops/src/uno-bridge-core.js"),
     import("../../backend/src/config.js"),
     import("../../backend/src/db/credentials.js"),
+    import("../../backend/src/lanes/events.js"),
   ]);
 
   configModule.config.lanes;
@@ -200,6 +202,13 @@ async function startServices(): Promise<void> {
   });
 
   await startOverlayBridge();
+  // Arming a lane should put the team on screen at once, not at the next poll.
+  // The API, the overlay and the serial reader share this process, so the
+  // signal is a function call — the poll underneath stays as the safety net.
+  const unsubscribeOverlay = eventsModule.onFieldChanged(() => {
+    void obsBridge?.refresh().catch(console.error);
+  });
+  overlayUnsubscribe = unsubscribeOverlay;
 
   /**
    * True once DynamoDB can actually be reached. In identity-pool mode there are
@@ -316,6 +325,7 @@ async function startServices(): Promise<void> {
 async function shutdown(): Promise<void> {
   for (const timer of timers) clearInterval(timer);
   timers = [];
+  overlayUnsubscribe?.(); overlayUnsubscribe = null;
   obsBridge?.stop(); obsBridge = null;
   if (serial?.isOpen) await new Promise<void>((resolveClose) => serial!.close(() => resolveClose()));
   if (server) await new Promise<void>((resolveClose) => server!.close(() => resolveClose()));
@@ -349,6 +359,7 @@ else {
     event.preventDefault();
     const closingServer = server; const closingSerial = serial;
     server = null; serial = null;
+    overlayUnsubscribe?.(); overlayUnsubscribe = null;
     obsBridge?.stop(); obsBridge = null;
     for (const timer of timers) clearInterval(timer);
     timers = [];

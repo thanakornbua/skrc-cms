@@ -29,6 +29,12 @@ export interface ObsBridgeOptions {
 export interface ObsBridge {
   /** Where OBS should point its three "Read from file" text sources. */
   outDir: string;
+  /**
+   * Fetches and writes at once, instead of waiting for the next poll. The
+   * desktop application calls this the moment a lane changes, so arming shows
+   * a team name immediately rather than up to a poll interval later.
+   */
+  refresh(): Promise<void>;
   stop(): void;
 }
 
@@ -104,6 +110,7 @@ export async function startObsBridge(options: ObsBridgeOptions): Promise<ObsBrid
 
   return {
     outDir,
+    async refresh(): Promise<void> { await poll(); await tick(); },
     stop(): void { clearInterval(pollTimer); clearInterval(tickTimer); },
   };
 }

@@ -5,6 +5,7 @@ import {
 import type { TransactWriteCommandInput } from "@aws-sdk/lib-dynamodb";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
+import { emitFieldChanged } from "../lanes/events.js";
 import { ApiError } from "../errors.js";
 import { getCompetitionState, isEligibleForStage, openSuddenDeathRound } from "../competition/state.js";
 import { ATTEMPTS_PER_ROUND } from "../competition/types.js";
@@ -235,6 +236,10 @@ export async function processGateEvent(
       } });
   try {
     await ddbDoc.send(new TransactWriteCommand({ TransactItems: transactionItems }));
+    // A gate event arrives over the serial port, not over HTTP, so it misses
+    // the request-level signal: the start of a run is exactly when the overlay
+    // clock must begin.
+    emitFieldChanged();
     return { accepted: true };
   } catch (error) {
     if (error instanceof TransactionCanceledException) {
