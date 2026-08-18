@@ -14,8 +14,7 @@ For each of the three text sources: **Properties → tick "Read from file" →
 browse to the matching `.txt`**. Leave everything else — font, colour, position
 — as it already is. The bridge only ever changes the text.
 
-The files live in `OBS_OUT_DIR` (default `./obs` relative to wherever the bridge
-is started) and are named exactly after the sources:
+The files are named exactly after the sources:
 
 ```
 obs/SKRC_StageName.txt
@@ -23,12 +22,35 @@ obs/SKRC_TeamName.txt
 obs/SKRC_ElapsedTime.txt
 ```
 
-Start the bridge once before configuring the sources so the files exist and the
-file picker can see them.
+Start the console (or the CLI below) once before configuring the sources, so the
+files exist and the file picker can see them.
 
-## Running it
+## On competition day: nothing to run
 
-From `ops/`, on the same laptop as the API and OBS:
+The bridge is built into the Windows application. **SKRC Competition Day** starts
+it against its own loopback API (`http://127.0.0.1:7070`) as it boots, so the
+broadcast operator installs one program and never opens a terminal. The files
+land in
+
+```text
+%APPDATA%\SKRC Competition Day\obs\
+```
+
+Paste that path into the OBS file picker's location bar to get there. Two keys in
+`competition-day.env` change it:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `OBS_OVERLAY` | `on` | Set to `off` to skip the overlay entirely. |
+| `OBS_OUT_DIR` | `%APPDATA%\SKRC Competition Day\obs` | Where the three text files are written. Point it at any writable folder — not beside the EXE, which sits in Program Files. |
+
+If the bridge fails to start it is logged and the application carries on: the
+timing console never depends on the overlay.
+
+## The CLI, for rehearsal or a second laptop
+
+From `ops/`, when driving OBS from a machine other than the operator's, or
+against a remote API during rehearsal:
 
 ```bash
 npm run obs-bridge
@@ -36,10 +58,13 @@ npm run obs-bridge
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `OBS_API_URL` | `http://127.0.0.1:3000` | Competition API base URL. Use the laptop's local API on competition day. |
-| `OBS_OUT_DIR` | `obs` | Where the three text files are written. |
+| `OBS_API_URL` | `http://127.0.0.1:7070` | Competition API base URL — the desktop application's port. Point it at the operator laptop's address, or at EC2 for rehearsal. |
+| `OBS_OUT_DIR` | `obs` | Where the three text files are written, relative to where the bridge is started. |
 | `OBS_POLL_MS` | `1000` | How often lane state is fetched. |
 | `OBS_TICK_MS` | `100` | How often the clock is redrawn between polls. |
+
+Reaching the API from another machine means it is no longer bound to loopback —
+see the network warning in `docs/COMPETITION_DAY_WINDOWS.md` before doing that.
 
 The clock is redrawn locally ten times a second and lane state is fetched once a
 second — polling an API at 10 Hz just to animate a number would be waste. Files
@@ -83,5 +108,7 @@ overlay does not simply read `/admin/lanes`.
 npm run test:obs
 ```
 
-covers the display decisions. To watch real files move, point `OBS_API_URL` at
-any server returning a `/public/lanes` payload.
+covers the display decisions — they live in `obs-bridge-core.ts`, apart from the
+polling loop in `obs-bridge-runner.ts` that both the desktop application and the
+CLI drive. To watch real files move, point `OBS_API_URL` at any server returning
+a `/public/lanes` payload.

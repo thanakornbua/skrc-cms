@@ -1,8 +1,8 @@
 # Windows desktop build
 
 The Electron package compiles the React competition console, Express competition
-API, DynamoDB/Cognito clients, and Arduino UNO serial bridge into one Windows
-desktop installation. The application binds only to `127.0.0.1:3210`; the web
+API, DynamoDB/Cognito clients, Arduino UNO serial bridge, and OBS overlay bridge
+into one Windows desktop installation. The application binds only to `127.0.0.1:7070`; the web
 renderer has Node integration disabled and context isolation enabled.
 
 ## Build on Windows
@@ -40,6 +40,19 @@ credentials (`backend/src/db/credentials.ts`); they expire on their own and
 nothing usable is left on disk if the machine is lost. Provision the pool once
 with `npm run create-desktop-identity-pool --prefix ops`. Never commit the
 runtime configuration.
+
+## OBS overlay
+
+The overlay bridge runs inside the application — no second program, no terminal
+on the broadcast laptop. It polls this machine's own API and writes
+
+```text
+%APPDATA%\SKRC Competition Day\obs\{SKRC_StageName,SKRC_TeamName,SKRC_ElapsedTime}.txt
+```
+
+for OBS text sources set to "Read from file". Start the application once so the
+files exist, then point the three sources at them; full setup and the
+`OBS_OVERLAY` / `OBS_OUT_DIR` keys are in `ops/OBS_BRIDGE.md`.
 
 Open Arduino IDE's Serial Monitor only for bench testing and close it before
 starting this application. Leave `UNO_SERIAL_PORT` blank for auto-detection or

@@ -6,11 +6,12 @@ import { performance } from "node:perf_hooks";
 import type { Server } from "node:http";
 import { SerialPort } from "serialport";
 
-const APP_PORT = 3210;
+const APP_PORT = 7070;
 let window: BrowserWindow | null = null;
 let server: Server | null = null;
 let serial: SerialPort | null = null;
 let timers: NodeJS.Timeout[] = [];
+let obsBridge: { outDir: string; stop(): void } | null = null;
 
 function parseEnvFile(content: string): Record<string, string> {
   const values: Record<string, string> = {};
@@ -87,6 +88,31 @@ async function createDesktopWindow(): Promise<void> {
   window.show();
 }
 
+/**
+ * Drives the OBS overlay from this machine's own API.
+ *
+ * Bundled into the application rather than left as the `ops/` CLI so the
+ * broadcast operator installs one thing: on competition day there is no Node
+ * toolchain, no checkout, and no second console window on the laptop. The three
+ * text files live under the writable user data directory — %APPDATA% — because
+ * an installed application cannot write beside its EXE in Program Files.
+ *
+ * Failure here is never fatal: the overlay is a nice-to-have and the timing
+ * console is not. `OBS_OVERLAY=off` in competition-day.env skips it entirely.
+ */
+async function startOverlayBridge(): Promise<void> {
+  if (process.env.OBS_OVERLAY?.trim().toLowerCase() === "off") return;
+  try {
+    const { startObsBridge } = await import("../../ops/src/obs-bridge-runner.js");
+    obsBridge = await startObsBridge({
+      apiUrl: `http://127.0.0.1:${APP_PORT}`,
+      outDir: process.env.OBS_OUT_DIR?.trim() || join(app.getPath("userData"), "obs"),
+    });
+  } catch (error) {
+    console.error("OBS overlay bridge did not start:", error);
+  }
+}
+
 async function startServices(): Promise<void> {
   const [appModule, runModule, hardwareModule, gateModule, spoolModule, unoCore, configModule] = await Promise.all([
     import("../../backend/src/app.js"),
@@ -105,6 +131,8 @@ async function startServices(): Promise<void> {
     const listening = expressApp.listen(APP_PORT, process.env.API_BIND_HOST?.trim() || "127.0.0.1", () => resolveServer(listening));
     listening.once("error", reject);
   });
+
+  await startOverlayBridge();
 
   await runModule.sweepTimedOutRuns();
   const sweepTimer = setInterval(() => runModule.sweepTimedOutRuns().catch(console.error), 1000);
@@ -188,13 +216,12 @@ async function startServices(): Promise<void> {
     const heartbeatTimer = setInterval(() => heartbeat("CONNECTED").catch(console.error), 10_000);
     heartbeatTimer.unref(); timers.push(heartbeatTimer);
   }
-  const drainTimer = setInterval(() => drain().catch(console.error), 500);
-  drainTimer.unref(); timers.push(drainTimer);
 }
 
 async function shutdown(): Promise<void> {
   for (const timer of timers) clearInterval(timer);
   timers = [];
+  obsBridge?.stop(); obsBridge = null;
   if (serial?.isOpen) await new Promise<void>((resolveClose) => serial!.close(() => resolveClose()));
   if (server) await new Promise<void>((resolveClose) => server!.close(() => resolveClose()));
 }
@@ -218,6 +245,7 @@ else {
     event.preventDefault();
     const closingServer = server; const closingSerial = serial;
     server = null; serial = null;
+    obsBridge?.stop(); obsBridge = null;
     for (const timer of timers) clearInterval(timer);
     timers = [];
     Promise.all([

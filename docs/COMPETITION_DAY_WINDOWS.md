@@ -8,18 +8,19 @@ UNO connected to Windows. One Electron application contains:
 - Cognito token verification and DynamoDB repositories;
 - the UNO serial reader and durable event spool;
 - check-in and both weight-inspection stages;
-- lane assignment, arming, live state, and reset controls.
+- lane assignment, arming, live state, and reset controls;
+- the OBS overlay bridge, writing the three broadcast text files.
 
 Only Amplify registration/public pages, Cognito, the registration Lambda, and
-DynamoDB remain remote. By default the desktop API listens on `127.0.0.1:3210`,
+DynamoDB remain remote. By default the desktop API listens on `127.0.0.1:7070`,
 so it is not exposed to the venue network. The bundled renderer calls this
 loopback API.
 
 If the existing Amplify competition pages must also call this API, set
 `API_BIND_HOST=0.0.0.0`, set `CORS_ORIGIN` to the exact Amplify origin, and place
-an approved HTTPS reverse proxy or tunnel in front of port 3210. Build the remote
+an approved HTTPS reverse proxy or tunnel in front of port 7070. Build the remote
 frontend with that stable HTTPS address as `VITE_API_BASE_URL`. Never expose port
-3210 directly to the internet without TLS and network controls.
+7070 directly to the internet without TLS and network controls.
 
 ## Run the compiled package
 

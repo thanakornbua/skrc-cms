@@ -18,7 +18,7 @@ run("npm", ["run", "build"], resolve(root, "ops"));
 run("npm", ["run", "build"], resolve(root, "frontend"), {
   ...process.env,
   VITE_EVENT_MODE: "competition",
-  VITE_API_BASE_URL: "http://127.0.0.1:3210",
+  VITE_API_BASE_URL: "http://127.0.0.1:7070",
 });
 
 const resourceFrontend = resolve(desktopDir, "resources/frontend");

@@ -13,7 +13,7 @@ dry-run environment and reset its records before accepting production entries.
 - `roster.csv` passes `npm run bootstrap-staff -- ../roster.csv --validate-only`.
 - Admin and committee test accounts can sign in and have changed temporary passwords.
 - `competitive.skrc.suankularb.space` points to the built frontend.
-- The selected competition API responds to `GET /health`. For the compiled Windows application this is `http://127.0.0.1:3210/health`; for EC2 it remains `api.suankularb.space`.
+- The selected competition API responds to `GET /health`. For the compiled Windows application this is `http://127.0.0.1:7070/health`; for EC2 it remains `api.suankularb.space`.
 - Backend `LANES` maps lane `1` to `esp32-lane1`.
 - Backend `DEVICE_KEYS` contains the simulator's device key.
 - One disposable competitor email is available for the registration journey.

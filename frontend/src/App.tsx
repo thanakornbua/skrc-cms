@@ -19,7 +19,7 @@ const DeploymentPage = lazy(() => import("./pages/DeploymentPage"));
 
 /**
  * The desktop console always loads the bundle from its own loopback server
- * (127.0.0.1:3210); the hosted site never does. That is the honest
+ * (127.0.0.1:7070); the hosted site never does. That is the honest
  * discriminator between "running inside the packaged app" and "running on the
  * web", with no build flag to keep in sync.
  */
