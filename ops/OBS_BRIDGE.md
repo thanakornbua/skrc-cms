@@ -27,6 +27,64 @@ rather than blanking mid-run.
 Nothing is loaded from the internet: no fonts, no scripts, no images. The
 overlay keeps working at a venue with no uplink.
 
+## Pulling the data yourself
+
+Both overlays above are just clients. The engine's side of the contract is two
+unauthenticated, CORS-open (`Access-Control-Allow-Origin: *`) endpoints, so a
+graphics page of your own — loaded from disk in a Browser Source, or served
+anywhere — can read them directly:
+
+| Endpoint | Shape |
+| --- | --- |
+| `GET http://127.0.0.1:7070/public/lanes` | One JSON snapshot |
+| `GET http://127.0.0.1:7070/public/lanes/stream` | The same snapshot as SSE: on connect, on every change, plus a refresh every 5s |
+
+```json
+{
+  "activeStage": "ROUND_1",
+  "stageLabel": "Qualifying round",
+  "serverTime": "2026-08-18T04:00:00.000Z",
+  "lanes": [{
+    "laneId": "1",
+    "state": "IDLE | ASSIGNED | ARMED | RUNNING",
+    "teamName": "SS2-04",
+    "runStartedAt": "2026-08-18T03:59:47.500Z",
+    "attempt": 2,
+    "attemptsTotal": 3,
+    "bestMs": 41902,
+    "lastResult": {
+      "teamName": "SS2-04",
+      "elapsedMs": 42123,
+      "status": "COMPLETE | TIMED_OUT | UNDER_REVIEW",
+      "finishedAt": "2026-08-18T04:00:00.000Z",
+      "attempt": 2,
+      "attemptsTotal": 3,
+      "bestMs": 41902
+    }
+  }]
+}
+```
+
+Consuming it, in the order that matters:
+
+1. **`RUNNING` beats `ARMED` beats `ASSIGNED`.** With one lane this is just "the
+   lane", but the ordering keeps a multi-lane scene sensible.
+2. **Count the clock locally.** `runStartedAt` is a server timestamp; tick from
+   it with `requestAnimationFrame` rather than asking the API for every frame.
+   Correct for clock skew with `serverTime` minus your own clock at receipt —
+   it is near zero on the operator laptop and seconds off against a remote API.
+3. **`lastResult` is how a finished time stays up.** The lane is `IDLE` the
+   instant a run stops. Hold the result while `now - finishedAt` is under your
+   chosen window (the built-in overlays use five seconds), and let an armed lane
+   preempt it.
+4. **Nothing here is official.** The overlay clock is a broadcast
+   approximation; the run record is the official time (Rule 6.1(1)).
+5. **No internal competitor IDs** appear, deliberately (Rule 10.1(3)). Do not
+   add them to anything on screen.
+
+Everything else — `/admin/*` and the rest — stays restricted to `CORS_ORIGIN`
+and needs a bearer token; only `/public` is open.
+
 ## Text files
 
 Feeds five OBS text sources — `SKRC_StageName`, `SKRC_TeamName`,

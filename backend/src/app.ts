@@ -20,6 +20,18 @@ import { overlayPage } from "./overlay/page.js";
 export function createApp(options: { staticFrontendDir?: string } = {}) {
   const app = express();
   app.use(cors({ origin: config.corsOrigin }));
+  /**
+   * The public display feed is readable from anywhere.
+   *
+   * CORS_ORIGIN exists to keep the authenticated console's API to one known
+   * origin, and that is right for every route that reads a competitor or writes
+   * a run. It is wrong for /public: an overlay is a page OBS loads from disk, a
+   * scoreboard on a second machine, a graphics tool nobody has told us about —
+   * all of them legitimately not this origin, and none of them able to reach
+   * anything that is not already unauthenticated and free of internal IDs
+   * (Rule 10.1(3)).
+   */
+  app.use("/public", cors({ origin: "*", methods: ["GET"] }));
   app.use(express.json());
 
   /**
