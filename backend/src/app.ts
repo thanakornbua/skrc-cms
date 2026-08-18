@@ -16,6 +16,8 @@ import { hardwareRouter } from "./hardware/routes.js";
 import { resolve } from "node:path";
 import { emitFieldChanged } from "./lanes/events.js";
 import { overlayPage } from "./overlay/page.js";
+import { fieldStyle, isOverlayField, OVERLAY_FIELDS } from "./overlay/fields.js";
+import { overlayFieldPage } from "./overlay/field-page.js";
 
 export function createApp(options: { staticFrontendDir?: string } = {}) {
   const app = express();
@@ -51,6 +53,19 @@ export function createApp(options: { staticFrontendDir?: string } = {}) {
   // Overlay for an OBS Browser Source: pushed by SSE, drawn on every frame.
   app.get("/overlay", (_req, res) => {
     res.type("html").send(overlayPage());
+  });
+  /**
+   * One field per Browser Source, so the scene owns the layout rather than
+   * inheriting mine. Same feed and the same display rules as the combined page.
+   */
+  app.get("/overlay/:field", (req, res) => {
+    const field = req.params.field;
+    if (!isOverlayField(field)) {
+      res.status(404).type("text/plain")
+        .send(`Unknown overlay field "${field}". Available: ${OVERLAY_FIELDS.join(", ")}`);
+      return;
+    }
+    res.type("html").send(overlayFieldPage(field, fieldStyle(req.query as Record<string, unknown>)));
   });
   app.get("/auth/me", requireAuth, meHandler);
   app.use(requireCompetitionOpen);

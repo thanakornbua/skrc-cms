@@ -27,6 +27,50 @@ rather than blanking mid-run.
 Nothing is loaded from the internet: no fonts, no scripts, no images. The
 overlay keeps working at a venue with no uplink.
 
+## One source per element
+
+The combined page above imposes its layout. For a scene that places each value
+itself, every field is also its own page — one Browser Source each, positioned
+and styled in OBS:
+
+```
+http://127.0.0.1:7070/overlay/stage      Qualifying round
+http://127.0.0.1:7070/overlay/team       SS2-04
+http://127.0.0.1:7070/overlay/clock      0:42.123
+http://127.0.0.1:7070/overlay/attempt    Attempt 2 of 3
+http://127.0.0.1:7070/overlay/best       0:41.902
+http://127.0.0.1:7070/overlay/status     Final | Time limit | Under review | On the line
+```
+
+Same feed and the same rules as the combined overlay: pushed by SSE, repainted
+every frame, a finished time held five seconds, an arming lane taking the screen
+back. All six compute the display state identically, so separate sources can
+never disagree about who is on screen.
+
+Size each Browser Source to the space the element occupies in the scene — a
+clock might be 600×160 — and set the text size with the query string rather
+than by scaling the source, which would blur it:
+
+| Parameter | Default | Accepts |
+| --- | --- | --- |
+| `size` | `9vh` | `14vh`, `72px`, `4rem` — `vh` is relative to the source's own height |
+| `color` | `#ffffff` | `#00ff88`, `white` |
+| `weight` | `700` | `100`–`900`, `normal`, `bold` |
+| `align` | `left` | `left`, `center`, `right` |
+| `font` | Segoe UI | any family name available on the machine |
+
+```
+http://127.0.0.1:7070/overlay/clock?size=90px&color=%2300ff88&align=center
+```
+
+Remember to URL-encode `#` as `%23`. Anything that does not match the expected
+shape falls back to its default rather than failing, so a typo renders plainly
+instead of rendering nothing.
+
+A field is empty whenever it would be meaningless — no team on the line, a team
+with no completed run — and an empty page draws nothing, so no visibility
+toggling is needed.
+
 ## Pulling the data yourself
 
 Both overlays above are just clients. The engine's side of the contract is two
