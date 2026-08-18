@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  clockSkewMs, focusLane, formatElapsed, overlayText, type PublicLane, type PublicLanesSnapshot, RESULT_HOLD_MS,
+  clockSkewMs, focusLane, formatElapsed, overlayText, type PublicLane, type PublicLanesSnapshot, RESULT_HOLD_MS, attemptText,
 } from "./obs-bridge-core.js";
 
 const lane = (over: Partial<PublicLane> = {}): PublicLane => ({
@@ -20,6 +20,8 @@ test("a running lane shows its team and a live clock", () => {
     SKRC_StageName: "Qualifying round",
     SKRC_TeamName: "Team A",
     SKRC_ElapsedTime: "0:12.500",
+    SKRC_Attempt: "",
+    SKRC_BestTime: "",
   });
 });
 
@@ -29,18 +31,22 @@ test("an armed lane shows the team about to run at zero", () => {
     SKRC_StageName: "Qualifying round",
     SKRC_TeamName: "Team B",
     SKRC_ElapsedTime: "0:00.000",
+    SKRC_Attempt: "",
+    SKRC_BestTime: "",
   });
 });
 
 test("an idle field clears the run fields but keeps the stage", () => {
   assert.deepEqual(overlayText(snapshotOf([lane()]), AT), {
     SKRC_StageName: "Qualifying round", SKRC_TeamName: "", SKRC_ElapsedTime: "",
+    SKRC_Attempt: "", SKRC_BestTime: "",
   });
 });
 
 test("everything is blank before the first successful poll", () => {
   assert.deepEqual(overlayText(null, AT), {
     SKRC_StageName: "", SKRC_TeamName: "", SKRC_ElapsedTime: "",
+    SKRC_Attempt: "", SKRC_BestTime: "",
   });
 });
 
@@ -118,4 +124,42 @@ test("an armed lane takes the screen from a result still inside its hold", () =>
   const text = overlayText(snapshot, Date.parse(finishedAt) + 1000);
   assert.equal(text.SKRC_TeamName, "Next Team");
   assert.equal(text.SKRC_ElapsedTime, "0:00.000");
+});
+
+test("attempt and best time ride along with the team on screen", () => {
+  const snapshot = snapshotOf([lane({
+    state: "ARMED", teamName: "Team C", attempt: 2, attemptsTotal: 3, bestMs: 41_902,
+  })]);
+  const text = overlayText(snapshot, AT);
+  assert.equal(text.SKRC_Attempt, "Attempt 2 of 3");
+  assert.equal(text.SKRC_BestTime, "0:41.902");
+});
+
+test("a team with no time yet shows no best, not a zero", () => {
+  const snapshot = snapshotOf([lane({ state: "ARMED", teamName: "Team D", attempt: 1, attemptsTotal: 3, bestMs: null })]);
+  const text = overlayText(snapshot, AT);
+  assert.equal(text.SKRC_Attempt, "Attempt 1 of 3");
+  assert.equal(text.SKRC_BestTime, "");
+});
+
+test("a held result carries the attempt it was and the best it produced", () => {
+  const finishedAt = "2026-08-18T10:00:00.000Z";
+  const snapshot = snapshotOf([{
+    laneId: "1", state: "IDLE", teamName: null, runStartedAt: null,
+    lastResult: {
+      teamName: "Team E", elapsedMs: 41_902, status: "COMPLETE", finishedAt,
+      attempt: 3, attemptsTotal: 3, bestMs: 41_902,
+    },
+  }]);
+  const text = overlayText(snapshot, Date.parse(finishedAt) + 1000);
+  assert.equal(text.SKRC_TeamName, "Team E");
+  assert.equal(text.SKRC_Attempt, "Attempt 3 of 3");
+  assert.equal(text.SKRC_BestTime, "0:41.902");
+});
+
+test("attemptText stays empty rather than printing a missing count", () => {
+  assert.equal(attemptText(undefined, 3), "");
+  assert.equal(attemptText(2, undefined), "");
+  assert.equal(attemptText(null, null), "");
+  assert.equal(attemptText(1, 3), "Attempt 1 of 3");
 });

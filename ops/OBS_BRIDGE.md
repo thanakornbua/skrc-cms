@@ -14,8 +14,9 @@ http://127.0.0.1:7070/overlay
 
 Set its width and height to the canvas size (1920×1080), leave "Shutdown source
 when not visible" **off** so it stays connected, and position it in the scene.
-The page has a transparent background and draws the stage name, the team name
-and the running clock; style and crop it from OBS as any other source.
+The page has a transparent background and draws the stage name, the team name,
+the running clock, the attempt (`Attempt 2 of 3`) and the team's best time this
+stage; style and crop it from OBS as any other source.
 
 It holds an SSE connection to `/public/lanes/stream`, which sends the current
 state on connect and every change as it happens, with a slow refresh underneath
@@ -28,8 +29,8 @@ overlay keeps working at a venue with no uplink.
 
 ## Text files
 
-Feeds three OBS text sources — `SKRC_StageName`, `SKRC_TeamName`,
-`SKRC_ElapsedTime` — from the competition API.
+Feeds five OBS text sources — `SKRC_StageName`, `SKRC_TeamName`,
+`SKRC_ElapsedTime`, `SKRC_Attempt`, `SKRC_BestTime` — from the competition API.
 
 The bridge writes three plain-text files and OBS reads them. There is no
 WebSocket connection, no password, and no plugin: OBS and the bridge can start,
@@ -38,17 +39,23 @@ a number that stops updating, never a blank or broken scene.
 
 ### One-time OBS setup
 
-For each of the three text sources: **Properties → tick "Read from file" →
+For each of the five text sources: **Properties → tick "Read from file" →
 browse to the matching `.txt`**. Leave everything else — font, colour, position
 — as it already is. The bridge only ever changes the text.
 
 The files are named exactly after the sources:
 
 ```
-obs/SKRC_StageName.txt
-obs/SKRC_TeamName.txt
-obs/SKRC_ElapsedTime.txt
+obs/SKRC_StageName.txt     Qualifying round
+obs/SKRC_TeamName.txt      SS2-04
+obs/SKRC_ElapsedTime.txt   0:42.123
+obs/SKRC_Attempt.txt       Attempt 2 of 3
+obs/SKRC_BestTime.txt      0:41.902
 ```
+
+`SKRC_Attempt` and `SKRC_BestTime` are empty whenever they would be
+meaningless — no team on screen, or a team with no completed run yet. An empty
+source draws nothing, so a scene that uses them needs no visibility toggling.
 
 Start the console (or the CLI below) once before configuring the sources, so the
 files exist and the file picker can see them.
@@ -106,6 +113,7 @@ so OBS never reads a half-written line.
 | A lane is `RUNNING` | Team name, and a clock counting from the run's start |
 | A lane is `ARMED` | Team name, `0:00.000` — the audience sees who is about to go |
 | A run just finished | The finishing team and its final time, held for five seconds |
+| Any of the above | The attempt being run, and the team's best time this stage |
 | Nothing armed, running or just finished | Stage name only; team and clock are cleared |
 | Before the first successful poll | All three blank |
 

@@ -14,6 +14,11 @@ export interface LaneResult {
   elapsedMs: number;
   status: "COMPLETE" | "TIMED_OUT" | "UNDER_REVIEW";
   finishedAt: string;
+  /** The attempt this result was, of the stage's three. */
+  attempt?: number | null;
+  attemptsTotal?: number | null;
+  /** The team's best time in this stage, including this result. */
+  bestMs?: number | null;
 }
 
 export interface PublicLane {
@@ -21,6 +26,11 @@ export interface PublicLane {
   state: LaneState;
   teamName: string | null;
   runStartedAt: string | null;
+  /** The attempt about to run, or running, of the stage's three. */
+  attempt?: number | null;
+  attemptsTotal?: number | null;
+  /** The team's best time so far in this stage, if it has one. */
+  bestMs?: number | null;
   /** The result this lane just produced, if any. */
   lastResult?: LaneResult | null;
 }
@@ -37,6 +47,10 @@ export interface OverlayText {
   SKRC_StageName: string;
   SKRC_TeamName: string;
   SKRC_ElapsedTime: string;
+  /** "Attempt 2 of 3", or empty when no team is on screen. */
+  SKRC_Attempt: string;
+  /** The team's best time this stage, or empty when it has none yet. */
+  SKRC_BestTime: string;
 }
 
 /**
@@ -77,6 +91,16 @@ export function formatElapsed(ms: number): string {
 }
 
 /**
+ * "Attempt 2 of 3". Empty when the engine did not supply a count — an older
+ * API, or a lane with no team — so the source clears rather than reading
+ * "Attempt null of 3" on a broadcast.
+ */
+export function attemptText(attempt?: number | null, total?: number | null): string {
+  if (typeof attempt !== "number" || typeof total !== "number") return "";
+  return `Attempt ${attempt} of ${total}`;
+}
+
+/**
  * How long a finishing time stays on screen after the lane has gone idle.
  *
  * The lane clears the moment a run stops, so without this the number the
@@ -99,9 +123,14 @@ export function overlayText(
   nowMs: number,
   skewMs = 0,
 ): OverlayText {
-  if (!snapshot) return { SKRC_StageName: "", SKRC_TeamName: "", SKRC_ElapsedTime: "" };
+  if (!snapshot) {
+    return { SKRC_StageName: "", SKRC_TeamName: "", SKRC_ElapsedTime: "", SKRC_Attempt: "", SKRC_BestTime: "" };
+  }
   const lane = focusLane(snapshot.lanes);
-  const blank = { SKRC_StageName: snapshot.stageLabel, SKRC_TeamName: "", SKRC_ElapsedTime: "" };
+  const blank = {
+    SKRC_StageName: snapshot.stageLabel, SKRC_TeamName: "", SKRC_ElapsedTime: "",
+    SKRC_Attempt: "", SKRC_BestTime: "",
+  };
   if (!lane || !lane.teamName) {
     const held = heldResult(snapshot, nowMs, skewMs);
     if (held?.teamName) {
@@ -109,6 +138,8 @@ export function overlayText(
         SKRC_StageName: snapshot.stageLabel,
         SKRC_TeamName: held.teamName,
         SKRC_ElapsedTime: formatElapsed(held.elapsedMs),
+        SKRC_Attempt: attemptText(held.attempt, held.attemptsTotal),
+        SKRC_BestTime: held.bestMs === null || held.bestMs === undefined ? "" : formatElapsed(held.bestMs),
       };
     }
     return blank;
@@ -121,6 +152,8 @@ export function overlayText(
       SKRC_StageName: snapshot.stageLabel,
       SKRC_TeamName: lane.teamName,
       SKRC_ElapsedTime: formatElapsed(nowMs - skewMs - startedMs),
+      SKRC_Attempt: attemptText(lane.attempt, lane.attemptsTotal),
+      SKRC_BestTime: lane.bestMs === null || lane.bestMs === undefined ? "" : formatElapsed(lane.bestMs),
     };
   }
 
@@ -129,6 +162,8 @@ export function overlayText(
       SKRC_StageName: snapshot.stageLabel,
       SKRC_TeamName: lane.teamName,
       SKRC_ElapsedTime: formatElapsed(0),
+      SKRC_Attempt: attemptText(lane.attempt, lane.attemptsTotal),
+      SKRC_BestTime: lane.bestMs === null || lane.bestMs === undefined ? "" : formatElapsed(lane.bestMs),
     };
   }
 

@@ -49,6 +49,11 @@ export function overlayPage(): string {
     font-size: 2.6vh; letter-spacing: 0.22em; text-transform: uppercase;
     font-weight: 700; opacity: 0.95;
   }
+  /* Context, not headline: the attempt and the team's best sit under the clock
+     at a size that reads on a stream without competing with it. */
+  #meta { display: flex; gap: 1.4em; font-size: 3vh; opacity: 0.9; }
+  #meta .label { opacity: 0.65; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.62em; }
+  #best { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
   #overlay > * { transition: opacity 220ms ease; }
   .hidden { visibility: hidden; opacity: 0; }
 </style>
@@ -59,6 +64,10 @@ export function overlayPage(): string {
   <div id="team" class="hidden"></div>
   <div id="clock" class="hidden"></div>
   <div id="tag" class="hidden"></div>
+  <div id="meta">
+    <span id="attempt" class="hidden"></span>
+    <span id="bestWrap" class="hidden"><span class="label">Best</span> <span id="best"></span></span>
+  </div>
 </div>
 <script>
 (function () {
@@ -66,6 +75,9 @@ export function overlayPage(): string {
   var teamEl = document.getElementById("team");
   var clockEl = document.getElementById("clock");
   var tagEl = document.getElementById("tag");
+  var attemptEl = document.getElementById("attempt");
+  var bestWrapEl = document.getElementById("bestWrap");
+  var bestEl = document.getElementById("best");
   var overlayEl = document.getElementById("overlay");
   var snapshot = null;
   var skewMs = 0;
@@ -113,12 +125,19 @@ export function overlayPage(): string {
     return newest;
   }
 
-  function paint(mode, team, clock, tag) {
+  function paint(mode, team, clock, tag, attempt, attemptsTotal, bestMs) {
     overlayEl.classList.toggle("result", mode === "result");
     overlayEl.classList.toggle("timed-out", tag === RESULT_TAGS.TIMED_OUT || tag === RESULT_TAGS.UNDER_REVIEW);
     show(teamEl, team);
     show(clockEl, clock);
     show(tagEl, tag);
+    show(attemptEl, typeof attempt === "number" && typeof attemptsTotal === "number"
+      ? "Attempt " + attempt + " of " + attemptsTotal : "");
+    /* A team with no completed run has no best — an empty slot is honest,
+       0:00.000 is not. */
+    var hasBest = typeof bestMs === "number";
+    bestEl.textContent = hasBest ? formatElapsed(bestMs) : "";
+    bestWrapEl.classList.toggle("hidden", !hasBest);
   }
 
   /* Redrawn every frame: the clock is the only thing that moves, and the
@@ -126,7 +145,7 @@ export function overlayPage(): string {
   function draw() {
     requestAnimationFrame(draw);
     var now = Date.now();
-    if (!snapshot) { show(stageEl, ""); paint("idle", "", "", ""); return; }
+    if (!snapshot) { show(stageEl, ""); paint("idle", "", "", "", null, null, null); return; }
     show(stageEl, snapshot.stageLabel || "");
     var lanes = snapshot.lanes || [];
     var lane = focusLane(lanes);
@@ -134,21 +153,24 @@ export function overlayPage(): string {
     if (lane && lane.teamName && lane.state === "RUNNING" && lane.runStartedAt) {
       var started = Date.parse(lane.runStartedAt);
       if (isFinite(started)) {
-        paint("live", lane.teamName, formatElapsed(now - skewMs - started), "");
+        paint("live", lane.teamName, formatElapsed(now - skewMs - started), "",
+          lane.attempt, lane.attemptsTotal, lane.bestMs);
         return;
       }
     }
     if (lane && lane.teamName && lane.state === "ARMED") {
-      paint("live", lane.teamName, formatElapsed(0), "On the line");
+      paint("live", lane.teamName, formatElapsed(0), "On the line",
+        lane.attempt, lane.attemptsTotal, lane.bestMs);
       return;
     }
 
     var held = heldResult(lanes, now);
     if (held && held.teamName) {
-      paint("result", held.teamName, formatElapsed(held.elapsedMs), RESULT_TAGS[held.status] || "Final");
+      paint("result", held.teamName, formatElapsed(held.elapsedMs), RESULT_TAGS[held.status] || "Final",
+        held.attempt, held.attemptsTotal, held.bestMs);
       return;
     }
-    paint("idle", "", "", "");
+    paint("idle", "", "", "", null, null, null);
   }
   requestAnimationFrame(draw);
 

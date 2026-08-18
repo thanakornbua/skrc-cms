@@ -5,11 +5,14 @@ import { ApiError, zodToFields } from "../errors.js";
 import { armLane, assignLane, listLanes, resetLane } from "./repo.js";
 import { getCompetitor } from "../competitors/repo.js";
 import { getCompetitionState } from "../competition/state.js";
-import { STAGE_LABELS } from "../competition/types.js";
+import { STAGE_LABELS, type CompetitionStage } from "../competition/types.js";
 import { competitorIdSchema } from "../competitorId.js";
 import { actorOf } from "../auth/types.js";
 import { onFieldChanged } from "./events.js";
 import { getLaneResult } from "./last-result.js";
+import { listRuns } from "../runs/repo.js";
+import { listCorrections, listAppliedPenalties } from "../timing/repo.js";
+import { scoreCompetitorStage } from "../competition/scoring.js";
 
 export const lanesRouter = Router();
 
@@ -31,23 +34,66 @@ const assignSchema = z.object({
  * elapsed time derived from those two is a broadcast approximation; the
  * official time is the run record, taken from device timestamps (Rule 6.1(1)).
  */
+/** Rules 4.2(2)/4.5(1): three attempts per team per stage. */
+const ATTEMPTS_PER_STAGE = 3;
+
+/**
+ * How far through its three attempts a team is, and its best time so far.
+ *
+ * Scored through scoreCompetitorStage rather than by reading run rows directly,
+ * so the number on the broadcast is the same one the scoreboard shows —
+ * corrections and voided runs included. A second opinion on air would be worse
+ * than showing nothing.
+ */
+async function competitorProgress(competitorId: string, stage: CompetitionStage) {
+  const [competitor, runs, corrections, penalties] = await Promise.all([
+    getCompetitor(competitorId),
+    listRuns(competitorId),
+    listCorrections(competitorId),
+    listAppliedPenalties(competitorId),
+  ]);
+  if (!competitor) return { attemptsUsed: 0, bestMs: null as number | null };
+  const scored = scoreCompetitorStage({ competitor, runs, corrections, penalties }, stage);
+  const attemptsUsed = runs.filter((run) =>
+    (run.stage ?? "ROUND_1") === stage
+    && run.suddenDeathRound === undefined
+    && run.status !== undefined
+    && run.status !== "VOID").length;
+  return { attemptsUsed, bestMs: scored?.lapTimeMs ?? null };
+}
+
 async function publicLanesSnapshot() {
   const [lanes, competition] = await Promise.all([listLanes(), getCompetitionState()]);
   const named = await Promise.all(lanes.map(async (lane) => {
     // The result the lane just produced, so a display can hold a finishing time
     // on screen instead of losing it the moment the lane returns to IDLE.
     const result = getLaneResult(lane.laneId);
+    const [live, finished] = await Promise.all([
+      lane.competitorId ? competitorProgress(lane.competitorId, competition.activeStage) : null,
+      result ? competitorProgress(result.competitorId, competition.activeStage) : null,
+    ]);
     return {
       laneId: lane.laneId,
       state: lane.state,
       teamName: lane.competitorId ? (await getCompetitor(lane.competitorId))?.teamName ?? null : null,
       runStartedAt: lane.runStartedAt,
+      // The attempt about to be run, or being run: the in-progress row carries
+      // no status yet, so it is never part of attemptsUsed. Clamped because an
+      // audited extra grant must not put "4 of 3" on a broadcast.
+      attempt: live ? Math.min(live.attemptsUsed + 1, ATTEMPTS_PER_STAGE) : null,
+      attemptsTotal: ATTEMPTS_PER_STAGE,
+      bestMs: live?.bestMs ?? null,
       lastResult: result
         ? {
             teamName: (await getCompetitor(result.competitorId))?.teamName ?? null,
             elapsedMs: result.elapsedMs,
             status: result.status,
             finishedAt: result.finishedAt,
+            // Already counted: this is the attempt that just happened, and the
+            // best now includes it.
+            attempt: Math.min(finished?.attemptsUsed ?? 1, ATTEMPTS_PER_STAGE),
+            attemptsTotal: ATTEMPTS_PER_STAGE,
+            bestMs: finished?.bestMs ?? null,
           }
         : null,
     };
