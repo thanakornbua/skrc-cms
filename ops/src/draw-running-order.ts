@@ -1,13 +1,18 @@
 /**
- * Draws a random running order for the qualifying round.
+ * Draws the random running sequence for the qualifying round.
  *
- * The console has no running-order concept in ROUND_1 — every inspected team
- * is eligible and the operator assigns whoever is next — so the order is a
- * paper artefact produced once, before the round, and read from. Randomising it
- * removes the appearance of favour in who runs first, which is the whole point.
+ * Every team gets three attempts (D25, Rules 4.2(2)/4.5(1)), and the field runs
+ * them a round at a time: everyone takes attempt 1, then everyone attempt 2,
+ * then attempt 3. Each round is drawn separately, so no team is stuck running
+ * first — or last — three times over, and every team has the rest of a round to
+ * work on the robot before its next attempt.
+ *
+ * The console has no running-order concept in ROUND_1 — every inspected team is
+ * eligible and the operator assigns whoever is next — so this sheet is a paper
+ * artefact produced once, before the round, and read from.
  *
  * Read-only: this writes nothing to the table. Re-running produces a different
- * order, so draw once and keep the output — it is the record of the draw.
+ * sequence, so draw once and keep the output — it is the record of the draw.
  *
  *   DYNAMO_TABLE   competition table (default: robo-compet)
  *   --seed <text>  reproducible order; prove the draw was not re-rolled by
@@ -18,6 +23,7 @@ import { createHash, randomInt } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { drawRounds } from "./running-order-core.js";
 
 const argv = process.argv.slice(2);
 const valueOf = (flag: string): string | undefined => {
@@ -69,19 +75,21 @@ function makeRandom(): (bound: number) => number {
 }
 const random = makeRandom();
 
-const rows: Array<{ category: string; position: number; teamName: string; competitorId: string }> = [];
+/** Rules 4.2(2)/4.5(1): three attempts per team, so three rounds of the field. */
+const ROUNDS = 3;
+
+const rows: Array<{ category: string; round: number; position: number; teamName: string; competitorId: string }> = [];
+
 for (const category of [...new Set(eligible.map((team) => team.category))].sort()) {
-  const drawn = eligible.filter((team) => team.category === category);
-  // Fisher-Yates: every ordering equally likely, which a sort-by-random is not.
-  for (let index = drawn.length - 1; index > 0; index--) {
-    const swap = random(index + 1);
-    [drawn[index], drawn[swap]] = [drawn[swap], drawn[index]];
-  }
-  console.log("");
-  console.log(`${category} — ${drawn.length} teams`);
-  drawn.forEach((team, index) => {
-    console.log(`${String(index + 1).padStart(3)}. ${team.teamName}`);
-    rows.push({ category, position: index + 1, teamName: team.teamName, competitorId: team.competitorId });
+  const entrants = eligible.filter((team) => team.category === category);
+  drawRounds(entrants, ROUNDS, random).forEach((order, index) => {
+    const round = index + 1;
+    console.log("");
+    console.log(`ROUND ${round} of ${ROUNDS}   (${category}${round === 1 ? `, ${entrants.length} teams` : ""})`);
+    order.forEach((team, position) => {
+      console.log(`${String(position + 1).padStart(3)}. ${team.teamName}`);
+      rows.push({ category, round, position: position + 1, teamName: team.teamName, competitorId: team.competitorId });
+    });
   });
 }
 
@@ -94,8 +102,8 @@ if (eligible.length === 0) console.log("No eligible teams found — has inspecti
 if (csvPath) {
   // Competitor IDs are internal (Rule 10.1(3)); this file is for the operator
   // table, not the public screen.
-  const csv = ["category,position,teamName,competitorId"]
-    .concat(rows.map((row) => [row.category, row.position, `"${row.teamName.replace(/"/g, '""')}"`, row.competitorId].join(",")))
+  const csv = ["category,round,position,teamName,competitorId"]
+    .concat(rows.map((row) => [row.category, row.round, row.position, `"${row.teamName.replace(/"/g, '""')}"`, row.competitorId].join(",")))
     .join("\n");
   await writeFile(csvPath, `${csv}\n`, "utf8");
   console.log(`CSV written to ${csvPath}`);

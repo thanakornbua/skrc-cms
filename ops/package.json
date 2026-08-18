@@ -28,6 +28,7 @@
     "wipe-competitors": "tsx src/wipe-competitors.ts",
     "reset-staff": "tsx src/reset-staff.ts",
     "draw-running-order": "tsx src/draw-running-order.ts",
+    "test:running-order": "tsx --test src/running-order-core.test.ts",
     "obs-bridge": "tsx src/obs-bridge.ts",
     "test:obs": "tsx --test src/obs-bridge.test.ts",
     "serial-bridge": "tsx src/serial-bridge.ts",
