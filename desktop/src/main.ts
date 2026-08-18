@@ -83,6 +83,7 @@ async function createDesktopWindow(): Promise<void> {
   window.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(`http://127.0.0.1:${APP_PORT}/`)) event.preventDefault();
   });
+  window.on("closed", () => { window = null; });
   await window.loadURL(`http://127.0.0.1:${APP_PORT}/competition-day`);
   window.maximize();
   window.show();
@@ -263,7 +264,15 @@ async function shutdown(): Promise<void> {
 
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
+  // `window` outliving the BrowserWindow it points at is normal — Electron
+  // destroys the native window on close and leaves the reference behind. Every
+  // use has to say so, or launching a second copy of the application crashes
+  // the first with "Object has been destroyed".
+  app.on("second-instance", () => {
+    if (!window || window.isDestroyed()) return;
+    if (window.isMinimized()) window.restore();
+    window.focus();
+  });
   app.whenReady().then(async () => {
     try {
       await loadRuntimeConfiguration();
