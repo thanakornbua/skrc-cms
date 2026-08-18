@@ -232,8 +232,14 @@ async function startServices(): Promise<void> {
   const laneId = process.env.UNO_LANE_ID ?? "1";
   const requestedPort = process.env.UNO_SERIAL_PORT?.trim();
   const available = await SerialPort.list();
+  console.log(`Serial ports present: ${available.length === 0 ? "(none)" : available.map((port) =>
+    `${port.path}${port.manufacturer ? ` [${port.manufacturer}]` : ""}`).join(", ")}`);
   const portPath = requestedPort || available.find((port) =>
     /arduino|uno|com\d+/i.test(`${port.manufacturer ?? ""} ${port.path}`))?.path;
+  console.log(requestedPort
+    ? `UNO_SERIAL_PORT=${requestedPort}${available.some((port) => port.path === requestedPort)
+        ? "" : " — NOT in the list above; check Device Manager or clear the setting to auto-detect"}`
+    : `Auto-detected port: ${portPath ?? "(none found)"}`);
   const bridgeSession = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
   const spool = new spoolModule.DurableSpool(join(app.getPath("userData"), "serial-spool"));
   await spool.init();
@@ -290,13 +296,21 @@ async function startServices(): Promise<void> {
   };
 
   if (!portPath) {
+    console.error("No Arduino COM port found — the timing gate will not report.");
     await heartbeat("ERROR", "No Arduino COM port found").catch(console.error);
     const missingPortTimer = setInterval(
       () => { void heartbeat("ERROR", "No Arduino COM port found").catch(console.error); }, 10_000);
     missingPortTimer.unref(); timers.push(missingPortTimer);
   } else {
     serial = new SerialPort({ path: portPath, baudRate: 115200 });
-    serial.on("open", () => heartbeat("CONNECTED").catch(console.error));
+    // Serial faults used to be reported only to the table, where the operator
+    // sees a status dot and no reason. The reason is the whole diagnosis: a
+    // port held by Arduino IDE's Serial Monitor and a missing cable look
+    // identical on screen and are fixed differently.
+    serial.on("open", () => {
+      console.log(`Serial port ${portPath} open at 115200 baud`);
+      heartbeat("CONNECTED").catch(console.error);
+    });
     serial.on("data", (chunk: Buffer) => {
       buffer += chunk.toString("utf8");
       if (buffer.length > 8192) buffer = buffer.slice(-2048);
@@ -308,8 +322,14 @@ async function startServices(): Promise<void> {
         processing = processing.then(() => onLine(line)).catch((error) => console.error("UNO line failed:", error));
       }
     });
-    serial.on("error", (error) => heartbeat("ERROR", error.message).catch(console.error));
-    serial.on("close", () => heartbeat("DISCONNECTED", "COM port closed").catch(console.error));
+    serial.on("error", (error) => {
+      console.error(`Serial port ${portPath} error: ${error.message}`);
+      heartbeat("ERROR", error.message).catch(console.error);
+    });
+    serial.on("close", () => {
+      console.warn(`Serial port ${portPath} closed`);
+      heartbeat("DISCONNECTED", "COM port closed").catch(console.error);
+    });
     // Report what the port is actually doing. Sending CONNECTED on a fixed
     // timer regardless would keep the console showing a healthy Arduino after
     // the cable was pulled — the one thing this indicator exists to catch.
