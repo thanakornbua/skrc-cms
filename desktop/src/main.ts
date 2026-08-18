@@ -114,7 +114,7 @@ async function startOverlayBridge(): Promise<void> {
 }
 
 async function startServices(): Promise<void> {
-  const [appModule, runModule, hardwareModule, gateModule, spoolModule, unoCore, configModule] = await Promise.all([
+  const [appModule, runModule, hardwareModule, gateModule, spoolModule, unoCore, configModule, credentialsModule] = await Promise.all([
     import("../../backend/src/app.js"),
     import("../../backend/src/runs/repo.js"),
     import("../../backend/src/hardware/repo.js"),
@@ -122,6 +122,7 @@ async function startServices(): Promise<void> {
     import("../../ops/src/serial-bridge-core.js"),
     import("../../ops/src/uno-bridge-core.js"),
     import("../../backend/src/config.js"),
+    import("../../backend/src/db/credentials.js"),
   ]);
 
   configModule.config.lanes;
@@ -134,8 +135,22 @@ async function startServices(): Promise<void> {
 
   await startOverlayBridge();
 
-  await runModule.sweepTimedOutRuns();
-  const sweepTimer = setInterval(() => runModule.sweepTimedOutRuns().catch(console.error), 1000);
+  /**
+   * True once DynamoDB can actually be reached. In identity-pool mode there are
+   * no AWS credentials until a staff operator signs in — and they sign in
+   * through the window that startup has not opened yet, so anything at boot
+   * that assumes a working table deadlocks the application into "Startup
+   * failed" before anyone can log in.
+   */
+  const canReachTable = (): boolean =>
+    !credentialsModule.usesOperatorCredentials() || credentialsModule.hasOperatorCredentials();
+
+  const sweep = async (): Promise<void> => {
+    if (!canReachTable()) return;
+    await runModule.sweepTimedOutRuns();
+  };
+  await sweep().catch(console.error);
+  const sweepTimer = setInterval(() => { void sweep().catch(console.error); }, 1000);
   sweepTimer.unref(); timers.push(sweepTimer);
 
   const deviceId = process.env.UNO_DEVICE_ID ?? "uno-lane1";
@@ -153,6 +168,10 @@ async function startServices(): Promise<void> {
   let draining = false;
 
   const heartbeat = async (state: "CONNECTED" | "DISCONNECTED" | "ERROR", detail: string | null = null) => {
+    // Same reason as the sweep: a heartbeat is a write, and there is nothing to
+    // write with until an operator is signed in. The 10s timer re-reports the
+    // real state once there is.
+    if (!canReachTable()) return;
     await hardwareModule.recordDeviceHeartbeat({
       deviceId, laneId, serialPort: portPath ?? "AUTO", bridgeSession, state, detail,
       lastSeenAt: new Date().toISOString(),
@@ -196,7 +215,10 @@ async function startServices(): Promise<void> {
   };
 
   if (!portPath) {
-    await heartbeat("ERROR", "No Arduino COM port found");
+    await heartbeat("ERROR", "No Arduino COM port found").catch(console.error);
+    const missingPortTimer = setInterval(
+      () => { void heartbeat("ERROR", "No Arduino COM port found").catch(console.error); }, 10_000);
+    missingPortTimer.unref(); timers.push(missingPortTimer);
   } else {
     serial = new SerialPort({ path: portPath, baudRate: 115200 });
     serial.on("open", () => heartbeat("CONNECTED").catch(console.error));
