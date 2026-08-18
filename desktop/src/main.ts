@@ -281,7 +281,14 @@ async function startServices(): Promise<void> {
     });
     serial.on("error", (error) => heartbeat("ERROR", error.message).catch(console.error));
     serial.on("close", () => heartbeat("DISCONNECTED", "COM port closed").catch(console.error));
-    const heartbeatTimer = setInterval(() => heartbeat("CONNECTED").catch(console.error), 10_000);
+    // Report what the port is actually doing. Sending CONNECTED on a fixed
+    // timer regardless would keep the console showing a healthy Arduino after
+    // the cable was pulled — the one thing this indicator exists to catch.
+    const heartbeatTimer = setInterval(() => {
+      const open = serial?.isOpen ?? false;
+      void heartbeat(open ? "CONNECTED" : "ERROR", open ? null : `COM port ${portPath} is not open`)
+        .catch(console.error);
+    }, 10_000);
     heartbeatTimer.unref(); timers.push(heartbeatTimer);
   }
 }
