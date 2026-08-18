@@ -116,6 +116,15 @@ async function createDesktopWindow(): Promise<void> {
     if (!url.startsWith(`http://127.0.0.1:${APP_PORT}/`)) event.preventDefault();
   });
   window.on("closed", () => { window = null; });
+  // The renderer is where an operator signs in, and a packaged application has
+  // no menu and no devtools shortcut — a failing login is a blank result with
+  // nowhere to look. F12 opens the inspector. It reads state, it does not grant
+  // any: contextIsolation, sandbox and the navigation guard are untouched.
+  window.webContents.on("before-input-event", (_event, input) => {
+    const combo = input.key === "F12"
+      || (input.control && input.shift && input.key.toLowerCase() === "i");
+    if (input.type === "keyDown" && combo) window?.webContents.toggleDevTools();
+  });
   await window.loadURL(`http://127.0.0.1:${APP_PORT}/competition-day`);
   window.maximize();
   window.show();
