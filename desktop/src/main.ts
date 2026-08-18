@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { appendFile, copyFile, mkdir, readFile } from "node:fs/promises";
+import { appendFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
@@ -12,6 +13,37 @@ let server: Server | null = null;
 let serial: SerialPort | null = null;
 let timers: NodeJS.Timeout[] = [];
 let obsBridge: { outDir: string; stop(): void } | null = null;
+
+/**
+ * Mirrors everything the main process prints into a file.
+ *
+ * The API masks unexpected failures as INTERNAL_ERROR and prints the real
+ * cause with console.error — invisible in a packaged application, which is a
+ * console this operator does not have. Without this, a competition-day fault
+ * reads as "Internal server error" and nothing else.
+ *
+ * Appends, so a crash and relaunch keep their history, and never throws: a
+ * logging failure must not become the failure being logged.
+ */
+function teeConsoleToFile(): string {
+  const logPath = join(app.getPath("userData"), "console.log");
+  const write = (level: string, args: unknown[]) => {
+    const text = args.map((value) => {
+      if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
+      if (typeof value === "string") return value;
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }).join(" ");
+    appendFileSync(logPath, `${new Date().toISOString()} ${level} ${text}\n`);
+  };
+  for (const level of ["log", "warn", "error"] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...args);
+      try { write(level.toUpperCase(), args); } catch { /* never let logging fail the app */ }
+    };
+  }
+  return logPath;
+}
 
 function parseEnvFile(content: string): Record<string, string> {
   const values: Record<string, string> = {};
@@ -275,6 +307,7 @@ else {
   });
   app.whenReady().then(async () => {
     try {
+      console.log(`SKRC Competition Day starting — logging to ${teeConsoleToFile()}`);
       await loadRuntimeConfiguration();
       await startServices();
       await createDesktopWindow();
