@@ -29,6 +29,9 @@ overlay keeps working at a venue with no uplink.
 
 ## One source per element
 
+Operator-facing setup notes, including every URL and parameter, live in
+`docs/OBS_FIELD_SOURCES.md` — hand that to whoever builds the scene.
+
 The combined page above imposes its layout. For a scene that places each value
 itself, every field is also its own page — one Browser Source each, positioned
 and styled in OBS:
