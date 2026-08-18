@@ -69,10 +69,18 @@ names. Install both on the OBS machine, or every one of those names falls back
 to whatever Windows picks:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install-overlay-fonts.ps1
+powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu\home\thanakornbua\skrc-robo-compet\scripts\install-overlay-fonts.ps1
 ```
 
-Restart OBS afterwards.
+Restart OBS afterwards. Check they arrived with:
+
+```powershell
+[Drawing.FontFamily]::Families | Where-Object Name -like "IBM Plex*"
+```
+
+If this machine has no access to that path, copy `install-overlay-fonts.ps1`
+across and run it locally — it downloads the fonts itself and needs no
+administrator rights.
 
 ## What each field does between runs
 
