@@ -66,7 +66,10 @@ export async function startObsBridge(options: ObsBridgeOptions): Promise<ObsBrid
   async function poll(): Promise<void> {
     try {
       const response = await fetch(`${apiUrl}/public/lanes`, { signal: AbortSignal.timeout(4000) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // The body carries the reason (an unauthenticated table read, a closed
+      // competition), and on a laptop with no visible console that reason is
+      // the whole diagnosis — a bare status code is not worth logging.
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${(await response.text()).slice(0, 200).trim()}`);
       const received = Date.now();
       snapshot = await response.json() as PublicLanesSnapshot;
       skewMs = clockSkewMs(snapshot, received);

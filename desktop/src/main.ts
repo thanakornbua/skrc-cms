@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
@@ -102,14 +102,27 @@ async function createDesktopWindow(): Promise<void> {
  */
 async function startOverlayBridge(): Promise<void> {
   if (process.env.OBS_OVERLAY?.trim().toLowerCase() === "off") return;
+  const outDir = process.env.OBS_OUT_DIR?.trim() || join(app.getPath("userData"), "obs");
+  // A packaged application has no console the operator can read, so the
+  // bridge's own account of itself goes in a file beside the text files it
+  // writes. Blank overlay sources are otherwise indistinguishable from a
+  // stopped API, a wrong port, or nobody signed in.
+  const logPath = join(outDir, "bridge.log");
+  const record = (level: string, message: string) => {
+    const line = `${new Date().toISOString()} ${level} ${message}\n`;
+    console.log(line.trimEnd());
+    appendFile(logPath, line).catch(() => { /* logging must never break the overlay */ });
+  };
   try {
     const { startObsBridge } = await import("../../ops/src/obs-bridge-runner.js");
     obsBridge = await startObsBridge({
       apiUrl: `http://127.0.0.1:${APP_PORT}`,
-      outDir: process.env.OBS_OUT_DIR?.trim() || join(app.getPath("userData"), "obs"),
+      outDir,
+      log: (message) => record("INFO", message),
+      logError: (message) => record("WARN", message),
     });
   } catch (error) {
-    console.error("OBS overlay bridge did not start:", error);
+    record("ERROR", `OBS overlay bridge did not start: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
